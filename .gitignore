@@ -9,6 +9,8 @@
 *.key
 
 # IDE and build outputs
+.dotnet-home/
+.dotnet-home/
 .vs/
 .idea/
 **/bin/

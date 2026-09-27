@@ -10,9 +10,35 @@
 - `docs/`: yêu cầu, thiết kế, tài liệu API và hướng dẫn.
 - `infra/`: Docker Compose và cấu hình triển khai.
 
+## Khởi động nhanh
+
+### Cơ sở dữ liệu và API bằng Docker
+
+```bash
+docker compose --env-file .env -f infra/compose.yaml up --build
+```
+
+Sao chép `.env.example` thành `.env` và đổi mật khẩu trước khi chạy.
+
+### Web React
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+### Mobile Flutter
+
+```bash
+cd mobile
+flutter pub get
+flutter run
+```
+
 ## Trạng thái
 
-Đã khởi tạo cấu trúc thư mục; chưa sinh mã ứng dụng hoặc triển khai nghiệp vụ.
+Đã khởi tạo solution ASP.NET Core, React, Flutter, PostgreSQL bằng Docker và một endpoint kiểm tra tại `GET /api/system/info`.
 
 ## Phạm vi
 
