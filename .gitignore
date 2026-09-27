@@ -1,0 +1,29 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+**/appsettings.Local.json
+**/appsettings.*.Local.json
+*.pfx
+*.p12
+*.key
+
+# IDE and build outputs
+.vs/
+.idea/
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/build/
+**/.dart_tool/
+**/.flutter-plugins-dependencies
+**/android/local.properties
+**/coverage/
+*.log
+.DS_Store
+Thumbs.db
+
+# Runtime data
+uploads/
+backups/
