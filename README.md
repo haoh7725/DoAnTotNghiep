@@ -20,6 +20,10 @@ docker compose --env-file .env -f infra/compose.yaml up --build
 
 Sao chép `.env.example` thành `.env` và đổi mật khẩu trước khi chạy.
 
+Khi volume PostgreSQL được tạo lần đầu, Docker tự chạy `infra/database/01_schema_postgresql.sql` để tạo schema `nckh`, 28 bảng, khóa ngoại, ràng buộc, trigger, index và dữ liệu danh mục ban đầu.
+PostgreSQL của đồ án được công bố tại cổng `5433` trên máy phát triển để không xung đột với dự án TaskManagement đang dùng cổng `5432`.
+Khi chạy toàn bộ Docker Compose, REST API khả dụng tại `http://localhost:8081`.
+
 ### Web React
 
 ```bash

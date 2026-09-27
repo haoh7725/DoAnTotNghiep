@@ -7,9 +7,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./database/01_schema_postgresql.sql:/docker-entrypoint-initdb.d/01_schema_postgresql.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -28,7 +29,7 @@ services:
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-research_management};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
       Cors__AllowedOrigins__0: http://localhost:5173
     ports:
-      - "8080:8080"
+      - "8081:8080"
     depends_on:
       postgres:
         condition: service_healthy
