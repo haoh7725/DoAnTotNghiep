@@ -44,6 +44,14 @@ flutter run
 
 Đã khởi tạo solution ASP.NET Core, React, Flutter, PostgreSQL bằng Docker và một endpoint kiểm tra tại `GET /api/system/info`.
 
+Backend đã có xác thực JWT và phân quyền theo vai trò/phạm vi:
+
+- `POST /api/auth/login`: đăng nhập, trả về access token (giới hạn 10 lần/phút/IP).
+- `GET /api/auth/me`: thông tin tài khoản và các phân quyền hiện tại (cần header `Authorization: Bearer <token>`).
+- Policy: `Admin`, `ResearchOffice`, `Management` (xem `Api/Authorization/Policies.cs`). Kiểm tra phạm vi khoa/bộ môn qua `ICurrentUser.CanAccess(facultyId, departmentId)`.
+- Lần chạy đầu, nếu đặt `SEED_ADMIN_PASSWORD` trong `.env`, hệ thống tạo tài khoản QUAN_TRI (mặc định tên `admin`).
+- Lỗi trả về theo chuẩn ProblemDetails; danh sách có phân trang dùng `PagedQuery` / `PagedResult<T>`.
+
 ## Phạm vi
 
 Tài khoản và phân quyền; hồ sơ giảng viên; sản phẩm khoa học và minh chứng; xét duyệt; kế hoạch và tiến độ; chỉ tiêu; quy đổi và đánh giá; báo cáo và thông báo.

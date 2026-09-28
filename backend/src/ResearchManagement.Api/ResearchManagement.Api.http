@@ -1,6 +1,20 @@
-@ResearchManagement.Api_HostAddress = http://localhost:5152
+@ResearchManagement.Api_HostAddress = http://localhost:8081
 
-GET {{ResearchManagement.Api_HostAddress}}/weatherforecast/
+### Kiểm tra API
+GET {{ResearchManagement.Api_HostAddress}}/api/system/info
 Accept: application/json
 
-###
+### Đăng nhập (dùng tài khoản seed: Seed__AdminUsername / Seed__AdminPassword)
+# @name login
+POST {{ResearchManagement.Api_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "change_me"
+}
+
+### Thông tin người dùng hiện tại
+@token = {{login.response.body.accessToken}}
+GET {{ResearchManagement.Api_HostAddress}}/api/auth/me
+Authorization: Bearer {{token}}
