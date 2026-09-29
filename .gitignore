@@ -29,3 +29,6 @@ Thumbs.db
 # Runtime data
 uploads/
 backups/
+
+# Local task artifacts and isolated test databases
+.artifacts/
