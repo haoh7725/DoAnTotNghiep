@@ -1,50 +1,113 @@
+using System.Text;
 using System.Threading.RateLimiting;
-using Microsoft.AspNetCore.RateLimiting;
-using ResearchManagement.Api.Middleware;
-using ResearchManagement.Api.Security;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using ResearchManagement.Api.Authorization;
+using ResearchManagement.Api.Infrastructure;
+using ResearchManagement.Application.Auth.Abstractions;
 using ResearchManagement.Infrastructure;
+using ResearchManagement.Infrastructure.Auth;
+using ResearchManagement.Infrastructure.Persistence.Seed;
 
 var builder = WebApplication.CreateBuilder(args);
+
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddSessionSecurity(builder.Configuration, builder.Environment);
-builder.Services.AddExceptionHandler<ApiErrors>();
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddProblemDetails();
-builder.Services.AddCors(options => options.AddPolicy("WebClient", policy => policy
-    .WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [])
-    .AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
+var jwt = JwtOptions.FromConfiguration(builder.Configuration);
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.MapInboundClaims = false;
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                if (!context.Request.Headers.ContainsKey("Authorization"))
+                    context.Token = context.Request.Cookies["research_session"];
+                return Task.CompletedTask;
+            }
+        };
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwt.Issuer,
+            ValidateAudience = true,
+            ValidAudience = jwt.Audience,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SecretKey)),
+            ClockSkew = TimeSpan.FromSeconds(30),
+            NameClaimType = AppClaimTypes.Name,
+            RoleClaimType = AppClaimTypes.Role
+        };
+    });
+builder.Services.AddAuthorization(Policies.Register);
+
+// Giới hạn đăng nhập: 10 lần/phút/IP để hạn chế dò mật khẩu.
 builder.Services.AddRateLimiter(options =>
 {
-    options.RejectionStatusCode = 429;
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 8, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
 });
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("WebClient", policy => policy
+        .WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [])
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials());
+});
+
 var app = builder.Build();
+
 app.UseExceptionHandler();
-if (app.Environment.IsDevelopment()) app.MapOpenApi();
-if (!app.Environment.IsDevelopment()) { app.UseHsts(); app.UseHttpsRedirection(); }
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+}
+
+app.UseHttpsRedirection();
 app.UseCors("WebClient");
-// All mutating requests require a custom header. Cross-origin scripts need an approved CORS preflight.
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/api") &&
-        !HttpMethods.IsGet(context.Request.Method) && !HttpMethods.IsHead(context.Request.Method) && !HttpMethods.IsOptions(context.Request.Method) &&
+        !HttpMethods.IsGet(context.Request.Method) &&
+        !HttpMethods.IsHead(context.Request.Method) &&
+        !HttpMethods.IsOptions(context.Request.Method) &&
         context.Request.Headers["X-Requested-With"] != "ResearchHub")
-    { context.Response.StatusCode = 400; await context.Response.WriteAsJsonAsync(new { title = "Thiếu header X-Requested-With: ResearchHub." }); return; }
+    {
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        await context.Response.WriteAsJsonAsync(new { title = "Thiếu header X-Requested-With: ResearchHub." });
+        return;
+    }
     await next(context);
 });
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapControllers();
-if (args.Contains("--seed-demo"))
-{
-    if (!app.Environment.IsDevelopment()) throw new InvalidOperationException("Demo seeding is only allowed in Development.");
-    await using var scope = app.Services.CreateAsyncScope();
-    await DemoSeeder.SeedAsync(scope.ServiceProvider, builder.Configuration);
-    return;
-}
+
+await AdminSeeder.SeedAdminAsync(app.Services);
+
 app.Run();
+
 public partial class Program;

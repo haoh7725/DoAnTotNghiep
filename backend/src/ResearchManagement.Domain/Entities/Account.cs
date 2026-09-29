@@ -1,11 +1,43 @@
+using ResearchManagement.Domain.Common;
+using ResearchManagement.Domain.Constants;
+
 namespace ResearchManagement.Domain.Entities;
-public sealed class Account
+
+/// <summary>Bảng tai_khoan.</summary>
+public sealed class Account : BaseEntity
 {
-    public long Id { get; set; }
-    public string Username { get; set; } = "";
-    public string PasswordHash { get; set; } = "";
-    public string FullName { get; set; } = "";
-    public string? Email { get; set; }
-    public string Status { get; set; } = "HOAT_DONG";
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    private readonly List<RoleAssignment> _roleAssignments = [];
+
+    private Account() { }
+
+    public Account(string username, string passwordHash, string fullName, string? email = null)
+    {
+        Username = username;
+        PasswordHash = passwordHash;
+        FullName = fullName;
+        Email = email;
+        Status = AccountStatuses.Active;
+        CreatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public string Username { get; private set; } = string.Empty;
+    public string PasswordHash { get; private set; } = string.Empty;
+    public string FullName { get; private set; } = string.Empty;
+    public string? Email { get; private set; }
+    public string Status { get; private set; } = AccountStatuses.Active;
+    public DateTimeOffset CreatedAt { get; private set; }
+
+    public IReadOnlyCollection<RoleAssignment> RoleAssignments => _roleAssignments;
+
+    public bool IsActive => Status == AccountStatuses.Active;
+
+    public void AddRole(RoleAssignment assignment) => _roleAssignments.Add(assignment);
+    public void UpdateProfile(string fullName, string? email)
+    {
+        FullName = fullName;
+        Email = email;
+    }
+    public void SetPasswordHash(string passwordHash) => PasswordHash = passwordHash;
+    public void Lock() => Status = AccountStatuses.Locked;
+    public void Unlock() => Status = AccountStatuses.Active;
 }

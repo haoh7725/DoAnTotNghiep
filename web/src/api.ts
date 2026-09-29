@@ -1,5 +1,5 @@
 export type Permission = { role: string; scope: string; facultyId: number | null; departmentId: number | null }
-export type Profile = { id: number; username: string; fullName: string; email: string | null; permissions: Permission[] }
+export type Profile = { id: number; username: string; fullName: string; email: string | null; roles: Permission[] }
 export type Faculty = { id: number; code: string; name: string }
 export type Department = Faculty & { facultyId: number }
 export type AcademicYear = { id: number; code: string; startDate: string; endDate: string }
@@ -21,7 +21,7 @@ export async function api<T>(path: string, method = 'GET', body?: unknown, notif
     if (response.status === 401 && notifyUnauthorized && path !== '/auth/login') window.dispatchEvent(new Event('session-expired'))
     const error = await response.json().catch(() => ({}))
     const validation = error.errors ? Object.values(error.errors).flat().join(' ') : ''
-    throw new ApiError(validation || error.title || ({ 401: 'Phiên đăng nhập đã hết hạn.', 403: 'Bạn không có quyền thực hiện thao tác này.', 429: 'Bạn thử quá nhiều lần. Vui lòng đợi một phút.' }[response.status] ?? 'Không thể hoàn thành yêu cầu.'), response.status)
+    throw new ApiError(validation || error.detail || error.title || ({ 401: 'Phiên đăng nhập đã hết hạn.', 403: 'Bạn không có quyền thực hiện thao tác này.', 429: 'Bạn thử quá nhiều lần. Vui lòng đợi một phút.' }[response.status] ?? 'Không thể hoàn thành yêu cầu.'), response.status)
   }
   return response.status === 204 ? undefined as T : response.json()
 }

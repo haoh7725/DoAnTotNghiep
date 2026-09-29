@@ -1,11 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using ResearchManagement.Api.Authorization;
 using ResearchManagement.Api.Contracts;
 using ResearchManagement.Domain.Entities;
 using ResearchManagement.Infrastructure.Persistence;
 namespace ResearchManagement.Api.Controllers;
-[ApiController, Route("api/admin"), Authorize(Policy = "Administrator")]
+[ApiController, Route("api/admin"), Authorize(Policy = Policies.Admin)]
 public sealed class CatalogController(ApplicationDbContext db) : ControllerBase
 {
     [HttpGet("faculties")]

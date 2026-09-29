@@ -1,6 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 namespace ResearchManagement.Api.Contracts;
-public sealed record LoginRequest([Required, StringLength(100)] string Username, [Required, StringLength(128)] string Password);
 public sealed record FacultyRequest([Required, StringLength(30)] string Code, [Required, StringLength(200)] string Name);
 public sealed record DepartmentRequest([Range(1, long.MaxValue)] long FacultyId, [Required, StringLength(30)] string Code, [Required, StringLength(200)] string Name);
 public sealed record AcademicYearRequest([Required, StringLength(20)] string Code, DateOnly StartDate, DateOnly EndDate);

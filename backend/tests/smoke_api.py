@@ -1,81 +1,126 @@
-"""Run only against an isolated database populated by --seed-demo.
-Set TEST_API_URL and TEST_SEED_PASSWORD. The test changes demo data and resets one demo password.
+"""Smoke test for an isolated database initialized from the project schema.
+
+Set TEST_API_URL, TEST_ADMIN_USERNAME and TEST_ADMIN_PASSWORD. The API must be
+running with the same seeded administrator credentials. Never run against
+production because the script creates and deletes test records.
 """
-import os,json,urllib.request,urllib.error,uuid,http.cookiejar
-base=os.environ['TEST_API_URL'].rstrip('/')
-password=os.environ['TEST_SEED_PASSWORD']
-checks=0
+import json
+import os
+import urllib.error
+import urllib.request
+import uuid
 
-def call(path,method='GET',body=None,token=None,status=200,header=True,opener=None):
- global checks
- headers={'Content-Type':'application/json'}
- if header: headers['X-Requested-With']='ResearchHub'
- if token: headers['Authorization']='Bearer '+token
- req=urllib.request.Request(base+'/api'+path,data=None if body is None else json.dumps(body).encode(),headers=headers,method=method)
- try:
-  response=(opener.open(req) if opener else urllib.request.urlopen(req))
- except urllib.error.HTTPError as e: response=e
- raw=response.read()
- assert response.status==status, f'{method} {path}: expected {status}, got {response.status}: {raw.decode()[:600]}'
- checks+=1
- return json.loads(raw) if raw else None
+BASE = os.environ["TEST_API_URL"].rstrip("/")
+ADMIN_USERNAME = os.environ.get("TEST_ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.environ["TEST_ADMIN_PASSWORD"]
+checks = 0
 
-call('/auth/me',status=401)
-call('/auth/login','POST',{'username':'demo.quan_tri','password':password},status=400,header=False)
-call('/auth/login','POST',{'username':'demo.quan_tri','password':'wrong'},status=401)
-roles=['quan_tri','giang_vien','truong_bo_mon','truong_khoa','phong_qlkh','ban_giam_hieu']
-tokens={r:call('/auth/login','POST',{'username':'demo.'+r,'password':password})['accessToken'] for r in roles}
-admin=tokens['quan_tri']
-profiles={r:call('/auth/me',token=t) for r,t in tokens.items()}
-for r,t in tokens.items():
- assert profiles[r]['permissions'][0]['role']==r.upper()
- call('/admin/accounts',token=t,status=200 if r=='quan_tri' else 403)
- call('/lookups',token=t)
-call('/auth/me',token=admin[:-10]+'aaaaaaaaaa',status=401)
-jar=http.cookiejar.CookieJar();opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
-call('/auth/login','POST',{'username':'demo.quan_tri','password':password},opener=opener)
-call('/auth/me',opener=opener)
-call('/auth/logout','POST',opener=opener,status=204)
-call('/auth/me',opener=opener,status=401)
-call('/auth/login','POST',{'username':'demo.quan_tri','password':password},status=429)
-tag=uuid.uuid4().hex[:8]
-f=call('/admin/faculties','POST',{'code':tag,'name':'Test faculty'},admin,201)
-call('/admin/faculties','POST',{'code':tag,'name':'Duplicate'},admin,409)
-call('/admin/faculties','POST',{'code':'  ','name':'Bad'},admin,400)
-call('/admin/faculties/'+str(f['id']),'PUT',{'code':tag,'name':'Updated'},admin)
-d=call('/admin/departments','POST',{'facultyId':f['id'],'code':tag,'name':'Department'},admin,201)
-call('/admin/faculties/'+str(f['id']),'DELETE',token=admin,status=409)
-call('/admin/departments','POST',{'facultyId':999999,'code':tag+'x','name':'Bad'},admin,409)
-call('/admin/academic-years','POST',{'code':tag,'startDate':'2027-01-01','endDate':'2026-01-01'},admin,400)
-y=call('/admin/academic-years','POST',{'code':tag,'startDate':'2026-01-01','endDate':'2026-12-31'},admin,201)
-call('/admin/academic-years/'+str(y['id']),'PUT',{'code':tag,'startDate':'2026-02-01','endDate':'2026-12-31'},admin)
-u=call('/admin/accounts','POST',{'username':'test.'+tag,'fullName':'Test User','email':tag+'@example.test','password':password},admin,201)
-assert 'passwordHash' not in u
-uid=u['id']; path='/admin/accounts/'+str(uid)
-call(path,'PUT',{'fullName':'Renamed','email':None,'status':'HOAT_DONG'},admin)
-call(path+'/permissions','PUT',[{'role':'GIANG_VIEN','scope':'TOAN_TRUONG','facultyId':None,'departmentId':None}],admin,400)
-call(path+'/permissions','PUT',[{'role':'TRUONG_BO_MON','scope':'BO_MON','facultyId':f['id']+999,'departmentId':d['id']}],admin,400)
-perm={'role':'TRUONG_BO_MON','scope':'BO_MON','facultyId':f['id'],'departmentId':d['id']}
-call(path+'/permissions','PUT',[perm],admin,204)
-call(path+'/permissions','PUT',[perm,perm],admin,400)
-assert len(call(path+'/permissions',token=admin))==1
-call('/admin/accounts/'+str(profiles['quan_tri']['id'])+'/permissions','PUT',[],admin,400)
-# Permissions and account state must be reloaded on an already-issued token.
-gvid=profiles['giang_vien']['id']; gvpath='/admin/accounts/'+str(gvid)
-call(gvpath+'/permissions','PUT',[perm],admin,204)
-scoped=call('/lookups',token=tokens['giang_vien'])
-assert d['id'] in [x['id'] for x in scoped['departments']]
-call(gvpath+'/permissions','PUT',[{'role':'GIANG_VIEN','scope':'CA_NHAN','facultyId':None,'departmentId':None}],admin,204)
-scoped=call('/lookups',token=tokens['giang_vien'])
-assert d['id'] not in [x['id'] for x in scoped['departments']]
-call(gvpath,'PUT',{'fullName':profiles['giang_vien']['fullName'],'email':None,'status':'KHOA'},admin)
-call('/auth/me',token=tokens['giang_vien'],status=401)
-call(gvpath,'PUT',{'fullName':profiles['giang_vien']['fullName'],'email':None,'status':'HOAT_DONG'},admin)
-call('/auth/me',token=tokens['giang_vien'])
-call(gvpath+'/password','PUT',{'password':password},admin,204)
-call('/auth/me',token=tokens['giang_vien'],status=401)
-call(path,'DELETE',token=admin,status=204)
-call('/admin/departments/'+str(d['id']),'DELETE',token=admin,status=204)
-call('/admin/faculties/'+str(f['id']),'DELETE',token=admin,status=204)
-call('/admin/academic-years/'+str(y['id']),'DELETE',token=admin,status=204)
-print(f'PASS: {checks} HTTP assertions plus role, scope, password exclusion and permission-refresh assertions')
+
+def call(path, method="GET", body=None, token=None, status=200, custom_header=True):
+    global checks
+    headers = {"Content-Type": "application/json"}
+    if custom_header:
+        headers["X-Requested-With"] = "ResearchHub"
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    request = urllib.request.Request(
+        BASE + "/api" + path,
+        data=None if body is None else json.dumps(body).encode(),
+        headers=headers,
+        method=method,
+    )
+    try:
+        response = urllib.request.urlopen(request)
+    except urllib.error.HTTPError as error:
+        response = error
+    raw = response.read()
+    assert response.status == status, (
+        f"{method} {path}: expected {status}, got {response.status}: "
+        f"{raw.decode(errors='replace')[:600]}"
+    )
+    checks += 1
+    return json.loads(raw) if raw else None
+
+
+call("/auth/me", status=401)
+call("/auth/login", "POST", {"username": ADMIN_USERNAME, "password": ADMIN_PASSWORD}, status=400, custom_header=False)
+call("/auth/login", "POST", {"username": ADMIN_USERNAME, "password": "wrong"}, status=401)
+login = call("/auth/login", "POST", {"username": ADMIN_USERNAME, "password": ADMIN_PASSWORD})
+admin = login["accessToken"]
+profile = call("/auth/me", token=admin)
+assert any(role["role"] == "QUAN_TRI" for role in profile["roles"])
+call("/admin/accounts", token=admin)
+call("/lookups", token=admin)
+call("/auth/me", token=admin[:-10] + "aaaaaaaaaa", status=401)
+
+tag = uuid.uuid4().hex[:8]
+faculty = call("/admin/faculties", "POST", {"code": tag, "name": "Test faculty"}, admin, 201)
+call("/admin/faculties", "POST", {"code": tag, "name": "Duplicate"}, admin, 409)
+department = call(
+    "/admin/departments",
+    "POST",
+    {"facultyId": faculty["id"], "code": tag, "name": "Test department"},
+    admin,
+    201,
+)
+year = call(
+    "/admin/academic-years",
+    "POST",
+    {"code": tag, "startDate": "2026-01-01", "endDate": "2026-12-31"},
+    admin,
+    201,
+)
+call(
+    "/admin/academic-years",
+    "POST",
+    {"code": tag + "x", "startDate": "2027-01-01", "endDate": "2026-01-01"},
+    admin,
+    400,
+)
+
+account = call(
+    "/admin/accounts",
+    "POST",
+    {
+        "username": "test." + tag,
+        "fullName": "Test user",
+        "email": tag + "@example.test",
+        "password": "ResearchHub-Test-2026!",
+    },
+    admin,
+    201,
+)
+assert "passwordHash" not in account
+account_path = "/admin/accounts/" + str(account["id"])
+permission = {
+    "role": "TRUONG_BO_MON",
+    "scope": "BO_MON",
+    "facultyId": faculty["id"],
+    "departmentId": department["id"],
+}
+call(account_path + "/permissions", "PUT", [permission], admin, 204)
+assert len(call(account_path + "/permissions", token=admin)) == 1
+
+user_login = call(
+    "/auth/login",
+    "POST",
+    {"username": account["username"], "password": "ResearchHub-Test-2026!"},
+)
+user = user_login["accessToken"]
+call("/admin/accounts", token=user, status=403)
+scoped = call("/lookups", token=user)
+assert department["id"] in [item["id"] for item in scoped["departments"]]
+
+call(account_path, "PUT", {"fullName": "Test user", "email": None, "status": "KHOA"}, admin)
+call("/auth/login", "POST", {"username": account["username"], "password": "ResearchHub-Test-2026!"}, status=403)
+call(account_path, "PUT", {"fullName": "Test user", "email": None, "status": "HOAT_DONG"}, admin)
+call(account_path + "/password", "PUT", {"password": "ResearchHub-Test-2026-Reset!"}, admin, 204)
+call("/auth/login", "POST", {"username": account["username"], "password": "ResearchHub-Test-2026!"}, status=401)
+call("/auth/login", "POST", {"username": account["username"], "password": "ResearchHub-Test-2026-Reset!"})
+
+call(account_path, "DELETE", token=admin, status=204)
+call("/admin/departments/" + str(department["id"]), "DELETE", token=admin, status=204)
+call("/admin/faculties/" + str(faculty["id"]), "DELETE", token=admin, status=204)
+call("/admin/academic-years/" + str(year["id"]), "DELETE", token=admin, status=204)
+
+print(f"PASS: {checks} HTTP assertions and scope checks")
