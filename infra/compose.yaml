@@ -26,6 +26,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
+      Auth__SigningKey: ${AUTH_SIGNING_KEY:-}
+      Seed__Password: ${SEED_PASSWORD:-}
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-research_management};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
       Cors__AllowedOrigins__0: http://localhost:5173
     ports:

@@ -42,7 +42,9 @@ flutter run
 
 ## Trạng thái
 
-Đã khởi tạo solution ASP.NET Core, React, Flutter, PostgreSQL bằng Docker và một endpoint kiểm tra tại `GET /api/system/info`.
+Đã có nền tảng đăng nhập, phân quyền theo phạm vi, API CRUD khoa/bộ môn/năm học/tài khoản và giao diện Web quản trị cơ bản. Mobile hiện là khung ban đầu.
+
+Xem [bàn giao tuần 1 của Hào](docs/HAO_TUAN_1.md) để chạy seed tài khoản, cấu hình Web/API và tích hợp các endpoint cho nhóm.
 
 ## Phạm vi
 
