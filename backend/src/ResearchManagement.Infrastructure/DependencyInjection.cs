@@ -7,6 +7,10 @@ using ResearchManagement.Infrastructure.Auth;
 using ResearchManagement.Infrastructure.Persistence;
 using ResearchManagement.Infrastructure.Persistence.Repositories;
 
+using ResearchManagement.Application.ResearchPlans.Abstractions;
+using ResearchManagement.Application.ResearchPlans;
+
+
 namespace ResearchManagement.Infrastructure;
 
 public static class DependencyInjection
@@ -24,7 +28,13 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordService, PasswordService>();
 
         services.AddScoped<IAccountRepository, AccountRepository>();
+        services.AddScoped<IResearchPlanRepository, ResearchPlanRepository>();
+        services.AddScoped<IResearchPlanItemRepository, ResearchPlanItemRepository>();
+        services.AddScoped<IProgressHistoryRepository, ProgressHistoryRepository>();
         services.AddScoped<AuthService>();
+        services.AddScoped<ResearchPlanService>();
+
+        services.AddScoped<ResearchPlanItemService>();
 
         return services;
     }
