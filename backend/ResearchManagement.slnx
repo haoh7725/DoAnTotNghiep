@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ResearchManagement.Api/ResearchManagement.Api.csproj" />
+    <Project Path="src/ResearchManagement.Application/ResearchManagement.Application.csproj" />
+    <Project Path="src/ResearchManagement.Domain/ResearchManagement.Domain.csproj" />
+    <Project Path="src/ResearchManagement.Infrastructure/ResearchManagement.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ResearchManagement.Api.Tests/ResearchManagement.Api.Tests.csproj" />
+  </Folder>
+</Solution>
