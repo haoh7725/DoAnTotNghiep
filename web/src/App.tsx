@@ -76,7 +76,7 @@ export default function App() {
       </>}
       {tab === 'my-profile' && <MyLecturerProfile user={user} lookups={lookups} />}
       {tab === 'lecturers' && (canBrowseLecturers(user) ? <LecturerDirectory user={user} lookups={lookups} /> : <p role="alert">Bạn không có quyền xem danh sách giảng viên.</p>)}
-      {tab === 'admin' && (administrator ? <AdminPanel onChanged={() => setRetry(x => x + 1)} /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
+      {tab === 'admin' && (administrator ? <AdminPanel currentAccountId={user.id} onChanged={() => setRetry(x => x + 1)} /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
       {tab === 'password' && <PasswordForm onChanged={() => { setUser(null); setError('Đã đổi mật khẩu. Vui lòng đăng nhập lại.'); setTab('overview') }} />}
     </main>
   </div>
