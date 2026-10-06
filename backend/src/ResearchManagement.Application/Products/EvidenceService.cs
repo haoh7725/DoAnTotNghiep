@@ -4,6 +4,7 @@ using ResearchManagement.Application.Products.Abstractions;
 using ResearchManagement.Application.Products.Models;
 using ResearchManagement.Domain.Constants;
 using ResearchManagement.Domain.Entities;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 
 namespace ResearchManagement.Application.Products;
