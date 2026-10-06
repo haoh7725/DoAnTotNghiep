@@ -4,6 +4,7 @@ import { api, ApiError, roleNames, scopeNames } from './api'
 import type { Lookups, Profile } from './api'
 import { AdminPanel } from './AdminPanel'
 import { LecturerDirectory, MyLecturerProfile, canBrowseLecturers } from './Lecturers'
+import { ConversionRules } from './ConversionRules'
 import './App.css'
 
 export default function App() {
@@ -65,6 +66,7 @@ export default function App() {
         <button className={tab === 'my-profile' ? 'active' : ''} onClick={() => setTab('my-profile')}>Hồ sơ của tôi</button>
         {canBrowseLecturers(user) && <button className={tab === 'lecturers' ? 'active' : ''} onClick={() => setTab('lecturers')}>Hồ sơ giảng viên</button>}
         {administrator && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>Quản trị dữ liệu nền</button>}
+        {administrator && <button className={tab === 'conversion-rules' ? 'active' : ''} onClick={() => setTab('conversion-rules')}>Quy định quy đổi</button>}
         <button className={tab === 'password' ? 'active' : ''} onClick={() => setTab('password')}>Đổi mật khẩu</button></nav>
       <div className="sidebar-bottom"><strong>{user.fullName}</strong><span>@{user.username}</span><button onClick={logout} disabled={busy}>Đăng xuất</button></div>
     </aside>
@@ -77,6 +79,7 @@ export default function App() {
       {tab === 'my-profile' && <MyLecturerProfile user={user} lookups={lookups} />}
       {tab === 'lecturers' && (canBrowseLecturers(user) ? <LecturerDirectory user={user} lookups={lookups} /> : <p role="alert">Bạn không có quyền xem danh sách giảng viên.</p>)}
       {tab === 'admin' && (administrator ? <AdminPanel currentAccountId={user.id} onChanged={() => setRetry(x => x + 1)} /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
+      {tab === 'conversion-rules' && (administrator ? <ConversionRules /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
       {tab === 'password' && <PasswordForm onChanged={() => { setUser(null); setError('Đã đổi mật khẩu. Vui lòng đăng nhập lại.'); setTab('overview') }} />}
     </main>
   </div>
