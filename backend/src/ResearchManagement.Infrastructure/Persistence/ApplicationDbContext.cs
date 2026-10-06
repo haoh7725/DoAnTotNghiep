@@ -26,6 +26,9 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<ProductCoAuthor> ProductCoAuthors => Set<ProductCoAuthor>();
     public DbSet<ProductEvidence> ProductEvidences => Set<ProductEvidence>();
     public DbSet<ReviewHistory> ReviewHistories => Set<ReviewHistory>();
+    public DbSet<ConversionRule> ConversionRules => Set<ConversionRule>();
+    public DbSet<ConversionCriterion> ConversionCriteria => Set<ConversionCriterion>();
+    public DbSet<AuthorConversionCoefficient> AuthorConversionCoefficients => Set<AuthorConversionCoefficient>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
