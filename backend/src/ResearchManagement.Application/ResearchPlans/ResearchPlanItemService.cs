@@ -1,8 +1,8 @@
+using ResearchManagement.Application.Auth.Abstractions;
 using ResearchManagement.Application.Common;
 using ResearchManagement.Application.ResearchPlans.Abstractions;
 using ResearchManagement.Application.ResearchPlans.Models;
 using ResearchManagement.Domain.Entities;
-using ResearchManagement.Application.Auth.Abstractions;
 
 namespace ResearchManagement.Application.ResearchPlans;
 
@@ -10,6 +10,7 @@ public sealed class ResearchPlanItemService(
     IResearchPlanItemRepository items,
     IResearchPlanRepository plans,
     IProgressHistoryRepository progressHistories,
+    ILecturerAccessRepository lecturerAccess,
     ICurrentUser currentUser)
 {
     private static readonly HashSet<string> ValidStatuses =
@@ -26,6 +27,13 @@ public sealed class ResearchPlanItemService(
         var item = await items.GetByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy nội dung kế hoạch.");
 
+        var plan = await plans.GetByIdAsync(
+            item.ResearchPlanId,
+            cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy kế hoạch NCKH.");
+
+        await EnsureCanAccessPlanAsync(plan, cancellationToken);
+
         return ToResponse(item);
     }
 
@@ -33,8 +41,12 @@ public sealed class ResearchPlanItemService(
         long researchPlanId,
         CancellationToken cancellationToken)
     {
-        _ = await plans.GetByIdAsync(researchPlanId, cancellationToken)
+        var plan = await plans.GetByIdAsync(
+            researchPlanId,
+            cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy kế hoạch NCKH.");
+
+        await EnsureCanAccessPlanAsync(plan, cancellationToken);
 
         var result = await items.GetByResearchPlanIdAsync(
             researchPlanId,
@@ -48,8 +60,18 @@ public sealed class ResearchPlanItemService(
         CreateResearchPlanItemRequest request,
         CancellationToken cancellationToken)
     {
-        _ = await plans.GetByIdAsync(researchPlanId, cancellationToken)
+        var plan = await plans.GetByIdAsync(
+            researchPlanId,
+            cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy kế hoạch NCKH.");
+
+        await EnsureCanAccessPlanAsync(plan, cancellationToken);
+
+        if (plan.Status == "DA_DANG_KY")
+        {
+            throw new BusinessRuleException(
+                "Kế hoạch đã đăng ký nên không thể thêm nội dung.");
+        }
 
         var item = new ResearchPlanItem(
             researchPlanId,
@@ -72,6 +94,19 @@ public sealed class ResearchPlanItemService(
         var item = await items.GetByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy nội dung kế hoạch.");
 
+        var plan = await plans.GetByIdAsync(
+            item.ResearchPlanId,
+            cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy kế hoạch NCKH.");
+
+        await EnsureCanAccessPlanAsync(plan, cancellationToken);
+
+        if (plan.Status == "DA_DANG_KY")
+        {
+            throw new BusinessRuleException(
+                "Kế hoạch đã đăng ký nên không thể chỉnh sửa nội dung.");
+        }
+
         item.Update(
             request.Name,
             request.CommittedQuantity,
@@ -86,8 +121,15 @@ public sealed class ResearchPlanItemService(
         long id,
         CancellationToken cancellationToken)
     {
-        _ = await items.GetByIdAsync(id, cancellationToken)
+        var item = await items.GetByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy nội dung kế hoạch.");
+
+        var plan = await plans.GetByIdAsync(
+            item.ResearchPlanId,
+            cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy kế hoạch NCKH.");
+
+        await EnsureCanAccessPlanAsync(plan, cancellationToken);
 
         var histories = await progressHistories.GetByResearchPlanItemIdAsync(
             id,
@@ -112,6 +154,13 @@ public sealed class ResearchPlanItemService(
     {
         var item = await items.GetByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy nội dung kế hoạch.");
+
+        var plan = await plans.GetByIdAsync(
+            item.ResearchPlanId,
+            cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy kế hoạch NCKH.");
+
+        await EnsureCanAccessPlanAsync(plan, cancellationToken);
 
         var status = request.Status.Trim().ToUpperInvariant();
 
@@ -144,6 +193,33 @@ public sealed class ResearchPlanItemService(
         await items.SaveChangesAsync(cancellationToken);
 
         return ToResponse(item);
+    }
+
+    private async Task EnsureCanAccessPlanAsync(
+        ResearchPlan plan,
+        CancellationToken cancellationToken)
+    {
+        var lecturer = await lecturerAccess.GetAccessInfoAsync(
+            plan.LecturerId,
+            cancellationToken)
+            ?? throw new NotFoundException(
+                "Không tìm thấy giảng viên.");
+
+        var accountId = currentUser.Id
+            ?? throw new AuthenticationFailedException(
+                "Không xác định được người dùng hiện tại.");
+
+        var isOwner = lecturer.AccountId == accountId;
+
+        var hasScopeAccess = currentUser.CanAccess(
+            lecturer.FacultyId,
+            lecturer.DepartmentId);
+
+        if (!isOwner && !hasScopeAccess)
+        {
+            throw new ForbiddenException(
+                "Bạn không có quyền truy cập dữ liệu của giảng viên này.");
+        }
     }
 
     private static ResearchPlanItemResponse ToResponse(

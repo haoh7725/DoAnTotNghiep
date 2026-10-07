@@ -15,6 +15,8 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<ResearchPlanItem> ResearchPlanItems => Set<ResearchPlanItem>();
 
     public DbSet<ProgressHistory> ProgressHistories => Set<ProgressHistory>();
+    public DbSet<Lecturer> Lecturers => Set<Lecturer>();
+    public DbSet<Department> Departments => Set<Department>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("nckh");

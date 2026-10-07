@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<ResearchPlanService>();
 
         services.AddScoped<ResearchPlanItemService>();
+        services.AddScoped<ILecturerAccessRepository, LecturerAccessRepository>();
 
         return services;
     }
