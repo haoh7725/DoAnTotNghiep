@@ -17,6 +17,10 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<ResearchPlanItem> ResearchPlanItems => Set<ResearchPlanItem>();
 
     public DbSet<ProgressHistory> ProgressHistories => Set<ProgressHistory>();
+    public DbSet<ResearchNorm> ResearchNorms => Set<ResearchNorm>();
+    public DbSet<ResearchTarget> ResearchTargets => Set<ResearchTarget>();
+    public DbSet<ResearchTargetAllocation> ResearchTargetAllocations
+    => Set<ResearchTargetAllocation>();
 
     public DbSet<Lecturer> Lecturers => Set<Lecturer>();
     public DbSet<ScientificProfile> ScientificProfiles => Set<ScientificProfile>();

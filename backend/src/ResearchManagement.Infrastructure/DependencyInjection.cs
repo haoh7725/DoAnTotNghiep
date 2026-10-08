@@ -9,6 +9,9 @@ using ResearchManagement.Infrastructure.Persistence.Repositories;
 
 using ResearchManagement.Application.ResearchPlans.Abstractions;
 using ResearchManagement.Application.ResearchPlans;
+using ResearchManagement.Application.ResearchNorms;
+using ResearchManagement.Application.ResearchNorms.Abstractions;
+using ResearchManagement.Application.ResearchTargets.Abstractions;
 using ResearchManagement.Application.Lecturers;
 using ResearchManagement.Application.Lecturers.Abstractions;
 using ResearchManagement.Application.ProductTypes;
@@ -16,7 +19,9 @@ using ResearchManagement.Application.ProductTypes.Abstractions;
 using ResearchManagement.Application.Products;
 using ResearchManagement.Application.Products.Abstractions;
 
-
+using ResearchManagement.Application.ResearchTargets;
+using ResearchManagement.Application.ResearchTargetAllocations.Abstractions;
+using ResearchManagement.Application.ResearchTargetAllocations;
 namespace ResearchManagement.Infrastructure;
 
 public static class DependencyInjection
@@ -41,6 +46,14 @@ public static class DependencyInjection
         services.AddScoped<ResearchPlanService>();
 
         services.AddScoped<ResearchPlanItemService>();
+        services.AddScoped<IResearchNormRepository, ResearchNormRepository>();
+        services.AddScoped<ResearchNormService>();
+        services.AddScoped<IResearchNormRepository, ResearchNormRepository>();
+        services.AddScoped<IResearchTargetRepository, ResearchTargetRepository>();
+
+        services.AddScoped<ResearchTargetService>();
+        services.AddScoped<IResearchTargetAllocationRepository, ResearchTargetAllocationRepository>();
+        services.AddScoped<ResearchTargetAllocationService>();
 
         services.AddScoped<ILecturerRepository, LecturerRepository>();
         services.AddScoped<IScientificProfileRepository, ScientificProfileRepository>();

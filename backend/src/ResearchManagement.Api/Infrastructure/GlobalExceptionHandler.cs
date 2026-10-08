@@ -7,10 +7,13 @@ using ResearchManagement.Application.Common;
 namespace ResearchManagement.Api.Infrastructure;
 
 /// <summary>Chuyển exception thành ProblemDetails (RFC 9457) với mã HTTP phù hợp.</summary>
-public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
+public sealed class GlobalExceptionHandler(
+    ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(
-        HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
+        HttpContext httpContext,
+        Exception exception,
+        CancellationToken cancellationToken)
     {
         var postgres = exception as PostgresException ?? exception.InnerException as PostgresException;
         var (status, title) = postgres?.SqlState switch
@@ -32,19 +35,57 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
         };
 
         if (status == StatusCodes.Status500InternalServerError)
-            logger.LogError(exception, "Lỗi không xử lý được tại {Path}", httpContext.Request.Path);
+        {
+            logger.LogError(
+                exception,
+                "Lỗi không xử lý được tại {Path}",
+                httpContext.Request.Path);
+        }
+
+        var detail = exception switch
+        {
+            AppException => exception.Message,
+            _ when postgresBusinessMessage is not null => postgresBusinessMessage,
+            _ => "Đã xảy ra lỗi. Vui lòng thử lại sau."
+        };
 
         var problem = new ProblemDetails
         {
             Status = status,
             Title = title,
-            // Không lộ chi tiết lỗi hệ thống ra ngoài.
-            Detail = exception is AppException ? exception.Message : "Đã xảy ra lỗi. Vui lòng thử lại sau.",
+            Detail = detail,
             Instance = httpContext.Request.Path
         };
 
         httpContext.Response.StatusCode = status;
-        await httpContext.Response.WriteAsJsonAsync(problem, cancellationToken);
+
+        await httpContext.Response.WriteAsJsonAsync(
+            problem,
+            cancellationToken);
+
         return true;
+    }
+
+    private static string? GetPostgresBusinessMessage(Exception exception)
+    {
+        if (exception is not DbUpdateException
+            {
+                InnerException: PostgresException postgresException
+            })
+        {
+            return null;
+        }
+
+        return postgresException.MessageText switch
+        {
+            "Chi tieu moi nho hon tong da phan bo" =>
+                "Chỉ tiêu mới không được nhỏ hơn tổng số bài đã phân bổ.",
+
+            _ when postgresException.MessageText.StartsWith(
+                "Tong phan bo vuot chi tieu duoc giao") =>
+                "Tổng số bài phân bổ không được vượt quá chỉ tiêu được giao.",
+
+            _ => null
+        };
     }
 }
