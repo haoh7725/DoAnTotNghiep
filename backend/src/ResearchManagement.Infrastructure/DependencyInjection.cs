@@ -9,6 +9,8 @@ using ResearchManagement.Infrastructure.Persistence.Repositories;
 
 using ResearchManagement.Application.ResearchPlans.Abstractions;
 using ResearchManagement.Application.ResearchPlans;
+using ResearchManagement.Application.Notifications.Abstractions;
+using ResearchManagement.Application.Notifications;
 
 
 namespace ResearchManagement.Infrastructure;
@@ -36,6 +38,10 @@ public static class DependencyInjection
 
         services.AddScoped<ResearchPlanItemService>();
         services.AddScoped<ILecturerAccessRepository, LecturerAccessRepository>();
+        services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<NotificationService>();
+        services.AddScoped<IReminderRepository, ReminderRepository>();
+        services.AddScoped<ReminderService>();
 
         return services;
     }
