@@ -15,30 +15,23 @@ public sealed class GlobalExceptionHandler(
         Exception exception,
         CancellationToken cancellationToken)
     {
-        var postgresBusinessMessage = GetPostgresBusinessMessage(exception);
-
-        var (status, title) = exception switch
+        var postgres = exception as PostgresException ?? exception.InnerException as PostgresException;
+        var (status, title) = postgres?.SqlState switch
         {
-            NotFoundException =>
-                (StatusCodes.Status404NotFound, "Không tìm thấy"),
-
-            ConflictException =>
-                (StatusCodes.Status409Conflict, "Xung đột dữ liệu"),
-
-            BusinessRuleException =>
-                (StatusCodes.Status422UnprocessableEntity, "Vi phạm quy tắc nghiệp vụ"),
-
-            AuthenticationFailedException =>
-                (StatusCodes.Status401Unauthorized, "Xác thực thất bại"),
-
-            ForbiddenException =>
-                (StatusCodes.Status403Forbidden, "Không có quyền"),
-
-            _ when postgresBusinessMessage is not null =>
-                (StatusCodes.Status422UnprocessableEntity, "Vi phạm quy tắc nghiệp vụ"),
-
-            _ =>
-                (StatusCodes.Status500InternalServerError, "Lỗi hệ thống")
+            PostgresErrorCodes.UniqueViolation => (StatusCodes.Status409Conflict, "Dữ liệu đã tồn tại"),
+            PostgresErrorCodes.ForeignKeyViolation => (StatusCodes.Status409Conflict, "Dữ liệu đang được sử dụng"),
+            PostgresErrorCodes.CheckViolation => (StatusCodes.Status422UnprocessableEntity, "Vi phạm quy tắc nghiệp vụ"),
+            _ => exception switch
+        {
+            NotFoundException => (StatusCodes.Status404NotFound, "Không tìm thấy"),
+            ConflictException => (StatusCodes.Status409Conflict, "Xung đột dữ liệu"),
+            BusinessRuleException => (StatusCodes.Status422UnprocessableEntity, "Vi phạm quy tắc nghiệp vụ"),
+            AuthenticationFailedException => (StatusCodes.Status401Unauthorized, "Xác thực thất bại"),
+            ForbiddenException => (StatusCodes.Status403Forbidden, "Không có quyền"),
+            _ when exception is NpgsqlException or DbUpdateException =>
+                (StatusCodes.Status503ServiceUnavailable, "Không thể xử lý dữ liệu"),
+            _ => (StatusCodes.Status500InternalServerError, "Lỗi hệ thống")
+        }
         };
 
         if (status == StatusCodes.Status500InternalServerError)

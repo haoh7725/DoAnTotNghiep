@@ -12,6 +12,12 @@ using ResearchManagement.Application.ResearchPlans;
 using ResearchManagement.Application.ResearchNorms;
 using ResearchManagement.Application.ResearchNorms.Abstractions;
 using ResearchManagement.Application.ResearchTargets.Abstractions;
+using ResearchManagement.Application.Lecturers;
+using ResearchManagement.Application.Lecturers.Abstractions;
+using ResearchManagement.Application.ProductTypes;
+using ResearchManagement.Application.ProductTypes.Abstractions;
+using ResearchManagement.Application.Products;
+using ResearchManagement.Application.Products.Abstractions;
 
 using ResearchManagement.Application.ResearchTargets;
 using ResearchManagement.Application.ResearchTargetAllocations.Abstractions;
@@ -48,6 +54,22 @@ public static class DependencyInjection
         services.AddScoped<ResearchTargetService>();
         services.AddScoped<IResearchTargetAllocationRepository, ResearchTargetAllocationRepository>();
         services.AddScoped<ResearchTargetAllocationService>();
+
+        services.AddScoped<ILecturerRepository, LecturerRepository>();
+        services.AddScoped<IScientificProfileRepository, ScientificProfileRepository>();
+        services.AddScoped<IProductTypeRepository, ProductTypeRepository>();
+        services.AddScoped<LecturerService>();
+        services.AddScoped<ScientificProfileService>();
+        services.AddScoped<ProductTypeService>();
+
+        services.AddScoped<IProductRepository, ProductRepository>();
+        services.AddScoped<IProductCoAuthorRepository, ProductCoAuthorRepository>();
+        services.AddScoped<IProductEvidenceRepository, ProductEvidenceRepository>();
+        services.AddScoped<IReviewHistoryRepository, ReviewHistoryRepository>();
+        services.AddScoped<ProductService>();
+        services.AddScoped<CoAuthorService>();
+        services.AddScoped<EvidenceService>();
+
         return services;
     }
 }
