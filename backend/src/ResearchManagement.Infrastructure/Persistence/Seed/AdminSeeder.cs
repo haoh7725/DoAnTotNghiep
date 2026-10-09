@@ -32,6 +32,27 @@ public static class AdminSeeder
         var accounts = scope.ServiceProvider.GetRequiredService<IAccountRepository>();
         var passwords = scope.ServiceProvider.GetRequiredService<IPasswordService>();
 
+        const string testUsername = "p1_test";
+        const string testPassword = "p1test123456";
+
+        if (!await accounts.ExistsByUsernameAsync(testUsername, cancellationToken))
+        {
+            var testAccount = new Account(
+                testUsername,
+                string.Empty,
+                "P1 Test User");
+
+            testAccount.SetPasswordHash(
+                passwords.Hash(testAccount, testPassword));
+
+            await accounts.AddAsync(testAccount, cancellationToken);
+            await accounts.SaveChangesAsync(cancellationToken);
+
+            logger.LogInformation(
+                "Đã tạo tài khoản test phân quyền {Username}.",
+                testUsername);
+        }
+
         if (await accounts.ExistsByUsernameAsync(username, cancellationToken))
         {
             logger.LogInformation("Tài khoản {Username} đã tồn tại, bỏ qua seed.", username);
