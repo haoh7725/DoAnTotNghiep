@@ -42,6 +42,8 @@ public sealed class GlobalExceptionHandler(
                 httpContext.Request.Path);
         }
 
+        var postgresBusinessMessage = GetPostgresBusinessMessage(exception);
+
         var detail = exception switch
         {
             AppException => exception.Message,
