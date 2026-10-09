@@ -27,6 +27,15 @@ builder.Services
     .AddJwtBearer(options =>
     {
         options.MapInboundClaims = false;
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                if (!context.Request.Headers.ContainsKey("Authorization"))
+                    context.Token = context.Request.Cookies["research_session"];
+                return Task.CompletedTask;
+            }
+        };
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -62,7 +71,8 @@ builder.Services.AddCors(options =>
     options.AddPolicy("WebClient", policy => policy
         .WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [])
         .AllowAnyHeader()
-        .AllowAnyMethod());
+        .AllowAnyMethod()
+        .AllowCredentials());
 });
 builder.Services.AddHostedService<ReminderBackgroundService>();
 var app = builder.Build();
@@ -77,6 +87,20 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors("WebClient");
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api") &&
+        !HttpMethods.IsGet(context.Request.Method) &&
+        !HttpMethods.IsHead(context.Request.Method) &&
+        !HttpMethods.IsOptions(context.Request.Method) &&
+        context.Request.Headers["X-Requested-With"] != "ResearchHub")
+    {
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        await context.Response.WriteAsJsonAsync(new { title = "Thiếu header X-Requested-With: ResearchHub." });
+        return;
+    }
+    await next(context);
+});
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();

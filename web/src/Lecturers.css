@@ -1,0 +1,37 @@
+/* Màn hình hồ sơ giảng viên & lý lịch khoa học — dùng chung bảng màu với App.css */
+textarea { width: 100%; padding: 12px 14px; border: 1px solid #cbd6ce; border-radius: 8px; background: #fff; color: #1d392f; line-height: 1.6; resize: vertical; min-height: 110px; }
+textarea:focus-visible { outline: 3px solid #85baa2; outline-offset: 3px; }
+input:disabled, select:disabled { background: #eef2ec; color: #6d7d70; cursor: not-allowed; }
+
+.lec-filter { display: grid; grid-template-columns: 2fr 1.4fr 1.4fr auto; gap: 0 16px; align-items: end; }
+.lec-filter label { margin: 0 0 4px; }
+.lec-filter .primary { height: 46px; margin-bottom: 4px; }
+
+.lec-back { margin-bottom: 8px; }
+.lec-badge { margin-left: 8px; padding: 2px 8px; border-radius: 20px; background: #d6eadc; color: #165d44; font-size: .68rem; font-weight: 700; vertical-align: middle; }
+
+.lec-notice { display: flex; flex-direction: column; gap: 4px; margin: 20px 0 0; padding: 14px 16px; border-radius: 8px; border: 1px solid; font-size: .85rem; line-height: 1.6; }
+.lec-notice strong { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
+.lec-notice.office { background: #e6f2ea; border-color: #b9d8c4; color: #1d5a40; }
+.lec-notice.owner { background: #eef4e4; border-color: #cfdcb4; color: #4a5f20; }
+.lec-notice.view { background: #f1f1ec; border-color: #d9d9d0; color: #55584f; }
+
+.lec-ok { margin: 14px 0 0; padding: 12px 14px; border-radius: 8px; background: #e6f2ea; border: 1px solid #b9d8c4; color: #1d5a40; font-size: .85rem; }
+.lec-sub { margin: 4px 0 0; font-size: .82rem; }
+
+.lec-dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 20px 28px; margin: 22px 0 4px; }
+.lec-dl dt { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #6d7d70; margin-bottom: 6px; }
+.lec-dl dd { margin: 0; font-size: .95rem; color: #203a33; overflow-wrap: anywhere; }
+
+.lec-blocks { display: grid; gap: 22px; margin-top: 20px; }
+.lec-blocks article { padding-top: 18px; border-top: 1px solid #e6eae4; }
+.lec-blocks article:first-child { padding-top: 0; border-top: 0; }
+.lec-blocks h3 { margin: 0 0 8px; font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; color: #34785d; }
+.lec-text { margin: 0; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.lec-lock { margin-left: 4px; font-size: .8rem; }
+.lec-hint { font-weight: 400; font-size: .78rem; color: #6d7d70; margin-top: -4px; }
+.lec-count { align-self: flex-end; font-size: .72rem; font-weight: 400; color: #6d7d70; }
+
+@media (max-width: 900px) { .lec-filter { grid-template-columns: 1fr 1fr; } .lec-filter .primary { grid-column: 1 / -1; } }
+@media (max-width: 650px) { .lec-filter { grid-template-columns: 1fr; } }

@@ -18,3 +18,45 @@ Content-Type: application/json
 @token = {{login.response.body.accessToken}}
 GET {{ResearchManagement.Api_HostAddress}}/api/auth/me
 Authorization: Bearer {{token}}
+
+### Hồ sơ giảng viên của tài khoản hiện tại
+GET {{ResearchManagement.Api_HostAddress}}/api/lecturers/me
+Authorization: Bearer {{token}}
+
+### Danh sách giảng viên trong phạm vi được xem
+GET {{ResearchManagement.Api_HostAddress}}/api/lecturers?page=1&pageSize=20&keyword=nguyen
+Authorization: Bearer {{token}}
+
+### Tạo giảng viên (PHONG_QLKH hoặc QUAN_TRI)
+POST {{ResearchManagement.Api_HostAddress}}/api/lecturers
+Authorization: Bearer {{token}}
+Content-Type: application/json
+X-Requested-With: ResearchHub
+
+{
+  "accountId": 2,
+  "departmentId": 1,
+  "code": "GV001",
+  "fullName": "Nguyễn Văn A",
+  "gender": "NAM",
+  "email": "a@example.test",
+  "academicRank": "Phó giáo sư",
+  "degree": "Tiến sĩ"
+}
+
+### Cập nhật lý lịch khoa học của mình
+PUT {{ResearchManagement.Api_HostAddress}}/api/lecturers/me/scientific-profile
+Authorization: Bearer {{token}}
+Content-Type: application/json
+X-Requested-With: ResearchHub
+
+{
+  "expertise": "Kỹ thuật phần mềm",
+  "researchFields": "Phân tích dữ liệu",
+  "researchDirections": "Học máy ứng dụng",
+  "activitySummary": "Chủ nhiệm 2 đề tài cấp cơ sở"
+}
+
+### Danh mục loại sản phẩm
+GET {{ResearchManagement.Api_HostAddress}}/api/product-types
+Authorization: Bearer {{token}}

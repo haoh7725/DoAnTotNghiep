@@ -32,6 +32,11 @@ public sealed class Account : BaseEntity
     public bool IsActive => Status == AccountStatuses.Active;
 
     public void AddRole(RoleAssignment assignment) => _roleAssignments.Add(assignment);
+    public void UpdateProfile(string fullName, string? email)
+    {
+        FullName = fullName;
+        Email = email;
+    }
     public void SetPasswordHash(string passwordHash) => PasswordHash = passwordHash;
     public void Lock() => Status = AccountStatuses.Locked;
     public void Unlock() => Status = AccountStatuses.Active;
