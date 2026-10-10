@@ -46,6 +46,8 @@ flutter run
 
 Xem [bàn giao tuần 1 của Hào](docs/HAO_TUAN_1.md) để chạy seed tài khoản, cấu hình Web/API và tích hợp các endpoint cho nhóm.
 
+Xem [hợp đồng API sản phẩm khoa học, trạng thái bài báo và đồng tác giả của Lâm](docs/LAM_TUAN_2.md) để tích hợp `/api/products`.
+
 Xem [hợp đồng API giảng viên, lý lịch khoa học và loại sản phẩm của Lâm](docs/LAM_TUAN_1.md) để tích hợp `/api/lecturers` và `/api/product-types`.
 
 Backend đã có xác thực JWT và phân quyền theo vai trò/phạm vi:

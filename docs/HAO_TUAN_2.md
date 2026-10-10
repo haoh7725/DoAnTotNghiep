@@ -13,7 +13,3 @@ Mỗi quy định gồm loại sản phẩm, mã, phiên bản, tên, mô tả �
 Mã quy định và phiên bản không được trùng. Ngày hết hiệu lực không được trước ngày bắt đầu. Tiêu chí chữ chỉ áp dụng cho chỉ số tạp chí, phân loại tạp chí và cấp đề tài; tiêu chí số áp dụng cho điểm công trình và năm công bố. Vai trò tác giả trong một quy định không được trùng.
 
 Màn hình Web **Quy định quy đổi** cho phép quản lý toàn bộ nội dung trên, gồm nhiều tiêu chí và nhiều hệ số tác giả. Công thức tính kết quả từ các quy định này thuộc hạng mục tuần 3.
-
-## Hợp đồng kết quả đánh giá
-
-Cấu trúc API kết quả dành cho Web và Mobile được chốt tại [API_KET_QUA_DANH_GIA.md](API_KET_QUA_DANH_GIA.md). DTO dùng chung đã được thêm vào Application để phần tính kết quả tuần 3 triển khai đúng hợp đồng mà không làm Lâm phải sửa màn hình Mobile.

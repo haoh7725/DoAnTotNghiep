@@ -1,284 +1,221 @@
-using ResearchManagement.Application.Common;
 using ResearchManagement.Application.Auth.Abstractions;
+using ResearchManagement.Application.Common;
+using ResearchManagement.Application.Lecturers.Abstractions;
+using ResearchManagement.Application.ProductTypes.Abstractions;
 using ResearchManagement.Application.Products.Abstractions;
 using ResearchManagement.Application.Products.Models;
-using ResearchManagement.Application.ResearchPlans.Abstractions;
-using ResearchManagement.Application.Lecturers.Abstractions;
 using ResearchManagement.Domain.Constants;
 using ResearchManagement.Domain.Entities;
 
 namespace ResearchManagement.Application.Products;
 
+/// <summary>
+/// Danh sách, chi tiết, thêm, sửa sản phẩm khoa học và đổi trạng thái bài báo.
+/// Gửi duyệt, xét duyệt, minh chứng và lưu phiên bản thuộc các hạng mục sau.
+/// </summary>
 public sealed class ProductService(
     IProductRepository products,
-    IProductCoAuthorRepository coAuthors,
-    IProductEvidenceRepository evidences,
-    IReviewHistoryRepository reviewHistories,
-    IResearchPlanItemRepository planItems,
+    IProductTypeRepository productTypes,
     ILecturerRepository lecturers,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    TimeProvider clock)
 {
-    // ──── Chuyển trạng thái hợp lệ khi APPROVE ───────────────────────────────
-    private static readonly Dictionary<string, string> ApproveTransitions = new()
-    {
-        [ProductStatuses.Submitted]               = ProductStatuses.DepartmentHeadApproved,
-        [ProductStatuses.DepartmentHeadApproved]  = ProductStatuses.FacultyDeanApproved,
-        [ProductStatuses.FacultyDeanApproved]     = ProductStatuses.ResearchOfficeApproved,
-        [ProductStatuses.ResearchOfficeApproved]  = ProductStatuses.Approved,
-    };
+    private const string CodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-    // Vai trò nào được duyệt từ trạng thái nào
-    private static readonly Dictionary<string, string> ApproverRoleForStatus = new()
-    {
-        [ProductStatuses.Submitted]               = Roles.DepartmentHead,
-        [ProductStatuses.DepartmentHeadApproved]  = Roles.FacultyDean,
-        [ProductStatuses.FacultyDeanApproved]     = Roles.ResearchOffice,
-        [ProductStatuses.ResearchOfficeApproved]  = Roles.ResearchOffice,
-    };
+    public Task<PagedResult<ProductSummaryResponse>> SearchAsync(
+        ProductSearchQuery query, CancellationToken cancellationToken) =>
+        products.SearchAsync(query, ProductAccess.VisibilityOf(currentUser), cancellationToken);
 
-    // ──── Queries ─────────────────────────────────────────────────────────────
-
-    public async Task<ProductResponse> GetByIdAsync(
-        long id,
-        CancellationToken cancellationToken)
+    public async Task<ProductDetailResponse> GetByIdAsync(long id, CancellationToken cancellationToken)
     {
-        var product = await products.GetByIdWithDetailsAsync(id, cancellationToken)
+        var product = await products.GetViewAsync(id, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
 
-        var coAuthorList = await coAuthors.GetByProductIdAsync(id, cancellationToken);
-        var evidenceList = await evidences.GetByProductIdAsync(id, cancellationToken);
+        if (!ProductAccess.CanRead(currentUser, product.CreatedByAccountId, product.ReviewStatus, product.Authors))
+            throw new ForbiddenException("Không có quyền xem sản phẩm này.");
 
-        return await ToResponseAsync(product, coAuthorList, evidenceList, cancellationToken);
+        return WithPermissions(product);
     }
 
-    public async Task<IReadOnlyList<ProductSummaryResponse>> GetByPlanItemIdAsync(
-        long planItemId,
-        CancellationToken cancellationToken)
+    public async Task<ProductDetailResponse> CreateAsync(
+        CreateProductRequest request, CancellationToken cancellationToken)
     {
-        _ = await planItems.GetByIdAsync(planItemId, cancellationToken)
-            ?? throw new NotFoundException("Không tìm thấy nội dung kế hoạch.");
+        var accountId = currentUser.Id ?? throw new ForbiddenException("Chưa đăng nhập.");
 
-        var list = await products.GetByPlanItemIdAsync(planItemId, cancellationToken);
-        return list.Select(ToSummary).ToList();
-    }
+        var type = await productTypes.GetByIdAsync(request.ProductTypeId, cancellationToken)
+            ?? throw new BusinessRuleException("Loại sản phẩm không tồn tại.");
+        if (!await products.AcademicYearExistsAsync(request.AcademicYearId, cancellationToken))
+            throw new BusinessRuleException("Năm học ghi nhận không tồn tại.");
 
-    public async Task<IReadOnlyList<ProductSummaryResponse>> GetMineAsync(CancellationToken cancellationToken)
-    {
-        var lecturer = await lecturers.GetByAccountIdAsync(GetCurrentAccountId(), cancellationToken)
-            ?? throw new NotFoundException("Tài khoản chưa liên kết với giảng viên.");
-        var list = await products.GetByLecturerIdAsync(lecturer.Id, cancellationToken);
-        return list.Select(ToSummary).ToList();
-    }
+        // Trạng thái bài báo chỉ có ở bài báo; bài báo mới mặc định là Đang viết.
+        var articleStatus = TextNormalizer.Clean(request.ArticleStatus)?.ToUpperInvariant();
+        if (type.Code == ProductTypeCodes.Article)
+            articleStatus ??= ArticleStatuses.Writing;
+        else if (articleStatus is not null)
+            throw new BusinessRuleException("Trạng thái bài báo chỉ áp dụng cho sản phẩm loại Bài báo.");
 
-    public async Task<IReadOnlyList<ReviewHistoryResponse>> GetReviewHistoryAsync(
-        long productId,
-        CancellationToken cancellationToken)
-    {
-        _ = await products.GetByIdAsync(productId, cancellationToken)
-            ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
+        var content = NormalizeContent(request, articleStatus);
+        await EnsureDoiAvailableAsync(content.Doi, null, cancellationToken);
 
-        var histories = await reviewHistories.GetByProductIdAsync(productId, cancellationToken);
-        return histories.Select(h => new ReviewHistoryResponse(
-            h.Id,
-            h.ProductId,
-            h.ActorAccountId,
-            string.Empty, // username cần join — trả về rỗng, controller hoặc repository sẽ enrich nếu cần
-            h.FromStatus,
-            h.ToStatus,
-            h.Comment,
-            h.OccurredAt)).ToList();
-    }
-
-    // ──── Commands ────────────────────────────────────────────────────────────
-
-    public async Task<ProductResponse> CreateAsync(
-        CreateProductRequest request,
-        CancellationToken cancellationToken)
-    {
-        var actorId = GetCurrentAccountId();
-
-        var planItem = await planItems.GetByIdAsync(request.ResearchPlanItemId, cancellationToken)
-            ?? throw new NotFoundException("Không tìm thấy nội dung kế hoạch.");
-
-        // Lấy giảng viên của người dùng hiện tại
-        var lecturer = await lecturers.GetByAccountIdAsync(actorId, cancellationToken)
-            ?? throw new BusinessRuleException("Tài khoản này chưa được liên kết với giảng viên.");
-
-        var product = new Product(
-            planItem.Id,
-            lecturer.Id,
-            request.Title,
-            request.Description,
-            request.PublicationInfo,
-            request.PublishedDate,
-            request.ArticleStatus,
-            request.JournalIndex,
-            request.JournalClassification,
-            request.ProjectLevel);
-
-        await products.AddAsync(product, cancellationToken);
-        await products.SaveChangesAsync(cancellationToken);
-
-        return await ToResponseAsync(product, [], [], cancellationToken);
-    }
-
-    public async Task<ProductResponse> UpdateAsync(
-        long id,
-        UpdateProductRequest request,
-        CancellationToken cancellationToken)
-    {
-        var product = await products.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
-
-        EnsureEditable(product);
-        await EnsureOwnerOrAdminAsync(product, cancellationToken);
-        product.Update(request.Title, request.Description, request.PublicationInfo, request.PublishedDate,
-            request.ArticleStatus, request.JournalIndex, request.JournalClassification, request.ProjectLevel);
-
-        await products.SaveChangesAsync(cancellationToken);
-
-        var coAuthorList = await coAuthors.GetByProductIdAsync(id, cancellationToken);
-        var evidenceList = await evidences.GetByProductIdAsync(id, cancellationToken);
-        return await ToResponseAsync(product, coAuthorList, evidenceList, cancellationToken);
-    }
-
-    public async Task<ProductResponse> SubmitAsync(
-        long id,
-        CancellationToken cancellationToken)
-    {
-        var product = await products.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
-
-        if (product.Status is not (ProductStatuses.Draft or ProductStatuses.Returned))
-            throw new BusinessRuleException("Chỉ có thể nộp sản phẩm ở trạng thái Nháp hoặc Trả lại.");
-
-        await EnsureOwnerOrAdminAsync(product, cancellationToken);
-
-        var actorId = GetCurrentAccountId();
-        var fromStatus = product.Status;
-
-        product.Submit();
-
-        var history = new ReviewHistory(product.Id, actorId, fromStatus, product.Status, null);
-        await reviewHistories.AddAsync(history, cancellationToken);
-
-        await products.SaveChangesAsync(cancellationToken);
-
-        var coAuthorList = await coAuthors.GetByProductIdAsync(id, cancellationToken);
-        var evidenceList = await evidences.GetByProductIdAsync(id, cancellationToken);
-        return await ToResponseAsync(product, coAuthorList, evidenceList, cancellationToken);
-    }
-
-    public async Task<ProductResponse> ReviewAsync(
-        long id,
-        ReviewProductRequest request,
-        CancellationToken cancellationToken)
-    {
-        var product = await products.GetByIdAsync(id, cancellationToken)
-            ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
-
-        var action = request.Action.Trim().ToUpperInvariant();
-        if (action is not ("APPROVE" or "REJECT"))
-            throw new BusinessRuleException("Hành động xét duyệt phải là APPROVE hoặc REJECT.");
-
-        // Kiểm tra trạng thái có thể duyệt không
-        if (!ApproverRoleForStatus.TryGetValue(product.Status, out var requiredRole))
-            throw new BusinessRuleException($"Sản phẩm ở trạng thái '{product.Status}' không thể xét duyệt.");
-
-        // Kiểm tra vai trò người duyệt
-        if (!currentUser.IsInRole(requiredRole) && !currentUser.IsInRole(Roles.Admin))
-            throw new ForbiddenException("Bạn không có quyền xét duyệt ở bước này.");
-
-        var actorId = GetCurrentAccountId();
-        var fromStatus = product.Status;
-
-        if (action == "APPROVE")
+        var mainLecturerId = await ResolveMainAuthorAsync(accountId, request.MainAuthorLecturerId, cancellationToken);
+        var authorInputs = new List<ProductAuthorInput> { new() { LecturerId = mainLecturerId, Role = AuthorRoles.Main } };
+        foreach (var co in request.CoAuthors ?? [])
         {
-            var nextStatus = ApproveTransitions[product.Status];
-            product.Approve(nextStatus, request.ScoreEquivalent);
-            var history = new ReviewHistory(product.Id, actorId, fromStatus, product.Status, request.Comment);
-            await reviewHistories.AddAsync(history, cancellationToken);
+            if (co.Role.Trim().ToUpperInvariant() == AuthorRoles.Main)
+                throw new BusinessRuleException("Chỉ có một tác giả chính; đồng tác giả phải có vai trò khác.");
+            authorInputs.Add(co);
         }
-        else // REJECT
+        var authors = await ProductWriteGuard.PlanAuthorsAsync(lecturers, authorInputs, cancellationToken);
+
+        var code = await NewCodeAsync(type.Code, cancellationToken);
+        var product = new Product(type.Id, request.AcademicYearId, accountId, code, content, articleStatus);
+        await products.CreateAsync(product, authors, cancellationToken);
+
+        return await GetAfterSaveAsync(product.Id, cancellationToken);
+    }
+
+    public async Task<ProductDetailResponse> UpdateAsync(
+        long id, UpdateProductRequest request, CancellationToken cancellationToken)
+    {
+        var context = await ProductWriteGuard.LoadForWriteAsync(
+            products, productTypes, currentUser, id, cancellationToken);
+        var product = context.Product;
+
+        if (request.AcademicYearId != product.AcademicYearId &&
+            !await products.AcademicYearExistsAsync(request.AcademicYearId, cancellationToken))
+            throw new BusinessRuleException("Năm học ghi nhận không tồn tại.");
+
+        var content = NormalizeContent(request, product.ArticleStatus);
+        await EnsureDoiAvailableAsync(content.Doi, id, cancellationToken);
+
+        product.Update(request.AcademicYearId, content);
+        await products.SaveChangesAsync(cancellationToken);
+
+        return await GetAfterSaveAsync(id, cancellationToken);
+    }
+
+    /// <summary>
+    /// Đổi tiến độ bài báo theo các bước hợp lệ (ArticleStatuses). Chuyển sang Đã xuất bản yêu cầu
+    /// bài báo đã có tên tạp chí/hội nghị và năm công bố, vì quy đổi dựa vào hai trường này.
+    /// </summary>
+    public async Task<ProductDetailResponse> ChangeArticleStatusAsync(
+        long id, ChangeArticleStatusRequest request, CancellationToken cancellationToken)
+    {
+        var context = await ProductWriteGuard.LoadForWriteAsync(
+            products, productTypes, currentUser, id, cancellationToken);
+        var product = context.Product;
+
+        if (context.TypeCode != ProductTypeCodes.Article)
+            throw new BusinessRuleException("Trạng thái bài báo chỉ áp dụng cho sản phẩm loại Bài báo.");
+
+        var next = request.Status.Trim().ToUpperInvariant();
+        if (!ArticleStatuses.All.Contains(next))
+            throw new BusinessRuleException("Trạng thái bài báo không hợp lệ.");
+        if (next == product.ArticleStatus)
+            throw new BusinessRuleException("Bài báo đã ở trạng thái này.");
+        if (!ArticleStatuses.CanTransition(product.ArticleStatus, next))
+            throw new BusinessRuleException(
+                $"Không thể chuyển bài báo từ '{product.ArticleStatus}' sang '{next}'.");
+        EnsurePublishable(next, product.JournalName, product.PublicationYear);
+
+        product.ChangeArticleStatus(next);
+        await products.SaveChangesAsync(cancellationToken);
+
+        return await GetAfterSaveAsync(id, cancellationToken);
+    }
+
+    // ──── Helpers ─────────────────────────────────────────────────────────────
+
+    private ProductDetailResponse WithPermissions(ProductDetailResponse product) =>
+        product with { Permissions = ProductAccess.PermissionsOf(currentUser, product) };
+
+    private async Task<ProductDetailResponse> GetAfterSaveAsync(long id, CancellationToken cancellationToken) =>
+        WithPermissions(await products.GetViewAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy sản phẩm."));
+
+    /// <summary>
+    /// Người dùng thường luôn là tác giả chính của sản phẩm mình tạo. Phòng QLKH/Quản trị được nhập hộ
+    /// cho giảng viên khác, nên được chỉ định tác giả chính.
+    /// </summary>
+    private async Task<long> ResolveMainAuthorAsync(
+        long accountId, long? requestedLecturerId, CancellationToken cancellationToken)
+    {
+        var own = await lecturers.GetViewByAccountIdAsync(accountId, cancellationToken);
+
+        if (requestedLecturerId is { } requested && requested != own?.Id)
         {
-            product.Return();
-            var history = new ReviewHistory(product.Id, actorId, fromStatus, ProductStatuses.Returned, request.Comment);
-            await reviewHistories.AddAsync(history, cancellationToken);
+            if (!ProductAccess.IsOffice(currentUser))
+                throw new ForbiddenException("Chỉ Phòng QLKH hoặc quản trị viên được tạo sản phẩm thay giảng viên khác.");
+            return requested;
         }
 
-        await products.SaveChangesAsync(cancellationToken);
-
-        var coAuthorList = await coAuthors.GetByProductIdAsync(id, cancellationToken);
-        var evidenceList = await evidences.GetByProductIdAsync(id, cancellationToken);
-        return await ToResponseAsync(product, coAuthorList, evidenceList, cancellationToken);
+        return own?.Id ?? throw new BusinessRuleException(
+            "Tài khoản chưa được liên kết với hồ sơ giảng viên. Hãy chọn tác giả chính hoặc liên hệ Phòng QLKH.");
     }
 
-    // ──── Private helpers ─────────────────────────────────────────────────────
-
-    private long GetCurrentAccountId() =>
-        currentUser.Id ?? throw new AuthenticationFailedException("Không xác định được người dùng hiện tại.");
-
-    private static void EnsureEditable(Product product)
+    private ProductContent NormalizeContent(ProductContentRequest r, string? articleStatus)
     {
-        if (product.Status is not (ProductStatuses.Draft or ProductStatuses.Returned))
-            throw new BusinessRuleException("Chỉ có thể chỉnh sửa sản phẩm ở trạng thái Nháp hoặc Trả lại.");
+        var title = r.Title.Trim();
+        if (title.Length < 3)
+            throw new BusinessRuleException("Tên sản phẩm phải có ít nhất 3 ký tự.");
+        if (r.StartDate is { } start && r.EndDate is { } end && end < start)
+            throw new BusinessRuleException("Ngày kết thúc không được trước ngày bắt đầu.");
+
+        // Năm công bố lấy từ ngày xuất bản nếu người dùng chỉ nhập ngày.
+        short? year = r.PublicationYear is { } y ? (short)y : r.PublishedDate is { } d ? (short)d.Year : null;
+        if (year is < 1900 or > 2200)
+            throw new BusinessRuleException("Năm công bố phải từ 1900 đến 2200.");
+
+        var journalName = TextNormalizer.Clean(r.JournalName);
+        EnsurePublishable(articleStatus, journalName, year);
+
+        return new ProductContent(
+            title, year, TextNormalizer.Clean(r.PublicationInfo), TextNormalizer.Clean(r.Doi),
+            TextNormalizer.Clean(r.Isbn), TextNormalizer.Clean(r.Issn), journalName,
+            TextNormalizer.Clean(r.JournalIndex), TextNormalizer.Clean(r.JournalCategory), r.WorkScore,
+            TextNormalizer.Clean(r.ResearchField), TextNormalizer.Clean(r.Publisher),
+            TextNormalizer.Clean(r.ProjectLevel), TextNormalizer.Clean(r.HostUnit),
+            TextNormalizer.Clean(r.ProjectObjective), TextNormalizer.Clean(r.ProjectContent),
+            TextNormalizer.Clean(r.ExpectedResult), TextNormalizer.Clean(r.CertificateNumber),
+            TextNormalizer.Clean(r.IssuingAuthority), r.StartDate, r.EndDate, r.SubmittedDate, r.PublishedDate);
     }
 
-    private async Task EnsureOwnerOrAdminAsync(Product product, CancellationToken cancellationToken)
+    private static void EnsurePublishable(string? articleStatus, string? journalName, int? year)
     {
-        if (currentUser.IsInRole(Roles.Admin)) return;
-        var owner = await lecturers.GetByIdAsync(product.SubmittedByLecturerId, cancellationToken);
-        if (owner?.AccountId != GetCurrentAccountId())
-            throw new ForbiddenException("Chỉ tác giả chính được sửa hoặc gửi duyệt sản phẩm.");
+        if (articleStatus == ArticleStatuses.Published && (journalName is null || year is null))
+            throw new BusinessRuleException(
+                "Bài báo đã xuất bản cần có tên tạp chí/hội nghị và năm công bố. Hãy bổ sung rồi lưu lại.");
     }
 
-    private async Task<ProductResponse> ToResponseAsync(
-        Product product,
-        List<ProductCoAuthor> coAuthorList,
-        List<ProductEvidence> evidenceList,
-        CancellationToken cancellationToken)
+    private async Task EnsureDoiAvailableAsync(string? doi, long? excludeProductId, CancellationToken cancellationToken)
     {
-        // Lấy tên tác giả chính
-        var ownerLecturer = await lecturers.GetByIdAsync(product.SubmittedByLecturerId, cancellationToken);
-        var ownerName = ownerLecturer?.FullName ?? string.Empty;
+        if (doi is not null && await products.DoiExistsAsync(doi, excludeProductId, cancellationToken))
+            throw new ConflictException("DOI này đã được dùng cho một sản phẩm khác.");
+    }
 
-        // Enrich đồng tác giả
-        var coAuthorResponses = new List<CoAuthorResponse>();
-        foreach (var ca in coAuthorList.OrderBy(c => c.DisplayOrder))
+    /// <summary>Mã dạng BB-2026-K7M2QX; ràng buộc UNIQUE của DB chặn trường hợp trùng hiếm gặp do đua nhau.</summary>
+    private async Task<string> NewCodeAsync(string typeCode, CancellationToken cancellationToken)
+    {
+        var prefix = typeCode switch
         {
-            var lec = await lecturers.GetByIdAsync(ca.LecturerId, cancellationToken);
-            coAuthorResponses.Add(new CoAuthorResponse(
-                ca.Id, ca.ProductId, ca.LecturerId,
-                lec?.FullName ?? string.Empty,
-                lec?.Code,
-                ca.DisplayOrder,
-                ca.AuthorRole));
+            ProductTypeCodes.Article => "BB",
+            ProductTypeCodes.Project => "DT",
+            ProductTypeCodes.Book => "SA",
+            ProductTypeCodes.Certificate => "CN",
+            _ => "SP",
+        };
+        var year = clock.GetUtcNow().Year;
+
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            var suffix = string.Create(6, 0, static (span, _) =>
+            {
+                for (var i = 0; i < span.Length; i++)
+                    span[i] = CodeAlphabet[Random.Shared.Next(CodeAlphabet.Length)];
+            });
+            var code = $"{prefix}-{year}-{suffix}";
+            if (!await products.CodeExistsAsync(code, cancellationToken)) return code;
         }
-
-        var evidenceResponses = evidenceList.Select(e => new EvidenceResponse(
-            e.Id, e.ProductId, e.OriginalFileName, e.FileSizeBytes, e.Description, e.UploadedAt)).ToList();
-
-        return new ProductResponse(
-            product.Id,
-            product.ResearchPlanItemId,
-            product.SubmittedByLecturerId,
-            ownerName,
-            product.Title,
-            product.Description,
-            product.PublicationInfo,
-            product.PublishedDate,
-            product.ArticleStatus,
-            product.JournalIndex,
-            product.JournalClassification,
-            product.ProjectLevel,
-            product.Status,
-            product.ScoreEquivalent,
-            product.CreatedAt,
-            product.UpdatedAt,
-            coAuthorResponses,
-            evidenceResponses);
+        throw new ConflictException("Không tạo được mã sản phẩm. Vui lòng thử lại.");
     }
-
-    private static ProductSummaryResponse ToSummary(Product p) =>
-        new(p.Id, p.ResearchPlanItemId, p.Title, p.ArticleStatus, p.Status, p.ScoreEquivalent, p.CreatedAt, p.UpdatedAt);
 }

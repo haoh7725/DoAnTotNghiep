@@ -60,3 +60,37 @@ X-Requested-With: ResearchHub
 ### Danh mục loại sản phẩm
 GET {{ResearchManagement.Api_HostAddress}}/api/product-types
 Authorization: Bearer {{token}}
+
+### Danh sách sản phẩm khoa học (lọc theo loại, năm học, trạng thái)
+GET {{ResearchManagement.Api_HostAddress}}/api/products?page=1&pageSize=20&articleStatus=DANG_VIET&mine=true
+Authorization: Bearer {{token}}
+
+### Tạo bài báo (người gọi là tác giả chính)
+POST {{ResearchManagement.Api_HostAddress}}/api/products
+Authorization: Bearer {{token}}
+Content-Type: application/json
+X-Requested-With: ResearchHub
+
+{
+  "productTypeId": 1,
+  "academicYearId": 1,
+  "title": "Học máy cho dự báo điểm",
+  "journalName": "Journal of X",
+  "coAuthors": [{ "lecturerId": 2, "role": "DONG_TAC_GIA" }]
+}
+
+### Đổi trạng thái bài báo
+PUT {{ResearchManagement.Api_HostAddress}}/api/products/1/article-status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+X-Requested-With: ResearchHub
+
+{ "status": "DANG_PHAN_BIEN" }
+
+### Thay danh sách tác giả
+PUT {{ResearchManagement.Api_HostAddress}}/api/products/1/authors
+Authorization: Bearer {{token}}
+Content-Type: application/json
+X-Requested-With: ResearchHub
+
+{ "authors": [ { "lecturerId": 1, "role": "TAC_GIA_CHINH" }, { "lecturerId": 2, "role": "TAC_GIA_LIEN_HE" } ] }

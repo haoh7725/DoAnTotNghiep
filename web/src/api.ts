@@ -26,13 +26,27 @@ export async function api<T>(path: string, method = 'GET', body?: unknown, notif
   return response.status === 204 ? undefined as T : response.json()
 }
 
-export async function apiForm<T>(path: string, body: FormData): Promise<T> {
-  const response = await fetch(`/api${path}`, { method: 'POST', credentials: 'include',
-    headers: { 'X-Requested-With': 'ResearchHub' }, body })
+export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
+  let response: Response
+  try {
+    response = await fetch(`/api${path}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'X-Requested-With': 'ResearchHub' },
+      body: formData,
+    })
+  } catch {
+    throw new ApiError('Không thể kết nối máy chủ. Vui lòng kiểm tra API và thử lại.', 0)
+  }
   if (!response.ok) {
     if (response.status === 401) window.dispatchEvent(new Event('session-expired'))
     const error = await response.json().catch(() => ({}))
-    throw new ApiError(error.detail || error.title || 'Không thể tải tệp lên.', response.status)
+    const validation = error.errors ? Object.values(error.errors).flat().join(' ') : ''
+    throw new ApiError(
+      validation || error.detail || error.title || ({ 401: 'Phiên đăng nhập đã hết hạn.', 403: 'Bạn không có quyền thực hiện thao tác này.', 429: 'Bạn thử quá nhiều lần. Vui lòng đợi một phút.' }[response.status] ?? 'Không thể hoàn thành yêu cầu.'),
+      response.status
+    )
   }
   return response.json()
 }
+

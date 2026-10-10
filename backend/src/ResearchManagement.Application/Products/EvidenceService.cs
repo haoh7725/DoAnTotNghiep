@@ -1,90 +1,163 @@
-using ResearchManagement.Application.Common;
+using System.Security.Cryptography;
+using Microsoft.AspNetCore.Http;
 using ResearchManagement.Application.Auth.Abstractions;
+using ResearchManagement.Application.Common;
 using ResearchManagement.Application.Products.Abstractions;
 using ResearchManagement.Application.Products.Models;
-using ResearchManagement.Application.Lecturers.Abstractions;
 using ResearchManagement.Domain.Constants;
 using ResearchManagement.Domain.Entities;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
 
 namespace ResearchManagement.Application.Products;
+
+public sealed record EvidenceDownloadResult(Stream Stream, string ContentType, string FileName);
 
 public sealed class EvidenceService(
     IProductRepository products,
     IProductEvidenceRepository evidences,
-    ILecturerRepository lecturers,
-    ICurrentUser currentUser,
-    IWebHostEnvironment environment)
+    IFileStorageService fileStorage,
+    ICurrentUser currentUser)
 {
-    private const long MaxFileSizeBytes = 20 * 1024 * 1024; // 20 MB
+    public const long MaxFileSizeBytes = 25 * 1024 * 1024; // 25 MB
 
-    private static readonly string[] AllowedExtensions =
-        [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".jpg", ".jpeg", ".png", ".zip"];
+    private static readonly Dictionary<string, string> AllowedTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".pdf"] = "application/pdf",
+        [".doc"] = "application/msword",
+        [".docx"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        [".xls"] = "application/vnd.ms-excel",
+        [".xlsx"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        [".ppt"] = "application/vnd.ms-powerpoint",
+        [".pptx"] = "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        [".jpg"] = "image/jpeg",
+        [".jpeg"] = "image/jpeg",
+        [".png"] = "image/png",
+        [".zip"] = "application/zip",
+        [".rar"] = "application/x-rar-compressed",
+        [".7z"] = "application/x-7z-compressed"
+    };
 
     public async Task<IReadOnlyList<EvidenceResponse>> GetByProductIdAsync(
         long productId,
         CancellationToken cancellationToken)
     {
-        _ = await products.GetByIdAsync(productId, cancellationToken)
+        var product = await products.GetByIdAsync(productId, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
+        var authors = await products.GetAuthorsAsync(productId, cancellationToken);
 
-        var list = await evidences.GetByProductIdAsync(productId, cancellationToken);
-        return list.Select(ToResponse).ToList();
+        if (!ProductAccess.CanRead(currentUser, product.CreatedByAccountId, product.ReviewStatus, authors))
+            throw new ForbiddenException("Không có quyền xem minh chứng của sản phẩm này.");
+
+        return await evidences.GetViewsByProductIdAsync(productId, cancellationToken);
     }
 
     public async Task<EvidenceResponse> UploadAsync(
         long productId,
         IFormFile file,
-        string? description,
         CancellationToken cancellationToken)
     {
         var product = await products.GetByIdAsync(productId, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
+        var authors = await products.GetAuthorsAsync(productId, cancellationToken);
 
-        if (product.Status == ProductStatuses.Approved)
-            throw new BusinessRuleException("Sản phẩm đã được duyệt hoàn toàn, không thể thêm minh chứng.");
-        await EnsureOwnerOrAdminAsync(product, cancellationToken);
+        if (!ProductAccess.CanRead(currentUser, product.CreatedByAccountId, product.ReviewStatus, authors))
+            throw new ForbiddenException("Không có quyền xem sản phẩm này.");
+
+        if (!ProductAccess.CanManage(currentUser, product.CreatedByAccountId, authors))
+            throw new ForbiddenException("Chỉ người tạo hoặc tác giả chính mới có quyền tải lên minh chứng.");
+
+        if (!ReviewStatuses.IsEditable(product.ReviewStatus))
+            throw new BusinessRuleException(
+                "Sản phẩm đã gửi duyệt hoặc đã chốt nên không thể thay đổi minh chứng. Chỉ có thể thêm minh chứng khi sản phẩm ở trạng thái Nháp hoặc Cần bổ sung.");
 
         if (file.Length == 0)
-            throw new BusinessRuleException("Tệp không được rỗng.");
+            throw new BusinessRuleException("Tệp tải lên không được để trống.");
 
         if (file.Length > MaxFileSizeBytes)
-            throw new BusinessRuleException($"Tệp vượt quá kích thước tối đa {MaxFileSizeBytes / 1024 / 1024} MB.");
+            throw new BusinessRuleException(
+                $"Dung lượng tệp ({file.Length / (1024.0 * 1024.0):0.#} MB) vượt quá giới hạn tối đa cho phép ({MaxFileSizeBytes / 1024 / 1024} MB).");
 
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (!AllowedExtensions.Contains(ext))
-            throw new BusinessRuleException($"Định dạng tệp '{ext}' không được phép.");
+        if (!AllowedTypes.TryGetValue(ext, out var detectedMimeType))
+            throw new BusinessRuleException(
+                $"Định dạng tệp '{ext}' không được phép. Hệ thống chỉ chấp nhận: PDF, Word, Excel, PowerPoint, Ảnh (JPG, PNG) và tệp nén (ZIP, RAR, 7Z).");
 
         var actorId = currentUser.Id
             ?? throw new AuthenticationFailedException("Không xác định được người dùng hiện tại.");
 
-        // Lưu file vào uploads/products/{productId}/
-        var webRoot = environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot");
-        var folder = Path.Combine(webRoot, "uploads", "products", productId.ToString());
-        Directory.CreateDirectory(folder);
+        var originalName = Path.GetFileName(file.FileName).Trim();
+        if (string.IsNullOrEmpty(originalName))
+            originalName = $"minh_chung_{DateTime.UtcNow:yyyyMMddHHmmss}{ext}";
+        if (originalName.Length > 255)
+            originalName = originalName[..255];
 
-        var uniqueName = $"{Guid.NewGuid():N}{ext}";
-        var fullPath = Path.Combine(folder, uniqueName);
+        // Tính mã băm SHA256 để bảo đảm tính toàn vẹn tệp
+        string sha256Hex;
+        using (var sha = SHA256.Create())
+        await using (var readStream = file.OpenReadStream())
+        {
+            var hashBytes = await sha.ComputeHashAsync(readStream, cancellationToken);
+            sha256Hex = Convert.ToHexString(hashBytes).ToLowerInvariant();
+        }
 
-        await using (var stream = new FileStream(fullPath, FileMode.Create))
-            await file.CopyToAsync(stream, cancellationToken);
-
-        var relativePath = Path.Combine("uploads", "products", productId.ToString(), uniqueName)
-            .Replace('\\', '/');
+        // Lưu tệp an toàn vào thư mục lưu trữ với tên tệp duy nhất
+        var uniqueFileName = $"{Guid.NewGuid():N}{ext}";
+        string storageKey;
+        await using (var uploadStream = file.OpenReadStream())
+        {
+            storageKey = await fileStorage.SaveAsync(
+                $"products/{productId}",
+                uniqueFileName,
+                uploadStream,
+                cancellationToken);
+        }
 
         var evidence = new ProductEvidence(
             productId,
             actorId,
-            file.FileName,
-            relativePath,
+            originalName,
+            storageKey,
+            detectedMimeType,
             file.Length,
-            description);
+            sha256Hex);
 
         await evidences.AddAsync(evidence, cancellationToken);
         await evidences.SaveChangesAsync(cancellationToken);
 
-        return ToResponse(evidence);
+        var view = await evidences.GetViewByIdAsync(evidence.Id, cancellationToken);
+        return view ?? new EvidenceResponse(
+            evidence.Id,
+            evidence.ProductId,
+            evidence.UploadedByAccountId,
+            "Tôi",
+            evidence.FileName,
+            evidence.MimeType,
+            evidence.FileSizeBytes,
+            evidence.Sha256,
+            evidence.UploadedAt);
+    }
+
+    public async Task<EvidenceDownloadResult> GetFileForDownloadAsync(
+        long productId,
+        long evidenceId,
+        CancellationToken cancellationToken)
+    {
+        var product = await products.GetByIdAsync(productId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
+        var authors = await products.GetAuthorsAsync(productId, cancellationToken);
+
+        if (!ProductAccess.CanRead(currentUser, product.CreatedByAccountId, product.ReviewStatus, authors))
+            throw new ForbiddenException("Không có quyền xem hoặc tải minh chứng của sản phẩm này.");
+
+        var evidence = await evidences.GetByIdAsync(evidenceId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy minh chứng.");
+
+        if (evidence.ProductId != productId)
+            throw new NotFoundException("Minh chứng không thuộc sản phẩm này.");
+
+        var stream = await fileStorage.OpenReadAsync(evidence.StorageKey, cancellationToken)
+            ?? throw new NotFoundException("Tệp minh chứng không tồn tại trên hệ thống lưu trữ.");
+
+        return new EvidenceDownloadResult(stream, evidence.MimeType, evidence.FileName);
     }
 
     public async Task DeleteAsync(
@@ -94,52 +167,27 @@ public sealed class EvidenceService(
     {
         var product = await products.GetByIdAsync(productId, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
+        var authors = await products.GetAuthorsAsync(productId, cancellationToken);
 
-        if (product.Status == ProductStatuses.Approved)
-            throw new BusinessRuleException("Sản phẩm đã được duyệt hoàn toàn, không thể xóa minh chứng.");
-        await EnsureOwnerOrAdminAsync(product, cancellationToken);
+        if (!ProductAccess.CanRead(currentUser, product.CreatedByAccountId, product.ReviewStatus, authors))
+            throw new ForbiddenException("Không có quyền truy cập sản phẩm này.");
+
+        if (!ProductAccess.CanManage(currentUser, product.CreatedByAccountId, authors))
+            throw new ForbiddenException("Chỉ người tạo hoặc tác giả chính mới có quyền xóa minh chứng.");
+
+        if (!ReviewStatuses.IsEditable(product.ReviewStatus))
+            throw new BusinessRuleException(
+                "Sản phẩm đã gửi duyệt hoặc đã chốt nên không thể thay đổi minh chứng. Chỉ có thể xóa minh chứng khi sản phẩm ở trạng thái Nháp hoặc Cần bổ sung.");
 
         var evidence = await evidences.GetByIdAsync(evidenceId, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy minh chứng.");
 
         if (evidence.ProductId != productId)
             throw new NotFoundException("Minh chứng không thuộc sản phẩm này.");
-
-        // Xóa file vật lý
-        var webRoot = environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot");
-        var fullPath = Path.Combine(webRoot, evidence.StoredPath.Replace('/', Path.DirectorySeparatorChar));
-        if (File.Exists(fullPath))
-            File.Delete(fullPath);
 
         evidences.Remove(evidence);
         await evidences.SaveChangesAsync(cancellationToken);
-    }
 
-    private static EvidenceResponse ToResponse(ProductEvidence e) =>
-        new(e.Id, e.ProductId, e.OriginalFileName, e.FileSizeBytes, e.Description, e.UploadedAt);
-
-    public async Task<(string Path, string FileName)> GetDownloadAsync(
-        long productId, long evidenceId, CancellationToken cancellationToken)
-    {
-        _ = await products.GetByIdAsync(productId, cancellationToken)
-            ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
-        var evidence = await evidences.GetByIdAsync(evidenceId, cancellationToken)
-            ?? throw new NotFoundException("Không tìm thấy minh chứng.");
-        if (evidence.ProductId != productId)
-            throw new NotFoundException("Minh chứng không thuộc sản phẩm này.");
-        var webRoot = environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot");
-        var fullPath = Path.GetFullPath(Path.Combine(webRoot, evidence.StoredPath.Replace('/', Path.DirectorySeparatorChar)));
-        var allowedRoot = Path.GetFullPath(Path.Combine(webRoot, "uploads", "products")) + Path.DirectorySeparatorChar;
-        if (!fullPath.StartsWith(allowedRoot, StringComparison.OrdinalIgnoreCase) || !File.Exists(fullPath))
-            throw new NotFoundException("Không tìm thấy tệp minh chứng.");
-        return (fullPath, evidence.OriginalFileName);
-    }
-
-    private async Task EnsureOwnerOrAdminAsync(Product product, CancellationToken cancellationToken)
-    {
-        if (currentUser.IsInRole(Roles.Admin)) return;
-        var owner = await lecturers.GetByIdAsync(product.SubmittedByLecturerId, cancellationToken);
-        if (owner?.AccountId != currentUser.Id)
-            throw new ForbiddenException("Chỉ tác giả chính được quản lý minh chứng.");
+        await fileStorage.DeleteAsync(evidence.StorageKey, cancellationToken);
     }
 }

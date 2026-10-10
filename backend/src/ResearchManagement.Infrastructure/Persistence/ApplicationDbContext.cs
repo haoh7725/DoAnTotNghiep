@@ -36,7 +36,7 @@ public sealed class ApplicationDbContext(
 
     // Scientific products
     public DbSet<Product> Products => Set<Product>();
-    public DbSet<ProductCoAuthor> ProductCoAuthors => Set<ProductCoAuthor>();
+    public DbSet<ProductAuthor> ProductAuthors => Set<ProductAuthor>();
     public DbSet<ProductEvidence> ProductEvidences => Set<ProductEvidence>();
     public DbSet<ReviewHistory> ReviewHistories => Set<ReviewHistory>();
 
@@ -45,9 +45,6 @@ public sealed class ApplicationDbContext(
     public DbSet<ConversionCriterion> ConversionCriteria => Set<ConversionCriterion>();
     public DbSet<AuthorConversionCoefficient> AuthorConversionCoefficients
         => Set<AuthorConversionCoefficient>();
-    public DbSet<Evaluation> Evaluations => Set<Evaluation>();
-    public DbSet<EvaluationConversionDetail> EvaluationConversionDetails
-        => Set<EvaluationConversionDetail>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

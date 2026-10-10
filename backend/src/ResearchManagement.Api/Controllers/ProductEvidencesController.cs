@@ -1,39 +1,59 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.StaticFiles;
 using ResearchManagement.Application.Products;
 using ResearchManagement.Application.Products.Models;
 
 namespace ResearchManagement.Api.Controllers;
 
-[ApiController, Authorize, Route("api/products/{productId:long}/evidences")]
-public sealed class ProductEvidencesController(EvidenceService evidenceService) : ControllerBase
+/// <summary>
+/// Quản lý minh chứng đính kèm sản phẩm nghiên cứu khoa học:
+/// upload, xem trực tiếp (inline view), tải về (download) và xóa minh chứng.
+/// </summary>
+[ApiController]
+[Route("api/products/{productId:long}/evidences")]
+[Authorize]
+public sealed class ProductEvidencesController(EvidenceService evidences) : ControllerBase
 {
+    /// <summary>Xem danh sách minh chứng của một sản phẩm.</summary>
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<EvidenceResponse>>> List(long productId, CancellationToken ct) =>
-        Ok(await evidenceService.GetByProductIdAsync(productId, ct));
+    public async Task<ActionResult<IReadOnlyList<EvidenceResponse>>> GetByProductId(
+        long productId, CancellationToken cancellationToken) =>
+        Ok(await evidences.GetByProductIdAsync(productId, cancellationToken));
 
-    [HttpPost, RequestSizeLimit(20 * 1024 * 1024)]
+    /// <summary>Tải lên tệp minh chứng mới cho sản phẩm (chỉ chấp nhận PDF, Word, Excel, PPT, Ảnh, Zip, tối đa 25MB).</summary>
+    [HttpPost]
     public async Task<ActionResult<EvidenceResponse>> Upload(
-        long productId, IFormFile file, [FromForm] string? description, CancellationToken ct)
+        long productId, IFormFile file, CancellationToken cancellationToken)
     {
-        var result = await evidenceService.UploadAsync(productId, file, description, ct);
-        return CreatedAtAction(nameof(Download), new { productId, id = result.Id }, result);
+        var result = await evidences.UploadAsync(productId, file, cancellationToken);
+        return CreatedAtAction(nameof(GetByProductId), new { productId }, result);
     }
 
-    [HttpGet("{id:long}/download")]
-    public async Task<IActionResult> Download(long productId, long id, CancellationToken ct)
+    /// <summary>Xem trực tiếp tệp minh chứng trên trình duyệt (inline preview).</summary>
+    [HttpGet("{evidenceId:long}/view")]
+    public async Task<IActionResult> ViewFile(
+        long productId, long evidenceId, CancellationToken cancellationToken)
     {
-        var stored = await evidenceService.GetDownloadAsync(productId, id, ct);
-        var provider = new FileExtensionContentTypeProvider();
-        if (!provider.TryGetContentType(stored.FileName, out var contentType)) contentType = "application/octet-stream";
-        return PhysicalFile(stored.Path, contentType, stored.FileName, enableRangeProcessing: true);
+        var result = await evidences.GetFileForDownloadAsync(productId, evidenceId, cancellationToken);
+        Response.Headers.ContentDisposition = $"inline; filename=\"{Uri.EscapeDataString(result.FileName)}\"";
+        return File(result.Stream, result.ContentType, enableRangeProcessing: true);
     }
 
-    [HttpDelete("{id:long}")]
-    public async Task<IActionResult> Delete(long productId, long id, CancellationToken ct)
+    /// <summary>Tải về tệp minh chứng với tên tệp gốc.</summary>
+    [HttpGet("{evidenceId:long}/download")]
+    public async Task<IActionResult> DownloadFile(
+        long productId, long evidenceId, CancellationToken cancellationToken)
     {
-        await evidenceService.DeleteAsync(productId, id, ct);
+        var result = await evidences.GetFileForDownloadAsync(productId, evidenceId, cancellationToken);
+        return File(result.Stream, result.ContentType, result.FileName, enableRangeProcessing: true);
+    }
+
+    /// <summary>Xóa tệp minh chứng (chỉ người tạo/tác giả chính khi sản phẩm ở trạng thái Nháp hoặc Cần bổ sung).</summary>
+    [HttpDelete("{evidenceId:long}")]
+    public async Task<IActionResult> Delete(
+        long productId, long evidenceId, CancellationToken cancellationToken)
+    {
+        await evidences.DeleteAsync(productId, evidenceId, cancellationToken);
         return NoContent();
     }
 }

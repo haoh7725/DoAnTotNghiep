@@ -1,107 +1,77 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ResearchManagement.Application.Common;
 using ResearchManagement.Application.Products;
 using ResearchManagement.Application.Products.Models;
-using ResearchManagement.Application.Auth.Abstractions;
-using ResearchManagement.Application.Common;
-using ResearchManagement.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
 
 namespace ResearchManagement.Api.Controllers;
 
+/// <summary>
+/// Sản phẩm khoa học (bài báo, đề tài, sách, chứng nhận), trạng thái bài báo và tác giả.
+/// Controller chỉ yêu cầu đăng nhập; quyền xem/sửa theo người tạo, tác giả và phạm vi do service kiểm tra.
+/// </summary>
 [ApiController]
+[Route("api/products")]
 [Authorize]
-public sealed class ProductsController(ProductService productService, ApplicationDbContext db, ICurrentUser currentUser) : ControllerBase
+public sealed class ProductsController(
+    ProductService products,
+    ProductAuthorService authors) : ControllerBase
 {
-    [HttpGet("api/products/mine")]
-    public async Task<ActionResult<IReadOnlyList<ProductSummaryResponse>>> Mine(CancellationToken cancellationToken) =>
-        Ok(await productService.GetMineAsync(cancellationToken));
+    [HttpGet]
+    public async Task<ActionResult<PagedResult<ProductSummaryResponse>>> Search(
+        [FromQuery] ProductSearchQuery query, CancellationToken cancellationToken) =>
+        Ok(await products.SearchAsync(query, cancellationToken));
 
-    [HttpGet("api/products/available-plan-items")]
-    public async Task<IActionResult> AvailablePlanItems(CancellationToken cancellationToken)
-    {
-        var accountId = currentUser.Id ?? throw new ForbiddenException("Không xác định được tài khoản hiện tại.");
-        var lecturerId = await db.Lecturers.Where(x => x.AccountId == accountId).Select(x => (long?)x.Id)
-            .SingleOrDefaultAsync(cancellationToken)
-            ?? throw new NotFoundException("Tài khoản chưa liên kết với giảng viên.");
-        var items = await (from item in db.ResearchPlanItems.AsNoTracking()
-                           join plan in db.ResearchPlans.AsNoTracking() on item.ResearchPlanId equals plan.Id
-                           join year in db.AcademicYears.AsNoTracking() on plan.AcademicYearId equals year.Id
-                           join type in db.ProductTypes.AsNoTracking() on item.ProductTypeId equals type.Id
-                           where plan.LecturerId == lecturerId
-                           orderby year.StartDate descending, item.Name
-                           select new { item.Id, item.Name, ProductTypeName = type.Name,
-                               AcademicYearCode = year.Code, item.Status }).ToListAsync(cancellationToken);
-        return Ok(items);
-    }
+    /// <summary>Tìm giảng viên toàn trường để chọn làm đồng tác giả (tối đa 10 kết quả).</summary>
+    [HttpGet("author-candidates")]
+    public async Task<ActionResult<IReadOnlyList<AuthorCandidateResponse>>> SearchAuthorCandidates(
+        [FromQuery] string? keyword, CancellationToken cancellationToken) =>
+        Ok(await authors.SearchCandidatesAsync(keyword, cancellationToken));
 
-    // GET /api/research-plan-items/{itemId}/products
-    [HttpGet("api/research-plan-items/{itemId:long}/products")]
-    public async Task<ActionResult<IReadOnlyList<ProductSummaryResponse>>> GetByPlanItem(
-        long itemId, CancellationToken cancellationToken)
-    {
-        var result = await productService.GetByPlanItemIdAsync(itemId, cancellationToken);
-        return Ok(result);
-    }
+    [HttpGet("{id:long}")]
+    public async Task<ActionResult<ProductDetailResponse>> GetById(long id, CancellationToken cancellationToken) =>
+        Ok(await products.GetByIdAsync(id, cancellationToken));
 
-    // POST /api/research-plan-items/{itemId}/products
-    [HttpPost("api/research-plan-items/{itemId:long}/products")]
-    public async Task<ActionResult<ProductResponse>> Create(
-        long itemId,
-        [FromBody] CreateProductRequest request,
-        CancellationToken cancellationToken)
+    [HttpPost]
+    public async Task<ActionResult<ProductDetailResponse>> Create(
+        [FromBody] CreateProductRequest request, CancellationToken cancellationToken)
     {
-        request.ResearchPlanItemId = itemId;
-        var result = await productService.CreateAsync(request, cancellationToken);
+        var result = await products.CreateAsync(request, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 
-    // GET /api/products/{id}
-    [HttpGet("api/products/{id:long}")]
-    public async Task<ActionResult<ProductResponse>> GetById(
-        long id, CancellationToken cancellationToken)
+    [HttpPut("{id:long}")]
+    public async Task<ActionResult<ProductDetailResponse>> Update(
+        long id, [FromBody] UpdateProductRequest request, CancellationToken cancellationToken) =>
+        Ok(await products.UpdateAsync(id, request, cancellationToken));
+
+    /// <summary>Đổi tiến độ bài báo: Đang viết → Đang phản biện → Đã nhận xét → Đã xuất bản.</summary>
+    [HttpPut("{id:long}/article-status")]
+    public async Task<ActionResult<ProductDetailResponse>> ChangeArticleStatus(
+        long id, [FromBody] ChangeArticleStatusRequest request, CancellationToken cancellationToken) =>
+        Ok(await products.ChangeArticleStatusAsync(id, request, cancellationToken));
+
+    [HttpGet("{id:long}/authors")]
+    public async Task<ActionResult<IReadOnlyList<ProductAuthorResponse>>> GetAuthors(
+        long id, CancellationToken cancellationToken) =>
+        Ok(await authors.GetAsync(id, cancellationToken));
+
+    /// <summary>Thay toàn bộ danh sách tác giả; thứ tự trong body là thứ tự tác giả.</summary>
+    [HttpPut("{id:long}/authors")]
+    public async Task<ActionResult<IReadOnlyList<ProductAuthorResponse>>> ReplaceAuthors(
+        long id, [FromBody] ReplaceProductAuthorsRequest request, CancellationToken cancellationToken) =>
+        Ok(await authors.ReplaceAsync(id, request, cancellationToken));
+
+    [HttpPost("{id:long}/authors")]
+    public async Task<ActionResult<IReadOnlyList<ProductAuthorResponse>>> AddAuthor(
+        long id, [FromBody] AddProductAuthorRequest request, CancellationToken cancellationToken)
     {
-        var result = await productService.GetByIdAsync(id, cancellationToken);
-        return Ok(result);
+        var result = await authors.AddAsync(id, request, cancellationToken);
+        return CreatedAtAction(nameof(GetAuthors), new { id }, result);
     }
 
-    // PUT /api/products/{id}
-    [HttpPut("api/products/{id:long}")]
-    public async Task<ActionResult<ProductResponse>> Update(
-        long id,
-        [FromBody] UpdateProductRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result = await productService.UpdateAsync(id, request, cancellationToken);
-        return Ok(result);
-    }
-
-    // POST /api/products/{id}/submit
-    [HttpPost("api/products/{id:long}/submit")]
-    public async Task<ActionResult<ProductResponse>> Submit(
-        long id, CancellationToken cancellationToken)
-    {
-        var result = await productService.SubmitAsync(id, cancellationToken);
-        return Ok(result);
-    }
-
-    // POST /api/products/{id}/review
-    [HttpPost("api/products/{id:long}/review")]
-    public async Task<ActionResult<ProductResponse>> Review(
-        long id,
-        [FromBody] ReviewProductRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result = await productService.ReviewAsync(id, request, cancellationToken);
-        return Ok(result);
-    }
-
-    // GET /api/products/{id}/review-history
-    [HttpGet("api/products/{id:long}/review-history")]
-    public async Task<ActionResult<IReadOnlyList<ReviewHistoryResponse>>> GetReviewHistory(
-        long id, CancellationToken cancellationToken)
-    {
-        var result = await productService.GetReviewHistoryAsync(id, cancellationToken);
-        return Ok(result);
-    }
+    [HttpDelete("{id:long}/authors/{lecturerId:long}")]
+    public async Task<ActionResult<IReadOnlyList<ProductAuthorResponse>>> RemoveAuthor(
+        long id, long lecturerId, CancellationToken cancellationToken) =>
+        Ok(await authors.RemoveAsync(id, lecturerId, cancellationToken));
 }

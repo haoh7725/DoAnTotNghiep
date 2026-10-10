@@ -1,1 +1,61 @@
-.product-sub{margin:0}.product-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:18px}.product-grid div{padding:14px;background:#f7f9f4;border-radius:8px}.product-grid dt{font-size:.72rem;color:#6d7d70;margin-bottom:7px}.product-grid dd{margin:0;font-weight:600}.product-list{list-style:none;padding:0;margin:16px 0}.product-list li{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #e6eae4}.product-list li span:first-child,.product-list li a{flex:1}.product-author{grid-template-columns:2fr 1fr 2fr auto}.product-upload{display:grid;grid-template-columns:2fr 2fr auto;gap:14px;align-items:end}.product-upload label{margin:0}.wide{grid-column:1/-1}@media(max-width:700px){.product-author,.product-upload{grid-template-columns:1fr}.product-list li{align-items:flex-start;flex-wrap:wrap}}
+/* Màn hình sản phẩm khoa học — dùng chung bảng màu với App.css và Lecturers.css */
+.prd-filter { display: grid; grid-template-columns: 2fr repeat(4, 1.2fr) auto auto; gap: 0 14px; align-items: end; }
+.prd-filter label { margin: 0 0 4px; }
+.prd-filter .primary { height: 46px; margin-bottom: 4px; }
+.prd-check { flex-direction: row !important; align-items: center; gap: 8px; white-space: nowrap; height: 46px; }
+.prd-check input { width: auto; }
+
+.prd-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: .72rem; font-weight: 700; white-space: nowrap; background: #eceee8; color: #55584f; }
+.prd-review-NHAP { background: #eceee8; color: #55584f; }
+.prd-review-CHO_DUYET { background: #fdf0d2; color: #8a5a00; }
+.prd-review-CAN_BO_SUNG { background: #fde2d6; color: #9a3412; }
+.prd-review-DA_DUYET { background: #d6eadc; color: #165d44; }
+.prd-review-TU_CHOI { background: #f8d7d7; color: #9b1c1c; }
+.prd-article-DANG_VIET { background: #e4ecf7; color: #1e4e8c; }
+.prd-article-DANG_PHAN_BIEN { background: #f1e6f7; color: #6b2c91; }
+.prd-article-DA_NHAN_XET { background: #fdf0d2; color: #8a5a00; }
+.prd-article-DA_XUAT_BAN { background: #d6eadc; color: #165d44; }
+.prd-badges { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 4px 0 0; }
+.prd-pre { white-space: pre-wrap; }
+.prd-hint { font-size: .8rem; margin: 12px 0 0; }
+
+.prd-steps { display: flex; flex-wrap: wrap; gap: 10px; list-style: none; padding: 0; margin: 18px 0; }
+.prd-steps li { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border: 1px solid #d9e0d8; border-radius: 24px; color: #6d7d70; font-size: .85rem; }
+.prd-steps li span { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #e6eae4; font-size: .72rem; font-weight: 700; }
+.prd-steps li.done { color: #165d44; border-color: #b9d8c4; } .prd-steps li.done span { background: #b9d8c4; }
+.prd-steps li.current { color: #fff; background: #2f7a5c; border-color: #2f7a5c; font-weight: 700; } .prd-steps li.current span { background: #fff; color: #2f7a5c; }
+
+.prd-authors { list-style: none; padding: 0; margin: 16px 0; display: grid; gap: 8px; }
+.prd-authors li { display: grid; grid-template-columns: 32px 1fr minmax(150px, 190px) auto auto auto; gap: 8px; align-items: center; padding: 10px 12px; border: 1px solid #e0e7df; border-radius: 10px; background: #f9fbf7; }
+.prd-order { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #d6eadc; color: #165d44; font-weight: 700; font-size: .78rem; }
+.prd-author-name, .prd-picker li span { display: flex; flex-direction: column; min-width: 0; }
+.prd-author-name small, .prd-picker small { color: #6d7d70; }
+
+.prd-picker ul { list-style: none; padding: 0; margin: 8px 0 0; border: 1px solid #e0e7df; border-radius: 10px; overflow: hidden; }
+.prd-picker li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid #eef1ec; }
+.prd-picker li:last-child { border-bottom: 0; }
+.prd-onbehalf { margin-top: 22px; padding-top: 16px; border-top: 1px solid #e6eae4; }
+
+/* Minh chứng */
+.prd-evidence-section { margin-top: 24px; }
+.prd-evidence-table td { vertical-align: middle; }
+.prd-ev-badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: .75rem; font-weight: 700; text-transform: uppercase; }
+.prd-ev-pdf { background: #fee2e2; color: #991b1b; }
+.prd-ev-doc { background: #dbeafe; color: #1e40af; }
+.prd-ev-xls { background: #dcfce7; color: #166534; }
+.prd-ev-ppt { background: #ffedd5; color: #9a3412; }
+.prd-ev-img { background: #f3e8ff; color: #6b21a8; }
+.prd-ev-zip { background: #fef9c3; color: #854d0e; }
+.prd-ev-other { background: #f3f4f6; color: #4b5563; }
+.prd-ev-hash { font-family: monospace; font-size: .75rem; background: #eef2ed; padding: 2px 6px; border-radius: 4px; color: #475569; }
+.prd-ev-actions { display: flex; gap: 6px; align-items: center; }
+.prd-ev-actions button { padding: 5px 10px; font-size: .8rem; }
+.prd-ev-upload-box { margin-top: 24px; padding-top: 20px; border-top: 1px solid #e2e8df; }
+.prd-ev-upload-box h3 { margin-bottom: 6px; font-size: 1.05rem; }
+.prd-ev-upload-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 14px; }
+.prd-ev-upload-form input[type="file"] { flex: 1; min-width: 260px; padding: 8px 12px; border: 1px dashed #94a3b8; border-radius: 8px; background: #fafbfc; }
+.prd-ev-file-info { font-size: .85rem; color: #334155; }
+
+@media (max-width: 1100px) { .prd-filter { grid-template-columns: 1fr 1fr; } .prd-filter .primary { grid-column: 1 / -1; } }
+@media (max-width: 700px) { .prd-filter { grid-template-columns: 1fr; } .prd-authors li { grid-template-columns: 32px 1fr; } .prd-authors li > :nth-child(n+3) { grid-column: 2; } }
+

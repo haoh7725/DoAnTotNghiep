@@ -21,8 +21,10 @@ using ResearchManagement.Application.Lecturers;
 using ResearchManagement.Application.Lecturers.Abstractions;
 using ResearchManagement.Application.ProductTypes;
 using ResearchManagement.Application.ProductTypes.Abstractions;
+using ResearchManagement.Application.Common;
 using ResearchManagement.Application.Products;
 using ResearchManagement.Application.Products.Abstractions;
+using ResearchManagement.Infrastructure.Storage;
 
 using ResearchManagement.Infrastructure.Auth;
 using ResearchManagement.Infrastructure.Persistence;
@@ -84,12 +86,12 @@ public static class DependencyInjection
         services.AddScoped<ProductTypeService>();
 
         // Scientific products
+        services.AddSingleton<IFileStorageService, LocalFileStorageService>();
         services.AddScoped<IProductRepository, ProductRepository>();
-        services.AddScoped<IProductCoAuthorRepository, ProductCoAuthorRepository>();
         services.AddScoped<IProductEvidenceRepository, ProductEvidenceRepository>();
         services.AddScoped<IReviewHistoryRepository, ReviewHistoryRepository>();
         services.AddScoped<ProductService>();
-        services.AddScoped<CoAuthorService>();
+        services.AddScoped<ProductAuthorService>();
         services.AddScoped<EvidenceService>();
 
         return services;
