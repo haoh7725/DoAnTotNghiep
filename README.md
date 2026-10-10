@@ -32,12 +32,22 @@ npm install
 npm run dev
 ```
 
+Sao chép `web/.env.example` thành `web/.env.local` để chọn đúng API. Dùng
+`http://localhost:8081` khi chạy Docker Compose, hoặc `http://localhost:5152`
+khi chạy backend bằng `dotnet run`.
+
 ### Mobile Flutter
 
 ```bash
 cd mobile
 flutter pub get
 flutter run
+```
+
+Android Emulator dùng API Docker trên máy phát triển qua `10.0.2.2`. Khi API chạy ở địa chỉ khác:
+
+```bash
+flutter run --dart-define=API_URL=http://10.0.2.2:8081/api
 ```
 
 ## Trạng thái

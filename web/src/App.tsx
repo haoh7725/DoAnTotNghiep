@@ -6,6 +6,7 @@ import { AdminPanel } from './AdminPanel'
 import { LecturerDirectory, MyLecturerProfile, canBrowseLecturers } from './Lecturers'
 import { ConversionRules } from './ConversionRules'
 import { ProductWorkspace } from './Products'
+import { ResearchReports } from './Reports'
 import './App.css'
 
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
   const [lookupError, setLookupError] = useState('')
   const [retry, setRetry] = useState(0)
   const administrator = user?.roles.some(p => p.role === 'QUAN_TRI' && p.scope === 'TOAN_TRUONG') ?? false
+  const manager = user?.roles.some(p => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'BAN_GIAM_HIEU', 'QUAN_TRI'].includes(p.role)) ?? false
   useEffect(() => {
     let active = true
     api<Profile>('/auth/me', 'GET', undefined, false).then(u => { if (active) setUser(u) }).catch(e => {
@@ -69,6 +71,7 @@ export default function App() {
         {canBrowseLecturers(user) && <button className={tab === 'lecturers' ? 'active' : ''} onClick={() => setTab('lecturers')}>Hồ sơ giảng viên</button>}
         {administrator && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>Quản trị dữ liệu nền</button>}
         {administrator && <button className={tab === 'conversion-rules' ? 'active' : ''} onClick={() => setTab('conversion-rules')}>Quy định quy đổi</button>}
+        {manager && <button className={tab === 'reports' ? 'active' : ''} onClick={() => setTab('reports')}>Thống kê kết quả</button>}
         <button className={tab === 'password' ? 'active' : ''} onClick={() => setTab('password')}>Đổi mật khẩu</button></nav>
       <div className="sidebar-bottom"><strong>{user.fullName}</strong><span>@{user.username}</span><button onClick={logout} disabled={busy}>Đăng xuất</button></div>
     </aside>
@@ -83,6 +86,7 @@ export default function App() {
       {tab === 'lecturers' && (canBrowseLecturers(user) ? <LecturerDirectory user={user} lookups={lookups} /> : <p role="alert">Bạn không có quyền xem danh sách giảng viên.</p>)}
       {tab === 'admin' && (administrator ? <AdminPanel currentAccountId={user.id} onChanged={() => setRetry(x => x + 1)} /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
       {tab === 'conversion-rules' && (administrator ? <ConversionRules /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
+      {tab === 'reports' && (manager ? <ResearchReports lookups={lookups} /> : <p role="alert">Bạn không có quyền xem báo cáo.</p>)}
       {tab === 'password' && <PasswordForm onChanged={() => { setUser(null); setError('Đã đổi mật khẩu. Vui lòng đăng nhập lại.'); setTab('overview') }} />}
     </main>
   </div>
