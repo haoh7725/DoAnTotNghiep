@@ -8,6 +8,7 @@ using ResearchManagement.Application.Auth.Abstractions;
 using ResearchManagement.Infrastructure;
 using ResearchManagement.Infrastructure.Auth;
 using ResearchManagement.Infrastructure.Persistence.Seed;
+using ResearchManagement.Api.BackgroundServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -73,7 +74,7 @@ builder.Services.AddCors(options =>
         .AllowAnyMethod()
         .AllowCredentials());
 });
-
+builder.Services.AddHostedService<ReminderBackgroundService>();
 var app = builder.Build();
 
 app.UseExceptionHandler();

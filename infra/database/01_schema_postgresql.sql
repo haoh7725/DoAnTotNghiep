@@ -468,17 +468,17 @@ DECLARE
     da_phan_bo BIGINT;
 BEGIN
     SELECT so_bai_duoc_giao INTO muc_giao
-    FROM chi_tieu_nckh WHERE id = NEW.chi_tieu_id FOR UPDATE;
+    FROM nckh.chi_tieu_nckh WHERE id = NEW.chi_tieu_id FOR UPDATE;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Chi tieu % khong ton tai', NEW.chi_tieu_id;
     END IF;
     IF TG_OP = 'UPDATE' THEN
         SELECT COALESCE(SUM(so_bai_phan_bo), 0) INTO da_phan_bo
-        FROM phan_bo_chi_tieu
+        FROM nckh.phan_bo_chi_tieu
         WHERE chi_tieu_id = NEW.chi_tieu_id AND id <> OLD.id;
     ELSE
         SELECT COALESCE(SUM(so_bai_phan_bo), 0) INTO da_phan_bo
-        FROM phan_bo_chi_tieu WHERE chi_tieu_id = NEW.chi_tieu_id;
+        FROM nckh.phan_bo_chi_tieu WHERE chi_tieu_id = NEW.chi_tieu_id;
     END IF;
     IF da_phan_bo + NEW.so_bai_phan_bo > muc_giao THEN
         RAISE EXCEPTION 'Tong phan bo vuot chi tieu duoc giao (%)', muc_giao;
@@ -494,7 +494,7 @@ CREATE FUNCTION kiem_tra_giam_chi_tieu() RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
     IF NEW.so_bai_duoc_giao < (
         SELECT COALESCE(SUM(so_bai_phan_bo), 0)
-        FROM phan_bo_chi_tieu WHERE chi_tieu_id = NEW.id
+        FROM nckh.phan_bo_chi_tieu WHERE chi_tieu_id = NEW.id
     ) THEN
         RAISE EXCEPTION 'Chi tieu moi nho hon tong da phan bo';
     END IF;

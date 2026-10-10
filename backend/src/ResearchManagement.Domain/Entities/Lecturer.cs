@@ -1,3 +1,4 @@
+
 using ResearchManagement.Domain.Common;
 
 namespace ResearchManagement.Domain.Entities;
@@ -43,7 +44,9 @@ public sealed class Lecturer : BaseEntity
     }
 
     /// <summary>Thông tin cá nhân mà chính giảng viên được tự sửa.</summary>
-    public void UpdatePersonal(string fullName, DateOnly? birthDate, string? gender, string? email, string? phone)
+    public void UpdatePersonal(
+        string fullName, DateOnly? birthDate, string? gender,
+        string? email, string? phone)
     {
         FullName = fullName;
         BirthDate = birthDate;
