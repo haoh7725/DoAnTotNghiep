@@ -8,9 +8,11 @@ using ResearchManagement.Application.Auth.Abstractions;
 using ResearchManagement.Infrastructure;
 using ResearchManagement.Infrastructure.Auth;
 using ResearchManagement.Infrastructure.Persistence.Seed;
+using QuestPDF.Infrastructure;
 using ResearchManagement.Api.BackgroundServices;
 
 var builder = WebApplication.CreateBuilder(args);
+QuestPDF.Settings.License = LicenseType.Community;
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
