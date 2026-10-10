@@ -9,7 +9,9 @@ export default defineConfig(({ mode }) => {
     server: {
       proxy: {
         '/api': {
-          target: env.API_PROXY_TARGET || 'http://localhost:5152',
+          // Docker Compose là cách chạy chuẩn của nhóm; có thể ghi đè bằng
+          // API_PROXY_TARGET=http://localhost:5152 khi chạy `dotnet run`.
+          target: env.API_PROXY_TARGET || 'http://localhost:8081',
           changeOrigin: true,
         },
       },
