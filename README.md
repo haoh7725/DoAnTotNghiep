@@ -32,9 +32,10 @@ npm install
 npm run dev
 ```
 
-Sao chép `web/.env.example` thành `web/.env.local` để chọn đúng API. Dùng
-`http://localhost:8081` khi chạy Docker Compose, hoặc `http://localhost:5152`
-khi chạy backend bằng `dotnet run`.
+Web mặc định kết nối API Docker Compose tại `http://localhost:8081`, vì vậy
+không cần tạo thêm file cấu hình. Chỉ sao chép `web/.env.example` thành
+`web/.env.local` và đổi sang `http://localhost:5152` khi chạy backend bằng
+`dotnet run`.
 
 ### Mobile Flutter
 
