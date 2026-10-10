@@ -10,6 +10,7 @@ public interface IProductRepository
     Task<Product?> GetByIdWithDetailsAsync(long id, CancellationToken cancellationToken);
 
     Task<List<Product>> GetByPlanItemIdAsync(long planItemId, CancellationToken cancellationToken);
+    Task<List<Product>> GetByLecturerIdAsync(long lecturerId, CancellationToken cancellationToken);
 
     Task AddAsync(Product product, CancellationToken cancellationToken);
 

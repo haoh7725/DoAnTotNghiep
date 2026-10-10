@@ -2,6 +2,7 @@ using ResearchManagement.Application.Common;
 using ResearchManagement.Application.Auth.Abstractions;
 using ResearchManagement.Application.Products.Abstractions;
 using ResearchManagement.Application.Products.Models;
+using ResearchManagement.Application.Lecturers.Abstractions;
 using ResearchManagement.Domain.Constants;
 using ResearchManagement.Domain.Entities;
 using Microsoft.AspNetCore.Hosting;
@@ -12,6 +13,7 @@ namespace ResearchManagement.Application.Products;
 public sealed class EvidenceService(
     IProductRepository products,
     IProductEvidenceRepository evidences,
+    ILecturerRepository lecturers,
     ICurrentUser currentUser,
     IWebHostEnvironment environment)
 {
@@ -42,6 +44,7 @@ public sealed class EvidenceService(
 
         if (product.Status == ProductStatuses.Approved)
             throw new BusinessRuleException("Sản phẩm đã được duyệt hoàn toàn, không thể thêm minh chứng.");
+        await EnsureOwnerOrAdminAsync(product, cancellationToken);
 
         if (file.Length == 0)
             throw new BusinessRuleException("Tệp không được rỗng.");
@@ -57,7 +60,8 @@ public sealed class EvidenceService(
             ?? throw new AuthenticationFailedException("Không xác định được người dùng hiện tại.");
 
         // Lưu file vào uploads/products/{productId}/
-        var folder = Path.Combine(environment.WebRootPath, "uploads", "products", productId.ToString());
+        var webRoot = environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot");
+        var folder = Path.Combine(webRoot, "uploads", "products", productId.ToString());
         Directory.CreateDirectory(folder);
 
         var uniqueName = $"{Guid.NewGuid():N}{ext}";
@@ -93,6 +97,7 @@ public sealed class EvidenceService(
 
         if (product.Status == ProductStatuses.Approved)
             throw new BusinessRuleException("Sản phẩm đã được duyệt hoàn toàn, không thể xóa minh chứng.");
+        await EnsureOwnerOrAdminAsync(product, cancellationToken);
 
         var evidence = await evidences.GetByIdAsync(evidenceId, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy minh chứng.");
@@ -101,7 +106,8 @@ public sealed class EvidenceService(
             throw new NotFoundException("Minh chứng không thuộc sản phẩm này.");
 
         // Xóa file vật lý
-        var fullPath = Path.Combine(environment.WebRootPath, evidence.StoredPath.Replace('/', Path.DirectorySeparatorChar));
+        var webRoot = environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot");
+        var fullPath = Path.Combine(webRoot, evidence.StoredPath.Replace('/', Path.DirectorySeparatorChar));
         if (File.Exists(fullPath))
             File.Delete(fullPath);
 
@@ -111,4 +117,29 @@ public sealed class EvidenceService(
 
     private static EvidenceResponse ToResponse(ProductEvidence e) =>
         new(e.Id, e.ProductId, e.OriginalFileName, e.FileSizeBytes, e.Description, e.UploadedAt);
+
+    public async Task<(string Path, string FileName)> GetDownloadAsync(
+        long productId, long evidenceId, CancellationToken cancellationToken)
+    {
+        _ = await products.GetByIdAsync(productId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
+        var evidence = await evidences.GetByIdAsync(evidenceId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy minh chứng.");
+        if (evidence.ProductId != productId)
+            throw new NotFoundException("Minh chứng không thuộc sản phẩm này.");
+        var webRoot = environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot");
+        var fullPath = Path.GetFullPath(Path.Combine(webRoot, evidence.StoredPath.Replace('/', Path.DirectorySeparatorChar)));
+        var allowedRoot = Path.GetFullPath(Path.Combine(webRoot, "uploads", "products")) + Path.DirectorySeparatorChar;
+        if (!fullPath.StartsWith(allowedRoot, StringComparison.OrdinalIgnoreCase) || !File.Exists(fullPath))
+            throw new NotFoundException("Không tìm thấy tệp minh chứng.");
+        return (fullPath, evidence.OriginalFileName);
+    }
+
+    private async Task EnsureOwnerOrAdminAsync(Product product, CancellationToken cancellationToken)
+    {
+        if (currentUser.IsInRole(Roles.Admin)) return;
+        var owner = await lecturers.GetByIdAsync(product.SubmittedByLecturerId, cancellationToken);
+        if (owner?.AccountId != currentUser.Id)
+            throw new ForbiddenException("Chỉ tác giả chính được quản lý minh chứng.");
+    }
 }

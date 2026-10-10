@@ -9,6 +9,8 @@ Tài liệu này chốt cấu trúc dữ liệu để Web và Mobile tích hợp
 | `GET /api/evaluations/me?academicYearId={id}` | Giảng viên chính chủ | Kết quả mới nhất của tài khoản hiện tại trong năm học |
 | `GET /api/evaluations/{id}` | Chính chủ hoặc quyền quản lý bao trùm đơn vị | Chi tiết kết quả và từng sản phẩm quy đổi |
 | `GET /api/evaluations?academicYearId={id}&lecturerId={id}` | Phòng QLKH, quản trị hoặc quản lý trong phạm vi | Danh sách kết quả |
+| `POST /api/evaluations` | Phòng QLKH hoặc quản trị | Tạo lần đánh giá nháp và tính chi tiết quy đổi |
+| `POST /api/evaluations/{id}/finalize` | Người đánh giá hoặc quản trị | Chốt xếp loại và căn cứ xếp loại |
 
 `GET /me` trả 404 khi tài khoản chưa liên kết giảng viên hoặc chưa có lần đánh giá. Mobile hiển thị trạng thái “Chưa có đánh giá” cho trường hợp này. Kết quả `NHAP` chỉ người đánh giá và quản trị được xem; giảng viên chỉ xem kết quả `CHOT`.
 
@@ -81,3 +83,15 @@ Mỗi chi tiết lưu mã quy định, phiên bản, giá trị gốc, hệ số
 - Không dùng trường `scoreEquivalent` của sản phẩm để thay cho tổng kết quả; kết quả chính thức lấy từ API đánh giá.
 - Khi chưa có đánh giá hoặc kết quả chưa chốt, Mobile không suy đoán xếp loại.
 - API phải kiểm tra chính chủ và phạm vi dữ liệu ở backend; ẩn nút trên giao diện không thay thế kiểm tra quyền.
+
+## Tạo và chốt kết quả
+
+Tạo bản nháp bằng `{ "lecturerId": 7, "academicYearId": 3 }`. Engine chỉ lấy sản phẩm đã ở
+trạng thái `DA_DUYET`, thuộc kế hoạch của đúng năm học, chọn phiên bản quy định mới nhất còn hiệu lực
+cho từng đơn vị và lưu ảnh chụp phép tính. Vai trò hệ số chuẩn là `TAC_GIA_CHINH` cho người nộp sản
+phẩm và `DONG_TAC_GIA` cho các tác giả còn lại. Nếu quy định không khai báo hệ số thì mặc định là 1;
+nếu có danh sách hệ số nhưng thiếu vai trò tương ứng, sản phẩm không được tự suy đoán hệ số.
+
+Chốt bản nháp bằng `{ "classification": "Hoàn thành tốt", "classificationBasis": "..." }`.
+Xếp loại được nhập theo quy định nghiệp vụ của đơn vị; engine không tự đặt ngưỡng khi hệ thống chưa
+có cấu hình định mức xếp loại.

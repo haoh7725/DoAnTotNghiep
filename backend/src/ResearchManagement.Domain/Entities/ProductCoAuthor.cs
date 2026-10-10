@@ -13,11 +13,13 @@ public sealed class ProductCoAuthor : BaseEntity
     public ProductCoAuthor(
         long productId,
         long lecturerId,
-        int displayOrder)
+        int displayOrder,
+        string authorRole = "DONG_TAC_GIA")
     {
         ProductId = productId;
         LecturerId = lecturerId;
         DisplayOrder = displayOrder;
+        AuthorRole = authorRole.Trim().ToUpperInvariant();
     }
 
     /// <summary>FK → san_pham.id</summary>
@@ -28,9 +30,11 @@ public sealed class ProductCoAuthor : BaseEntity
 
     /// <summary>Thứ tự hiển thị (1 = tác giả chính thứ nhất, tăng dần).</summary>
     public int DisplayOrder { get; private set; }
+    public string AuthorRole { get; private set; } = "DONG_TAC_GIA";
 
-    public void UpdateOrder(int displayOrder)
+    public void Update(int displayOrder, string authorRole)
     {
         DisplayOrder = displayOrder;
+        AuthorRole = authorRole.Trim().ToUpperInvariant();
     }
 }

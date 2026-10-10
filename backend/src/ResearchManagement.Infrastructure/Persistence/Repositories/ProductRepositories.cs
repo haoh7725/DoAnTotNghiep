@@ -18,6 +18,11 @@ public sealed class ProductRepository(ApplicationDbContext db) : IProductReposit
             .OrderByDescending(p => p.CreatedAt)
             .ToListAsync(cancellationToken);
 
+    public Task<List<Product>> GetByLecturerIdAsync(long lecturerId, CancellationToken cancellationToken) =>
+        db.Products.Where(p => p.SubmittedByLecturerId == lecturerId ||
+                db.ProductCoAuthors.Any(a => a.ProductId == p.Id && a.LecturerId == lecturerId))
+            .OrderByDescending(p => p.UpdatedAt).ToListAsync(cancellationToken);
+
     public async Task AddAsync(Product product, CancellationToken cancellationToken) =>
         await db.Products.AddAsync(product, cancellationToken);
 

@@ -17,7 +17,11 @@ public sealed class Product : BaseEntity
         string title,
         string? description,
         string? publicationInfo,
-        DateOnly? publishedDate)
+        DateOnly? publishedDate,
+        string? articleStatus = null,
+        string? journalIndex = null,
+        string? journalClassification = null,
+        string? projectLevel = null)
     {
         ResearchPlanItemId = researchPlanItemId;
         SubmittedByLecturerId = submittedByLecturerId;
@@ -25,6 +29,10 @@ public sealed class Product : BaseEntity
         Description = description?.Trim();
         PublicationInfo = publicationInfo?.Trim();
         PublishedDate = publishedDate;
+        ArticleStatus = Normalize(articleStatus);
+        JournalIndex = Normalize(journalIndex);
+        JournalClassification = Normalize(journalClassification);
+        ProjectLevel = Normalize(projectLevel);
         Status = ProductStatuses.Draft;
         CreatedAt = DateTimeOffset.UtcNow;
         UpdatedAt = DateTimeOffset.UtcNow;
@@ -43,6 +51,10 @@ public sealed class Product : BaseEntity
     public string? PublicationInfo { get; private set; }
 
     public DateOnly? PublishedDate { get; private set; }
+    public string? ArticleStatus { get; private set; }
+    public string? JournalIndex { get; private set; }
+    public string? JournalClassification { get; private set; }
+    public string? ProjectLevel { get; private set; }
 
     public string Status { get; private set; } = ProductStatuses.Draft;
 
@@ -59,12 +71,20 @@ public sealed class Product : BaseEntity
         string title,
         string? description,
         string? publicationInfo,
-        DateOnly? publishedDate)
+        DateOnly? publishedDate,
+        string? articleStatus = null,
+        string? journalIndex = null,
+        string? journalClassification = null,
+        string? projectLevel = null)
     {
         Title = title.Trim();
         Description = description?.Trim();
         PublicationInfo = publicationInfo?.Trim();
         PublishedDate = publishedDate;
+        ArticleStatus = Normalize(articleStatus);
+        JournalIndex = Normalize(journalIndex);
+        JournalClassification = Normalize(journalClassification);
+        ProjectLevel = Normalize(projectLevel);
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
@@ -90,4 +110,6 @@ public sealed class Product : BaseEntity
         Status = ProductStatuses.Draft;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
+
+    private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
