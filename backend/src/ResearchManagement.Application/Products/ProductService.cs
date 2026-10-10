@@ -62,6 +62,14 @@ public sealed class ProductService(
         return list.Select(ToSummary).ToList();
     }
 
+    public async Task<IReadOnlyList<ProductSummaryResponse>> GetMineAsync(CancellationToken cancellationToken)
+    {
+        var lecturer = await lecturers.GetByAccountIdAsync(GetCurrentAccountId(), cancellationToken)
+            ?? throw new NotFoundException("Tài khoản chưa liên kết với giảng viên.");
+        var list = await products.GetByLecturerIdAsync(lecturer.Id, cancellationToken);
+        return list.Select(ToSummary).ToList();
+    }
+
     public async Task<IReadOnlyList<ReviewHistoryResponse>> GetReviewHistoryAsync(
         long productId,
         CancellationToken cancellationToken)
@@ -102,7 +110,11 @@ public sealed class ProductService(
             request.Title,
             request.Description,
             request.PublicationInfo,
-            request.PublishedDate);
+            request.PublishedDate,
+            request.ArticleStatus,
+            request.JournalIndex,
+            request.JournalClassification,
+            request.ProjectLevel);
 
         await products.AddAsync(product, cancellationToken);
         await products.SaveChangesAsync(cancellationToken);
@@ -119,9 +131,9 @@ public sealed class ProductService(
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
 
         EnsureEditable(product);
-        EnsureOwnerOrAdmin(product);
-
-        product.Update(request.Title, request.Description, request.PublicationInfo, request.PublishedDate);
+        await EnsureOwnerOrAdminAsync(product, cancellationToken);
+        product.Update(request.Title, request.Description, request.PublicationInfo, request.PublishedDate,
+            request.ArticleStatus, request.JournalIndex, request.JournalClassification, request.ProjectLevel);
 
         await products.SaveChangesAsync(cancellationToken);
 
@@ -140,7 +152,7 @@ public sealed class ProductService(
         if (product.Status is not (ProductStatuses.Draft or ProductStatuses.Returned))
             throw new BusinessRuleException("Chỉ có thể nộp sản phẩm ở trạng thái Nháp hoặc Trả lại.");
 
-        EnsureOwnerOrAdmin(product);
+        await EnsureOwnerOrAdminAsync(product, cancellationToken);
 
         var actorId = GetCurrentAccountId();
         var fromStatus = product.Status;
@@ -212,14 +224,12 @@ public sealed class ProductService(
             throw new BusinessRuleException("Chỉ có thể chỉnh sửa sản phẩm ở trạng thái Nháp hoặc Trả lại.");
     }
 
-    private void EnsureOwnerOrAdmin(Product product)
+    private async Task EnsureOwnerOrAdminAsync(Product product, CancellationToken cancellationToken)
     {
         if (currentUser.IsInRole(Roles.Admin)) return;
-
-        // Người dùng phải là chủ sản phẩm — kiểm tra qua lecturer
-        // (kiểm tra đơn giản: không throw nếu Admin, các trường hợp khác để controller quyết định)
-        // Thực tế cần join với lecturer để so sánh SubmittedByLecturerId với currentUser
-        // — bổ sung khi cần phân quyền sở hữu chặt hơn.
+        var owner = await lecturers.GetByIdAsync(product.SubmittedByLecturerId, cancellationToken);
+        if (owner?.AccountId != GetCurrentAccountId())
+            throw new ForbiddenException("Chỉ tác giả chính được sửa hoặc gửi duyệt sản phẩm.");
     }
 
     private async Task<ProductResponse> ToResponseAsync(
@@ -241,7 +251,8 @@ public sealed class ProductService(
                 ca.Id, ca.ProductId, ca.LecturerId,
                 lec?.FullName ?? string.Empty,
                 lec?.Code,
-                ca.DisplayOrder));
+                ca.DisplayOrder,
+                ca.AuthorRole));
         }
 
         var evidenceResponses = evidenceList.Select(e => new EvidenceResponse(
@@ -256,6 +267,10 @@ public sealed class ProductService(
             product.Description,
             product.PublicationInfo,
             product.PublishedDate,
+            product.ArticleStatus,
+            product.JournalIndex,
+            product.JournalClassification,
+            product.ProjectLevel,
             product.Status,
             product.ScoreEquivalent,
             product.CreatedAt,
@@ -265,5 +280,5 @@ public sealed class ProductService(
     }
 
     private static ProductSummaryResponse ToSummary(Product p) =>
-        new(p.Id, p.ResearchPlanItemId, p.Title, p.Status, p.ScoreEquivalent, p.CreatedAt, p.UpdatedAt);
+        new(p.Id, p.ResearchPlanItemId, p.Title, p.ArticleStatus, p.Status, p.ScoreEquivalent, p.CreatedAt, p.UpdatedAt);
 }

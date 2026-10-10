@@ -34,6 +34,7 @@ public sealed class CoAuthorService(
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
 
         EnsureEditable(product);
+        await EnsureOwnerOrAdminAsync(product, cancellationToken);
 
         var lecturer = await lecturers.GetByIdAsync(request.LecturerId, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy giảng viên.");
@@ -44,13 +45,13 @@ public sealed class CoAuthorService(
         if (await coAuthors.ExistsAsync(productId, request.LecturerId, cancellationToken))
             throw new ConflictException("Giảng viên này đã là đồng tác giả của sản phẩm.");
 
-        var coAuthor = new ProductCoAuthor(productId, request.LecturerId, request.DisplayOrder);
+        var coAuthor = new ProductCoAuthor(productId, request.LecturerId, request.DisplayOrder, request.AuthorRole);
         await coAuthors.AddAsync(coAuthor, cancellationToken);
         await coAuthors.SaveChangesAsync(cancellationToken);
 
         return new CoAuthorResponse(
             coAuthor.Id, coAuthor.ProductId, coAuthor.LecturerId,
-            lecturer.FullName, lecturer.Code, coAuthor.DisplayOrder);
+            lecturer.FullName, lecturer.Code, coAuthor.DisplayOrder, coAuthor.AuthorRole);
     }
 
     public async Task<CoAuthorResponse> UpdateAsync(
@@ -63,6 +64,7 @@ public sealed class CoAuthorService(
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
 
         EnsureEditable(product);
+        await EnsureOwnerOrAdminAsync(product, cancellationToken);
 
         var coAuthor = await coAuthors.GetByIdAsync(coAuthorId, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy đồng tác giả.");
@@ -70,13 +72,13 @@ public sealed class CoAuthorService(
         if (coAuthor.ProductId != productId)
             throw new NotFoundException("Đồng tác giả không thuộc sản phẩm này.");
 
-        coAuthor.UpdateOrder(request.DisplayOrder);
+        coAuthor.Update(request.DisplayOrder, request.AuthorRole);
         await coAuthors.SaveChangesAsync(cancellationToken);
 
         var lecturer = await lecturers.GetByIdAsync(coAuthor.LecturerId, cancellationToken);
         return new CoAuthorResponse(
             coAuthor.Id, coAuthor.ProductId, coAuthor.LecturerId,
-            lecturer?.FullName ?? string.Empty, lecturer?.Code, coAuthor.DisplayOrder);
+            lecturer?.FullName ?? string.Empty, lecturer?.Code, coAuthor.DisplayOrder, coAuthor.AuthorRole);
     }
 
     public async Task RemoveAsync(
@@ -88,6 +90,7 @@ public sealed class CoAuthorService(
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
 
         EnsureEditable(product);
+        await EnsureOwnerOrAdminAsync(product, cancellationToken);
 
         var coAuthor = await coAuthors.GetByIdAsync(coAuthorId, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy đồng tác giả.");
@@ -107,6 +110,14 @@ public sealed class CoAuthorService(
             throw new BusinessRuleException("Chỉ có thể chỉnh sửa đồng tác giả khi sản phẩm ở trạng thái Nháp hoặc Trả lại.");
     }
 
+    private async Task EnsureOwnerOrAdminAsync(Product product, CancellationToken cancellationToken)
+    {
+        if (currentUser.IsInRole(Roles.Admin)) return;
+        var owner = await lecturers.GetByIdAsync(product.SubmittedByLecturerId, cancellationToken);
+        if (owner?.AccountId != currentUser.Id)
+            throw new ForbiddenException("Chỉ tác giả chính được quản lý đồng tác giả.");
+    }
+
     private async Task<IReadOnlyList<CoAuthorResponse>> EnrichAsync(
         List<ProductCoAuthor> list,
         CancellationToken cancellationToken)
@@ -117,7 +128,7 @@ public sealed class CoAuthorService(
             var lec = await lecturers.GetByIdAsync(ca.LecturerId, cancellationToken);
             result.Add(new CoAuthorResponse(
                 ca.Id, ca.ProductId, ca.LecturerId,
-                lec?.FullName ?? string.Empty, lec?.Code, ca.DisplayOrder));
+                lec?.FullName ?? string.Empty, lec?.Code, ca.DisplayOrder, ca.AuthorRole));
         }
         return result;
     }

@@ -25,3 +25,14 @@ export async function api<T>(path: string, method = 'GET', body?: unknown, notif
   }
   return response.status === 204 ? undefined as T : response.json()
 }
+
+export async function apiForm<T>(path: string, body: FormData): Promise<T> {
+  const response = await fetch(`/api${path}`, { method: 'POST', credentials: 'include',
+    headers: { 'X-Requested-With': 'ResearchHub' }, body })
+  if (!response.ok) {
+    if (response.status === 401) window.dispatchEvent(new Event('session-expired'))
+    const error = await response.json().catch(() => ({}))
+    throw new ApiError(error.detail || error.title || 'Không thể tải tệp lên.', response.status)
+  }
+  return response.json()
+}

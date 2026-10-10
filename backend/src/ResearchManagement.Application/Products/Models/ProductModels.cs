@@ -18,6 +18,10 @@ public sealed class CreateProductRequest
     public string? PublicationInfo { get; set; }
 
     public DateOnly? PublishedDate { get; set; }
+    [RegularExpression("^(DANG_VIET|DANG_PHAN_BIEN|DA_NHAN_DANG|DA_XUAT_BAN)$")] public string? ArticleStatus { get; set; }
+    [StringLength(100)] public string? JournalIndex { get; set; }
+    [StringLength(100)] public string? JournalClassification { get; set; }
+    [StringLength(100)] public string? ProjectLevel { get; set; }
 }
 
 public sealed class UpdateProductRequest
@@ -31,6 +35,10 @@ public sealed class UpdateProductRequest
     public string? PublicationInfo { get; set; }
 
     public DateOnly? PublishedDate { get; set; }
+    [RegularExpression("^(DANG_VIET|DANG_PHAN_BIEN|DA_NHAN_DANG|DA_XUAT_BAN)$")] public string? ArticleStatus { get; set; }
+    [StringLength(100)] public string? JournalIndex { get; set; }
+    [StringLength(100)] public string? JournalClassification { get; set; }
+    [StringLength(100)] public string? ProjectLevel { get; set; }
 }
 
 public sealed class ReviewProductRequest
@@ -54,12 +62,14 @@ public sealed class AddCoAuthorRequest
 
     [Range(1, int.MaxValue)]
     public int DisplayOrder { get; set; } = 1;
+    [Required, StringLength(100)] public string AuthorRole { get; set; } = "DONG_TAC_GIA";
 }
 
 public sealed class UpdateCoAuthorRequest
 {
     [Range(1, int.MaxValue)]
     public int DisplayOrder { get; set; }
+    [Required, StringLength(100)] public string AuthorRole { get; set; } = "DONG_TAC_GIA";
 }
 
 // ──── Responses ───────────────────────────────────────────────────────────────
@@ -70,7 +80,8 @@ public sealed record CoAuthorResponse(
     long LecturerId,
     string LecturerFullName,
     string? LecturerCode,
-    int DisplayOrder);
+    int DisplayOrder,
+    string AuthorRole);
 
 public sealed record EvidenceResponse(
     long Id,
@@ -99,6 +110,10 @@ public sealed record ProductResponse(
     string? Description,
     string? PublicationInfo,
     DateOnly? PublishedDate,
+    string? ArticleStatus,
+    string? JournalIndex,
+    string? JournalClassification,
+    string? ProjectLevel,
     string Status,
     decimal? ScoreEquivalent,
     DateTimeOffset CreatedAt,
@@ -110,6 +125,7 @@ public sealed record ProductSummaryResponse(
     long Id,
     long ResearchPlanItemId,
     string Title,
+    string? ArticleStatus,
     string Status,
     decimal? ScoreEquivalent,
     DateTimeOffset CreatedAt,

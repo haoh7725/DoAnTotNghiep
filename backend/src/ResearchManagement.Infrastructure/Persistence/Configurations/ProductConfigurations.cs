@@ -18,6 +18,10 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(x => x.Description).HasColumnName("mo_ta");
         builder.Property(x => x.PublicationInfo).HasColumnName("thong_tin_xuat_ban").HasMaxLength(500);
         builder.Property(x => x.PublishedDate).HasColumnName("ngay_cong_bo").HasColumnType("date");
+        builder.Property(x => x.ArticleStatus).HasColumnName("trang_thai_bai_bao").HasMaxLength(30);
+        builder.Property(x => x.JournalIndex).HasColumnName("chi_so_tap_chi").HasMaxLength(100);
+        builder.Property(x => x.JournalClassification).HasColumnName("phan_loai_tap_chi").HasMaxLength(100);
+        builder.Property(x => x.ProjectLevel).HasColumnName("cap_de_tai").HasMaxLength(100);
         builder.Property(x => x.Status).HasColumnName("trang_thai").HasMaxLength(30).IsRequired();
         builder.Property(x => x.ScoreEquivalent).HasColumnName("diem_quy_doi").HasPrecision(5, 2);
         builder.Property(x => x.CreatedAt).HasColumnName("tao_luc").HasColumnType("timestamptz").IsRequired();
@@ -46,6 +50,7 @@ public sealed class ProductCoAuthorConfiguration : IEntityTypeConfiguration<Prod
         builder.Property(x => x.ProductId).HasColumnName("san_pham_id").IsRequired();
         builder.Property(x => x.LecturerId).HasColumnName("giang_vien_id").IsRequired();
         builder.Property(x => x.DisplayOrder).HasColumnName("thu_tu").IsRequired();
+        builder.Property(x => x.AuthorRole).HasColumnName("vai_tro_tac_gia").HasMaxLength(100).IsRequired();
 
         // Mỗi giảng viên chỉ xuất hiện một lần trong một sản phẩm
         builder.HasIndex(x => new { x.ProductId, x.LecturerId }).IsUnique();
@@ -66,7 +71,7 @@ public sealed class ProductEvidenceConfiguration : IEntityTypeConfiguration<Prod
 {
     public void Configure(EntityTypeBuilder<ProductEvidence> builder)
     {
-        builder.ToTable("minh_chung", "nckh");
+        builder.ToTable("minh_chung_san_pham", "nckh");
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Id).HasColumnName("id");
@@ -89,7 +94,7 @@ public sealed class ReviewHistoryConfiguration : IEntityTypeConfiguration<Review
 {
     public void Configure(EntityTypeBuilder<ReviewHistory> builder)
     {
-        builder.ToTable("lich_su_xet_duyet", "nckh");
+        builder.ToTable("lich_su_xet_duyet_san_pham", "nckh");
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Id).HasColumnName("id");

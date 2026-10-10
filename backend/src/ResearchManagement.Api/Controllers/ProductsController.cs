@@ -2,13 +2,39 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ResearchManagement.Application.Products;
 using ResearchManagement.Application.Products.Models;
+using ResearchManagement.Application.Auth.Abstractions;
+using ResearchManagement.Application.Common;
+using ResearchManagement.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace ResearchManagement.Api.Controllers;
 
 [ApiController]
 [Authorize]
-public sealed class ProductsController(ProductService productService) : ControllerBase
+public sealed class ProductsController(ProductService productService, ApplicationDbContext db, ICurrentUser currentUser) : ControllerBase
 {
+    [HttpGet("api/products/mine")]
+    public async Task<ActionResult<IReadOnlyList<ProductSummaryResponse>>> Mine(CancellationToken cancellationToken) =>
+        Ok(await productService.GetMineAsync(cancellationToken));
+
+    [HttpGet("api/products/available-plan-items")]
+    public async Task<IActionResult> AvailablePlanItems(CancellationToken cancellationToken)
+    {
+        var accountId = currentUser.Id ?? throw new ForbiddenException("Không xác định được tài khoản hiện tại.");
+        var lecturerId = await db.Lecturers.Where(x => x.AccountId == accountId).Select(x => (long?)x.Id)
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw new NotFoundException("Tài khoản chưa liên kết với giảng viên.");
+        var items = await (from item in db.ResearchPlanItems.AsNoTracking()
+                           join plan in db.ResearchPlans.AsNoTracking() on item.ResearchPlanId equals plan.Id
+                           join year in db.AcademicYears.AsNoTracking() on plan.AcademicYearId equals year.Id
+                           join type in db.ProductTypes.AsNoTracking() on item.ProductTypeId equals type.Id
+                           where plan.LecturerId == lecturerId
+                           orderby year.StartDate descending, item.Name
+                           select new { item.Id, item.Name, ProductTypeName = type.Name,
+                               AcademicYearCode = year.Code, item.Status }).ToListAsync(cancellationToken);
+        return Ok(items);
+    }
+
     // GET /api/research-plan-items/{itemId}/products
     [HttpGet("api/research-plan-items/{itemId:long}/products")]
     public async Task<ActionResult<IReadOnlyList<ProductSummaryResponse>>> GetByPlanItem(
