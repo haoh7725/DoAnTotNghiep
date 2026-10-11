@@ -7,11 +7,13 @@ import { LecturerDirectory, MyLecturerProfile, canBrowseLecturers } from './Lect
 import { ConversionRules } from './ConversionRules'
 import { ProductWorkspace } from './Products'
 import { ResearchReports } from './Reports'
+import { ResearchPlans } from './ResearchPlans'
 import './App.css'
 
 export default function App() {
   const [user, setUser] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [connectionError, setConnectionError] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [tab, setTab] = useState('overview')
@@ -22,9 +24,28 @@ export default function App() {
   const manager = user?.roles.some(p => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'BAN_GIAM_HIEU', 'QUAN_TRI'].includes(p.role)) ?? false
   useEffect(() => {
     let active = true
-    api<Profile>('/auth/me', 'GET', undefined, false).then(u => { if (active) setUser(u) }).catch(e => {
-      if (active && (!(e instanceof ApiError) || e.status !== 401)) setError(e.message)
-    }).finally(() => { if (active) setLoading(false) })
+    api<Profile>('/auth/me', 'GET', undefined, false)
+      .then(u => {
+        if (active) {
+          setUser(u)
+          setConnectionError('')
+        }
+      })
+      .catch(e => {
+        if (!active) return
+
+        if (e instanceof ApiError && e.status === 401) {
+          setUser(null)
+          setConnectionError('')
+        } else {
+          setConnectionError(
+            'Không thể kết nối hoặc kiểm tra phiên đăng nhập. Vui lòng thử lại.'
+          )
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
     const expired = () => { setUser(null); setLookups(null); setTab('overview'); setError('Phiên đăng nhập đã hết hạn hoặc tài khoản đã thay đổi. Vui lòng đăng nhập lại.') }
     window.addEventListener('session-expired', expired)
     return () => { active = false; window.removeEventListener('session-expired', expired) }
@@ -49,6 +70,36 @@ export default function App() {
     catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }
   if (loading) return <main className="loading" role="status">Đang kiểm tra phiên đăng nhập…</main>
+  if (connectionError && !user) {
+    return (
+      <main className="connection-error-page">
+        <section className="connection-error-card">
+          <div className="connection-error-icon" aria-hidden="true">
+            !
+          </div>
+
+          <h2>Không thể kết nối máy chủ</h2>
+
+          <p className="connection-error-description">
+            Hệ thống hiện không thể xác minh phiên đăng nhập.
+            Vui lòng kiểm tra kết nối và thử lại.
+          </p>
+
+          <p className="alert" role="alert">
+            {connectionError}
+          </p>
+
+          <button
+            type="button"
+            className="primary"
+            onClick={() => window.location.reload()}
+          >
+            Thử lại
+          </button>
+        </section>
+      </main>
+    )
+  }
   if (!user) return <main className="login-layout">
     <section className="login-story"><div className="brand"><span className="brand-mark">R</span> ResearchHub <small>HUIT</small></div>
       <div><p className="eyebrow">NGHIÊN CỨU KHOA HỌC</p><h1>Mỗi đóng góp.<br />Một hành trình.</h1><p className="story-text">Không gian làm việc chung cho hồ sơ, kế hoạch và kết quả nghiên cứu của giảng viên.</p></div>
@@ -67,6 +118,14 @@ export default function App() {
     <aside className="sidebar"><div className="brand"><span className="brand-mark">R</span> ResearchHub</div><p className="nav-label">KHÔNG GIAN LÀM VIỆC</p>
       <nav aria-label="Điều hướng chính"><button className={tab === 'overview' ? 'active' : ''} onClick={() => setTab('overview')}>Tổng quan tài khoản</button>
         <button className={tab === 'my-profile' ? 'active' : ''} onClick={() => setTab('my-profile')}>Hồ sơ của tôi</button>
+        {user.roles.some(r => r.role === 'GIANG_VIEN') && (
+          <button
+            className={tab === 'research-plans' ? 'active' : ''}
+            onClick={() => setTab('research-plans')}
+          >
+            Kế hoạch & Tiến độ
+          </button>
+        )}
         {user.roles.some(r => r.role === 'GIANG_VIEN') && <button className={tab === 'products' ? 'active' : ''} onClick={() => setTab('products')}>Sản phẩm khoa học</button>}
         {canBrowseLecturers(user) && <button className={tab === 'lecturers' ? 'active' : ''} onClick={() => setTab('lecturers')}>Hồ sơ giảng viên</button>}
         {administrator && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>Quản trị dữ liệu nền</button>}
@@ -82,6 +141,10 @@ export default function App() {
         <section className="panel"><h2>Đơn vị và năm học</h2>{lookupError ? <><p className="alert" role="alert">{lookupError}</p><button onClick={() => setRetry(x => x + 1)}>Thử lại</button></> : !lookups ? <p role="status">Đang tải dữ liệu…</p> : <div className="summary-grid"><div><h3>Khoa</h3>{lookups.faculties.map(f => <p key={f.id}>{f.name}</p>)}{!lookups.faculties.length && <p className="muted">Chưa có đơn vị được liên kết.</p>}</div><div><h3>Bộ môn</h3>{lookups.departments.map(d => <p key={d.id}>{d.name}</p>)}{!lookups.departments.length && <p className="muted">Chưa có bộ môn được liên kết.</p>}</div><div><h3>Năm học</h3>{lookups.academicYears.map(y => <p key={y.id}>{y.code}</p>)}{!lookups.academicYears.length && <p className="muted">Chưa có năm học.</p>}</div></div>}</section>
       </>}
       {tab === 'my-profile' && <MyLecturerProfile user={user} lookups={lookups} />}
+      {tab === 'research-plans' &&
+        user.roles.some(r => r.role === 'GIANG_VIEN') && (
+          <ResearchPlans academicYears={lookups?.academicYears ?? []} />
+        )}
       {tab === 'products' && <ProductWorkspace />}
       {tab === 'lecturers' && (canBrowseLecturers(user) ? <LecturerDirectory user={user} lookups={lookups} /> : <p role="alert">Bạn không có quyền xem danh sách giảng viên.</p>)}
       {tab === 'admin' && (administrator ? <AdminPanel currentAccountId={user.id} onChanged={() => setRetry(x => x + 1)} /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
@@ -107,3 +170,4 @@ function PasswordForm({ onChanged }: { onChanged: () => void }) {
     <p className="muted">Từ 12 đến 128 ký tự. Các phiên đăng nhập cũ sẽ hết hiệu lực.</p><button className="primary" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu mật khẩu'}</button>
   </form></>
 }
+
