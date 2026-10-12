@@ -1,0 +1,53 @@
+/* ── Filter toolbar ─────────────────────────────────── */
+.notif-filter-row{display:flex;gap:8px;flex-wrap:wrap}
+.notif-filter-row button{background:transparent;border-color:#d4ddd0;color:#4a6259;font-size:.82rem;padding:8px 14px;display:flex;align-items:center;gap:6px}
+.notif-filter-row button.active{background:#173f32;color:#fff;border-color:#173f32}
+.notif-filter-row button:hover:not(.active):not(:disabled){background:#eaf1eb}
+
+/* ── Unread badge ───────────────────────────────────── */
+.notif-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:20px;background:#d73a3a;color:#fff;font-size:.65rem;font-weight:700;line-height:1}
+.notif-badge--feedback{background:#176b50}
+
+/* ── Notification list ──────────────────────────────── */
+.notif-list{list-style:none;padding:0;margin:20px 0}
+.notif-item{display:flex;align-items:flex-start;gap:14px;padding:16px 0;border-bottom:1px solid #e6eae4;transition:background .15s}
+.notif-item:last-child{border-bottom:none}
+.notif-item--unread{background:#f7fbf8;border-radius:8px;padding:16px;margin:4px -4px}
+.notif-item--feedback.notif-item--unread{background:#f0f8f4;border-left:3px solid #176b50;padding-left:13px}
+
+/* ── Icon ───────────────────────────────────────────── */
+.notif-icon{font-size:1.4rem;flex-shrink:0;margin-top:2px;line-height:1}
+
+/* ── Body ───────────────────────────────────────────── */
+.notif-body{flex:1;min-width:0}
+.notif-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+
+/* ── Type badge ─────────────────────────────────────── */
+.notif-type{font-size:.7rem;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:20px;background:#e8f2ec;color:#176b50}
+.notif-type--phan_hoi{background:#d4eede;color:#126040}
+.notif-type--nhac_han{background:#fff3d8;color:#7a5700}
+.notif-type--qua_han{background:#fdecea;color:#922f22}
+.notif-type--he_thong{background:#e9ecf5;color:#3a4a8a}
+
+/* ── Reference tag ──────────────────────────────────── */
+.notif-ref{font-size:.72rem;color:#7d9087;background:#f0f4f0;border-radius:6px;padding:2px 8px}
+
+/* ── Unread dot ─────────────────────────────────────── */
+.notif-dot{width:8px;height:8px;border-radius:50%;background:#176b50;flex-shrink:0;margin-left:2px}
+
+/* ── Content ────────────────────────────────────────── */
+.notif-content{margin:0 0 8px;line-height:1.65;color:#1e3830;font-size:.9rem}
+
+/* ── Footer meta ────────────────────────────────────── */
+.notif-foot{font-size:.73rem;color:#8a9d93}
+.notif-read-time{color:#aab8ae}
+
+/* ── Read button ────────────────────────────────────── */
+.notif-read-btn{flex-shrink:0;align-self:center;background:transparent;border:1px solid #c4d6cc;color:#176b50;font-size:.85rem;padding:6px 10px;border-radius:7px}
+.notif-read-btn:hover:not(:disabled){background:#d8eedf;border-color:#98c5ac}
+
+@media(max-width:600px){
+  .notif-item--unread{margin:4px 0}
+  .notif-filter-row{gap:6px}
+  .notif-filter-row button{font-size:.78rem;padding:7px 10px}
+}

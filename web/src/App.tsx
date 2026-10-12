@@ -7,6 +7,7 @@ import { LecturerDirectory, MyLecturerProfile, canBrowseLecturers } from './Lect
 import { ConversionRules } from './ConversionRules'
 import { ProductWorkspace } from './Products'
 import { ResearchReports } from './Reports'
+import { NotificationInbox, useUnreadCount } from './Notifications'
 import './App.css'
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
   const [retry, setRetry] = useState(0)
   const administrator = user?.roles.some(p => p.role === 'QUAN_TRI' && p.scope === 'TOAN_TRUONG') ?? false
   const manager = user?.roles.some(p => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'BAN_GIAM_HIEU', 'QUAN_TRI'].includes(p.role)) ?? false
+  const unreadCount = useUnreadCount()
   useEffect(() => {
     let active = true
     api<Profile>('/auth/me', 'GET', undefined, false).then(u => { if (active) setUser(u) }).catch(e => {
@@ -68,6 +70,9 @@ export default function App() {
       <nav aria-label="Điều hướng chính"><button className={tab === 'overview' ? 'active' : ''} onClick={() => setTab('overview')}>Tổng quan tài khoản</button>
         <button className={tab === 'my-profile' ? 'active' : ''} onClick={() => setTab('my-profile')}>Hồ sơ của tôi</button>
         {user.roles.some(r => r.role === 'GIANG_VIEN') && <button className={tab === 'products' ? 'active' : ''} onClick={() => setTab('products')}>Sản phẩm khoa học</button>}
+        <button className={`notif-nav-btn${tab === 'notifications' ? ' active' : ''}`} onClick={() => setTab('notifications')}>
+          Thông báo{unreadCount > 0 && <span className="sidebar-notif-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+        </button>
         {canBrowseLecturers(user) && <button className={tab === 'lecturers' ? 'active' : ''} onClick={() => setTab('lecturers')}>Hồ sơ giảng viên</button>}
         {administrator && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>Quản trị dữ liệu nền</button>}
         {administrator && <button className={tab === 'conversion-rules' ? 'active' : ''} onClick={() => setTab('conversion-rules')}>Quy định quy đổi</button>}
@@ -82,7 +87,8 @@ export default function App() {
         <section className="panel"><h2>Đơn vị và năm học</h2>{lookupError ? <><p className="alert" role="alert">{lookupError}</p><button onClick={() => setRetry(x => x + 1)}>Thử lại</button></> : !lookups ? <p role="status">Đang tải dữ liệu…</p> : <div className="summary-grid"><div><h3>Khoa</h3>{lookups.faculties.map(f => <p key={f.id}>{f.name}</p>)}{!lookups.faculties.length && <p className="muted">Chưa có đơn vị được liên kết.</p>}</div><div><h3>Bộ môn</h3>{lookups.departments.map(d => <p key={d.id}>{d.name}</p>)}{!lookups.departments.length && <p className="muted">Chưa có bộ môn được liên kết.</p>}</div><div><h3>Năm học</h3>{lookups.academicYears.map(y => <p key={y.id}>{y.code}</p>)}{!lookups.academicYears.length && <p className="muted">Chưa có năm học.</p>}</div></div>}</section>
       </>}
       {tab === 'my-profile' && <MyLecturerProfile user={user} lookups={lookups} />}
-      {tab === 'products' && <ProductWorkspace />}
+      {tab === 'products' && <ProductWorkspace user={user} />}
+      {tab === 'notifications' && <NotificationInbox />}
       {tab === 'lecturers' && (canBrowseLecturers(user) ? <LecturerDirectory user={user} lookups={lookups} /> : <p role="alert">Bạn không có quyền xem danh sách giảng viên.</p>)}
       {tab === 'admin' && (administrator ? <AdminPanel currentAccountId={user.id} onChanged={() => setRetry(x => x + 1)} /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
       {tab === 'conversion-rules' && (administrator ? <ConversionRules /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
