@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+
+import { useCallback, useEffect, useState } from 'react'
 import { api } from './api'
 import './Notifications.css'
 
-type Notification = {
+export type Notification = {
   id: number
   type: string
   content: string
@@ -17,179 +18,281 @@ type Notification = {
   isRead: boolean
 }
 
-const typeLabel: Record<string, string> = {
-  PHAN_HOI: 'Phản hồi',
-  NHAC_HAN: 'Nhắc hạn',
-  QUA_HAN: 'Quá hạn',
-  HE_THONG: 'Hệ thống',
+type NotificationFilter = 'all' | 'unread' | 'read'
+
+type NotificationsProps = {
+  onUnreadCountChange?: (count: number) => void
 }
 
-const typeIcon: Record<string, string> = {
-  PHAN_HOI: '💬',
-  NHAC_HAN: '⏰',
-  QUA_HAN: '⚠️',
-  HE_THONG: 'ℹ️',
+function formatDate(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Không xác định'
+
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
 }
 
-export function NotificationInbox() {
-  const [items, setItems] = useState<Notification[]>([])
+export default function Notifications({
+  onUnreadCountChange,
+}: NotificationsProps) {
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [filter, setFilter] = useState<NotificationFilter>('all')
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [filter, setFilter] = useState<'all' | 'unread' | 'feedback'>('all')
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
 
-  function load() {
+  const loadNotifications = useCallback(async () => {
     setLoading(true)
     setError('')
-    api<Notification[]>('/notifications')
-      .then(setItems)
-      .catch(e => setError((e as Error).message))
-      .finally(() => setLoading(false))
-  }
 
-  useEffect(() => { load() }, [])
-
-  async function markRead(id: number) {
     try {
-      const updated = await api<Notification>(`/notifications/${id}/read`, 'PUT')
-      setItems(prev => prev.map(n => n.id === id ? updated : n))
-    } catch (e) { setError((e as Error).message) }
-  }
+      const data = await api<Notification[]>('/notifications')
+      setNotifications(data)
 
-  async function markAllRead() {
-    setBusy(true); setError('')
+      const count = await api<{ unreadCount: number }>(
+        '/notifications/unread-count'
+      )
+      onUnreadCountChange?.(count.unreadCount)
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Không thể tải danh sách thông báo.'
+      )
+    } finally {
+      setLoading(false)
+    }
+  }, [onUnreadCountChange])
+
+  useEffect(() => {
+    void loadNotifications()
+  }, [loadNotifications])
+
+  async function markAsRead(id: number) {
+    setBusy(true)
+    setError('')
+    setMessage('')
+
     try {
-      await api('/notifications/read-all', 'PUT')
-      setItems(prev => prev.map(n => ({ ...n, isRead: true, readAt: new Date().toISOString() })))
-    } catch (e) { setError((e as Error).message) }
-    finally { setBusy(false) }
+      const updated = await api<Notification>(
+        `/notifications/${id}/read`,
+        'PUT'
+      )
+
+      setNotifications(previous =>
+        previous.map(item => item.id === id ? updated : item)
+      )
+
+      const count = await api<{ unreadCount: number }>(
+        '/notifications/unread-count'
+      )
+      onUnreadCountChange?.(count.unreadCount)
+
+      setMessage('Đã đánh dấu thông báo là đã đọc.')
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Không thể cập nhật thông báo.'
+      )
+    } finally {
+      setBusy(false)
+    }
   }
 
-  const filtered = items.filter(n => {
-    if (filter === 'unread') return !n.isRead
-    if (filter === 'feedback') return n.type === 'PHAN_HOI'
+  async function markAllAsRead() {
+    setBusy(true)
+    setError('')
+    setMessage('')
+
+    try {
+      await api<{ updatedCount: number }>(
+        '/notifications/read-all',
+        'PUT'
+      )
+
+      await loadNotifications()
+      setMessage('Đã đánh dấu tất cả thông báo là đã đọc.')
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Không thể cập nhật thông báo.'
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const unreadCount = notifications.filter(item => !item.isRead).length
+
+  const filteredNotifications = notifications.filter(item => {
+    if (filter === 'unread') return !item.isRead
+    if (filter === 'read') return item.isRead
     return true
   })
 
-  const unreadCount = items.filter(n => !n.isRead).length
-  const feedbackCount = items.filter(n => n.type === 'PHAN_HOI' && !n.isRead).length
-
   return (
-    <>
-      <p className="eyebrow">THÔNG BÁO</p>
-      <h1>Hộp thư thông báo</h1>
-      <p className="muted">
-        Phản hồi từ Phòng quản lý khoa học, nhắc hạn và thông báo hệ thống về sản phẩm của bạn.
-      </p>
+    <div className="notifications-page">
+      <p className="eyebrow">TRUNG TÂM THÔNG BÁO</p>
 
-      {error && <p className="alert" role="alert">{error}</p>}
-
-      <section className="panel">
-        <div className="section-top">
-          <div className="notif-filter-row">
-            <button
-              className={filter === 'all' ? 'active' : ''}
-              onClick={() => setFilter('all')}
-            >
-              Tất cả
-              {unreadCount > 0 && <span className="notif-badge">{unreadCount}</span>}
-            </button>
-            <button
-              className={filter === 'feedback' ? 'active' : ''}
-              onClick={() => setFilter('feedback')}
-            >
-              Phản hồi QLKH
-              {feedbackCount > 0 && <span className="notif-badge notif-badge--feedback">{feedbackCount}</span>}
-            </button>
-            <button
-              className={filter === 'unread' ? 'active' : ''}
-              onClick={() => setFilter('unread')}
-            >
-              Chưa đọc
-            </button>
-          </div>
-          <div className="actions">
-            <button onClick={load} disabled={loading}>↺ Làm mới</button>
-            {unreadCount > 0 && (
-              <button className="primary" onClick={markAllRead} disabled={busy}>
-                {busy ? 'Đang xử lý…' : 'Đánh dấu tất cả đã đọc'}
-              </button>
-            )}
-          </div>
+      <div className="notifications-heading">
+        <div>
+          <h1>Thông báo & Nhắc hạn</h1>
+          <p className="muted">
+            Theo dõi các thông báo và nhắc hạn liên quan đến
+            hoạt động nghiên cứu khoa học.
+          </p>
         </div>
 
-        {loading ? (
-          <p role="status">Đang tải thông báo…</p>
-        ) : filtered.length === 0 ? (
-          <p className="empty">
-            {filter === 'unread' ? 'Không có thông báo chưa đọc.' :
-             filter === 'feedback' ? 'Chưa có phản hồi nào từ Phòng QLKH.' :
-             'Chưa có thông báo nào.'}
+        <button
+          type="button"
+          className="notifications-refresh"
+          onClick={() => void loadNotifications()}
+          disabled={loading || busy}
+        >
+          ↻ Làm mới
+        </button>
+      </div>
+
+      <section className="panel notifications-panel">
+        <div className="notifications-toolbar">
+          <div className="notifications-filters">
+            <button
+              type="button"
+              className={filter === 'all' ? 'selected' : ''}
+              onClick={() => setFilter('all')}
+            >
+              Tất cả ({notifications.length})
+            </button>
+
+            <button
+              type="button"
+              className={filter === 'unread' ? 'selected' : ''}
+              onClick={() => setFilter('unread')}
+            >
+              Chưa đọc ({unreadCount})
+            </button>
+
+            <button
+              type="button"
+              className={filter === 'read' ? 'selected' : ''}
+              onClick={() => setFilter('read')}
+            >
+              Đã đọc
+            </button>
+          </div>
+
+          <button
+            type="button"
+            className="notifications-read-all"
+            disabled={busy || loading || unreadCount === 0}
+            onClick={() => void markAllAsRead()}
+          >
+            ✓ Đánh dấu tất cả đã đọc
+          </button>
+        </div>
+
+        {error && (
+          <div className="notifications-error" role="alert">
+            <p>{error}</p>
+            <button
+              type="button"
+              onClick={() => void loadNotifications()}
+            >
+              Thử lại
+            </button>
+          </div>
+        )}
+
+        {message && (
+          <p className="notifications-success" role="status">
+            {message}
           </p>
+        )}
+
+        {loading ? (
+          <p className="notifications-empty" role="status">
+            Đang tải danh sách thông báo...
+          </p>
+        ) : filteredNotifications.length === 0 ? (
+          <div className="notifications-empty">
+            <span className="notifications-empty-icon">♧</span>
+            <h3>Chưa có thông báo</h3>
+            <p>
+              {filter === 'unread'
+                ? 'Bạn đã đọc tất cả thông báo.'
+                : filter === 'read'
+                  ? 'Bạn chưa có thông báo đã đọc.'
+                  : 'Các thông báo mới sẽ xuất hiện tại đây.'}
+            </p>
+          </div>
         ) : (
-          <ul className="notif-list" role="list">
-            {filtered.map(n => (
-              <li
-                key={n.id}
-                className={`notif-item${!n.isRead ? ' notif-item--unread' : ''}${n.type === 'PHAN_HOI' ? ' notif-item--feedback' : ''}`}
+          <div className="notifications-list">
+            {filteredNotifications.map(item => (
+              <article
+                key={item.id}
+                className={`notification-item ${
+                  item.isRead ? 'is-read' : 'is-unread'
+                }`}
               >
-                <span className="notif-icon" aria-hidden="true">{typeIcon[n.type] ?? 'ℹ️'}</span>
-                <div className="notif-body">
-                  <div className="notif-meta">
-                    <span className={`notif-type notif-type--${n.type.toLowerCase()}`}>
-                      {typeLabel[n.type] ?? n.type}
+                <div className="notification-symbol" aria-hidden="true">
+                  🔔
+                </div>
+
+                <div className="notification-body">
+                  <div className="notification-meta">
+                    <span className="notification-type">
+                      {item.type.replaceAll('_', ' ')}
                     </span>
-                    {n.scientificProductId && (
-                      <span className="notif-ref">Sản phẩm #{n.scientificProductId}</span>
-                    )}
-                    {n.researchPlanItemId && !n.scientificProductId && (
-                      <span className="notif-ref">Nội dung kế hoạch #{n.researchPlanItemId}</span>
-                    )}
-                    {!n.isRead && <span className="notif-dot" aria-label="Chưa đọc" />}
-                  </div>
-                  <p className="notif-content">{n.content}</p>
-                  <div className="notif-foot">
-                    <time dateTime={n.scheduledAt} className="notif-time">
-                      {new Date(n.scheduledAt).toLocaleString('vi-VN')}
-                    </time>
-                    {n.readAt && (
-                      <span className="notif-read-time">
-                        · Đã đọc lúc {new Date(n.readAt).toLocaleString('vi-VN')}
+
+                    {!item.isRead && (
+                      <span className="notification-unread-label">
+                        Chưa đọc
                       </span>
                     )}
                   </div>
+
+                  <p className="notification-content">
+                    {item.content}
+                  </p>
+
+                  <div className="notification-details">
+                    <span>
+                      {formatDate(
+                        item.sentAt ?? item.scheduledAt
+                      )}
+                    </span>
+
+                    <span>
+                      {item.sentAt
+                        ? 'Đã gửi'
+                        : 'Thời gian dự kiến'}
+                    </span>
+                  </div>
                 </div>
-                {!n.isRead && (
+
+                {!item.isRead && (
                   <button
-                    className="notif-read-btn"
-                    onClick={() => markRead(n.id)}
-                    title="Đánh dấu đã đọc"
-                    aria-label="Đánh dấu thông báo này đã đọc"
+                    type="button"
+                    className="notification-mark-read"
+                    disabled={busy}
+                    onClick={() => void markAsRead(item.id)}
                   >
-                    ✓
+                    Đánh dấu đã đọc
                   </button>
                 )}
-              </li>
+              </article>
             ))}
-          </ul>
+          </div>
         )}
       </section>
-    </>
+    </div>
   )
-}
-
-/** Badge số thông báo chưa đọc dùng cho sidebar */
-export function useUnreadCount(): number {
-  const [count, setCount] = useState(0)
-  useEffect(() => {
-    let active = true
-    const fetchCount = () =>
-      api<{ unreadCount: number }>('/notifications/unread-count')
-        .then(r => { if (active) setCount(r.unreadCount) })
-        .catch(() => { /* im lặng */ })
-    fetchCount()
-    const id = setInterval(fetchCount, 60_000)
-    return () => { active = false; clearInterval(id) }
-  }, [])
-  return count
 }

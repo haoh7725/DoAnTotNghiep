@@ -7,15 +7,18 @@ import { LecturerDirectory, MyLecturerProfile, canBrowseLecturers } from './Lect
 import { ConversionRules } from './ConversionRules'
 import { ProductWorkspace } from './Products'
 import { ResearchReports } from './Reports'
-import { NotificationInbox, useUnreadCount } from './Notifications'
+import { ResearchPlans } from './ResearchPlans'
+import Notifications from './Notifications'
 import './App.css'
 
 export default function App() {
   const [user, setUser] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [connectionError, setConnectionError] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [tab, setTab] = useState('overview')
+  const [unreadCount, setUnreadCount] = useState(0)
   const [lookups, setLookups] = useState<Lookups | null>(null)
   const [lookupError, setLookupError] = useState('')
   const [retry, setRetry] = useState(0)
@@ -24,9 +27,28 @@ export default function App() {
   const unreadCount = useUnreadCount()
   useEffect(() => {
     let active = true
-    api<Profile>('/auth/me', 'GET', undefined, false).then(u => { if (active) setUser(u) }).catch(e => {
-      if (active && (!(e instanceof ApiError) || e.status !== 401)) setError(e.message)
-    }).finally(() => { if (active) setLoading(false) })
+    api<Profile>('/auth/me', 'GET', undefined, false)
+      .then(u => {
+        if (active) {
+          setUser(u)
+          setConnectionError('')
+        }
+      })
+      .catch(e => {
+        if (!active) return
+
+        if (e instanceof ApiError && e.status === 401) {
+          setUser(null)
+          setConnectionError('')
+        } else {
+          setConnectionError(
+            'Không thể kết nối hoặc kiểm tra phiên đăng nhập. Vui lòng thử lại.'
+          )
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
     const expired = () => { setUser(null); setLookups(null); setTab('overview'); setError('Phiên đăng nhập đã hết hạn hoặc tài khoản đã thay đổi. Vui lòng đăng nhập lại.') }
     window.addEventListener('session-expired', expired)
     return () => { active = false; window.removeEventListener('session-expired', expired) }
@@ -38,6 +60,41 @@ export default function App() {
     api<Lookups>('/lookups').then(data => { if (active) setLookups(data) }).catch(e => { if (active) setLookupError(e.message) })
     return () => { active = false }
   }, [user, retry])
+
+  useEffect(() => {
+    if (!user) {
+      setUnreadCount(0)
+      return
+    }
+
+    let active = true
+
+    async function loadUnreadCount() {
+      try {
+        const result = await api<{ unreadCount: number }>(
+          '/notifications/unread-count'
+        )
+
+        if (active) {
+          setUnreadCount(result.unreadCount)
+        }
+      } catch {
+        // Không làm gián đoạn giao diện nếu chưa tải được số thông báo.
+      }
+    }
+
+    void loadUnreadCount()
+
+    const interval = window.setInterval(() => {
+      void loadUnreadCount()
+    }, 60000)
+
+    return () => {
+      active = false
+      window.clearInterval(interval)
+    }
+  }, [user])
+
   async function login(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const data = new FormData(e.currentTarget); setBusy(true); setError('')
     try {
@@ -51,6 +108,36 @@ export default function App() {
     catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }
   if (loading) return <main className="loading" role="status">Đang kiểm tra phiên đăng nhập…</main>
+  if (connectionError && !user) {
+    return (
+      <main className="connection-error-page">
+        <section className="connection-error-card">
+          <div className="connection-error-icon" aria-hidden="true">
+            !
+          </div>
+
+          <h2>Không thể kết nối máy chủ</h2>
+
+          <p className="connection-error-description">
+            Hệ thống hiện không thể xác minh phiên đăng nhập.
+            Vui lòng kiểm tra kết nối và thử lại.
+          </p>
+
+          <p className="alert" role="alert">
+            {connectionError}
+          </p>
+
+          <button
+            type="button"
+            className="primary"
+            onClick={() => window.location.reload()}
+          >
+            Thử lại
+          </button>
+        </section>
+      </main>
+    )
+  }
   if (!user) return <main className="login-layout">
     <section className="login-story"><div className="brand"><span className="brand-mark">R</span> ResearchHub <small>HUIT</small></div>
       <div><p className="eyebrow">NGHIÊN CỨU KHOA HỌC</p><h1>Mỗi đóng góp.<br />Một hành trình.</h1><p className="story-text">Không gian làm việc chung cho hồ sơ, kế hoạch và kết quả nghiên cứu của giảng viên.</p></div>
@@ -69,6 +156,21 @@ export default function App() {
     <aside className="sidebar"><div className="brand"><span className="brand-mark">R</span> ResearchHub</div><p className="nav-label">KHÔNG GIAN LÀM VIỆC</p>
       <nav aria-label="Điều hướng chính"><button className={tab === 'overview' ? 'active' : ''} onClick={() => setTab('overview')}>Tổng quan tài khoản</button>
         <button className={tab === 'my-profile' ? 'active' : ''} onClick={() => setTab('my-profile')}>Hồ sơ của tôi</button>
+        {user.roles.some(r => r.role === 'GIANG_VIEN') && (
+          <button
+            className={tab === 'research-plans' ? 'active' : ''}
+            onClick={() => setTab('research-plans')}
+          >
+            Kế hoạch & Tiến độ
+          </button>
+        )}
+        <button
+          className={tab === 'notifications' ? 'active' : ''}
+          onClick={() => setTab('notifications')}
+        >
+          🔔 Thông báo
+          {unreadCount > 0 ? ` (${unreadCount})` : ''}
+        </button>
         {user.roles.some(r => r.role === 'GIANG_VIEN') && <button className={tab === 'products' ? 'active' : ''} onClick={() => setTab('products')}>Sản phẩm khoa học</button>}
         <button className={`notif-nav-btn${tab === 'notifications' ? ' active' : ''}`} onClick={() => setTab('notifications')}>
           Thông báo{unreadCount > 0 && <span className="sidebar-notif-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
@@ -80,15 +182,45 @@ export default function App() {
         <button className={tab === 'password' ? 'active' : ''} onClick={() => setTab('password')}>Đổi mật khẩu</button></nav>
       <div className="sidebar-bottom"><strong>{user.fullName}</strong><span>@{user.username}</span><button onClick={logout} disabled={busy}>Đăng xuất</button></div>
     </aside>
-    <main className="content"><header className="page-top"><span>HUIT / Nghiên cứu khoa học</span><span className="status">Đã đăng nhập</span></header>
+    <main className="content">
+    <header className="page-top">
+      <span>HUIT / Nghiên cứu khoa học</span>
+
+      <div className="notification-header-action">
+        <button
+          type="button"
+          className="notification-bell"
+          title="Xem thông báo"
+          aria-label={`Thông báo, ${unreadCount} chưa đọc`}
+          onClick={() => setTab('notifications')}
+        >
+          🔔
+
+          {unreadCount > 0 && (
+            <span className="notification-bell-count">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </button>
+
+        <span className="status">Đã đăng nhập</span>
+      </div>
+    </header>
+
       {error && <p className="alert" role="alert">{error}</p>}
       {tab === 'overview' && <><p className="eyebrow">TỔNG QUAN</p><h1>Xin chào, {user.fullName}</h1><p className="muted">Thông tin tài khoản và phạm vi truy cập của bạn.</p>
         <section className="panel"><h2>Quyền truy cập</h2>{user.roles.length ? <div className="permission-grid">{user.roles.map((p, i) => <article key={i} className="permission"><strong>{roleNames[p.role] ?? p.role}</strong><span>{scopeNames[p.scope] ?? p.scope}</span>{p.facultyId && <small>{lookups?.faculties.find(f => f.id === p.facultyId)?.name ?? `Khoa #${p.facultyId}`}</small>}{p.departmentId && <small>{lookups?.departments.find(d => d.id === p.departmentId)?.name ?? `Bộ môn #${p.departmentId}`}</small>}</article>)}</div> : <p>Tài khoản chưa được gán quyền. Vui lòng liên hệ quản trị viên.</p>}</section>
         <section className="panel"><h2>Đơn vị và năm học</h2>{lookupError ? <><p className="alert" role="alert">{lookupError}</p><button onClick={() => setRetry(x => x + 1)}>Thử lại</button></> : !lookups ? <p role="status">Đang tải dữ liệu…</p> : <div className="summary-grid"><div><h3>Khoa</h3>{lookups.faculties.map(f => <p key={f.id}>{f.name}</p>)}{!lookups.faculties.length && <p className="muted">Chưa có đơn vị được liên kết.</p>}</div><div><h3>Bộ môn</h3>{lookups.departments.map(d => <p key={d.id}>{d.name}</p>)}{!lookups.departments.length && <p className="muted">Chưa có bộ môn được liên kết.</p>}</div><div><h3>Năm học</h3>{lookups.academicYears.map(y => <p key={y.id}>{y.code}</p>)}{!lookups.academicYears.length && <p className="muted">Chưa có năm học.</p>}</div></div>}</section>
       </>}
       {tab === 'my-profile' && <MyLecturerProfile user={user} lookups={lookups} />}
+      {tab === 'research-plans' &&
+        user.roles.some(r => r.role === 'GIANG_VIEN') && (
+          <ResearchPlans academicYears={lookups?.academicYears ?? []} />
+        )}
+      {tab === 'notifications' && (
+        <Notifications onUnreadCountChange={setUnreadCount} />
+      )}
       {tab === 'products' && <ProductWorkspace user={user} />}
-      {tab === 'notifications' && <NotificationInbox />}
       {tab === 'lecturers' && (canBrowseLecturers(user) ? <LecturerDirectory user={user} lookups={lookups} /> : <p role="alert">Bạn không có quyền xem danh sách giảng viên.</p>)}
       {tab === 'admin' && (administrator ? <AdminPanel currentAccountId={user.id} onChanged={() => setRetry(x => x + 1)} /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
       {tab === 'conversion-rules' && (administrator ? <ConversionRules /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
@@ -113,3 +245,4 @@ function PasswordForm({ onChanged }: { onChanged: () => void }) {
     <p className="muted">Từ 12 đến 128 ký tự. Các phiên đăng nhập cũ sẽ hết hiệu lực.</p><button className="primary" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu mật khẩu'}</button>
   </form></>
 }
+

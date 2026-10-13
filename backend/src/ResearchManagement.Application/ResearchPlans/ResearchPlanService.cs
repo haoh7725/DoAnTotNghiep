@@ -65,6 +65,25 @@ public sealed class ResearchPlanService(
         return ToResponse(plan);
     }
 
+    
+    public async Task<ResearchPlanResponse?> GetByLecturerAndAcademicYearAsync(
+        long lecturerId,
+        long academicYearId,
+        CancellationToken cancellationToken)
+    {
+        await EnsureCanAccessLecturerAsync(
+            lecturerId,
+            cancellationToken);
+
+        var plan = await researchPlans.GetByLecturerAndAcademicYearAsync(
+            lecturerId,
+            academicYearId,
+            cancellationToken);
+
+        return plan is null ? null : ToResponse(plan);
+    }
+
+
     public async Task<ResearchPlanResponse> UpdateAsync(
         long id,
         UpdateResearchPlanRequest request,
