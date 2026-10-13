@@ -104,10 +104,10 @@ public sealed class Product : BaseEntity
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
-    /// <summary>Trả lại để giảng viên chỉnh sửa; trạng thái về NHAP.</summary>
+    /// <summary>Trả lại để giảng viên chỉnh sửa; trạng thái về TRA_LAI.</summary>
     public void Return()
     {
-        Status = ProductStatuses.Draft;
+        Status = ProductStatuses.Returned;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 

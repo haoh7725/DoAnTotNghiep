@@ -24,6 +24,7 @@ export default function App() {
   const [retry, setRetry] = useState(0)
   const administrator = user?.roles.some(p => p.role === 'QUAN_TRI' && p.scope === 'TOAN_TRUONG') ?? false
   const manager = user?.roles.some(p => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'BAN_GIAM_HIEU', 'QUAN_TRI'].includes(p.role)) ?? false
+  const unreadCount = useUnreadCount()
   useEffect(() => {
     let active = true
     api<Profile>('/auth/me', 'GET', undefined, false)
@@ -171,6 +172,9 @@ export default function App() {
           {unreadCount > 0 ? ` (${unreadCount})` : ''}
         </button>
         {user.roles.some(r => r.role === 'GIANG_VIEN') && <button className={tab === 'products' ? 'active' : ''} onClick={() => setTab('products')}>Sản phẩm khoa học</button>}
+        <button className={`notif-nav-btn${tab === 'notifications' ? ' active' : ''}`} onClick={() => setTab('notifications')}>
+          Thông báo{unreadCount > 0 && <span className="sidebar-notif-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+        </button>
         {canBrowseLecturers(user) && <button className={tab === 'lecturers' ? 'active' : ''} onClick={() => setTab('lecturers')}>Hồ sơ giảng viên</button>}
         {administrator && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>Quản trị dữ liệu nền</button>}
         {administrator && <button className={tab === 'conversion-rules' ? 'active' : ''} onClick={() => setTab('conversion-rules')}>Quy định quy đổi</button>}
@@ -216,7 +220,7 @@ export default function App() {
       {tab === 'notifications' && (
         <Notifications onUnreadCountChange={setUnreadCount} />
       )}
-      {tab === 'products' && <ProductWorkspace />}
+      {tab === 'products' && <ProductWorkspace user={user} />}
       {tab === 'lecturers' && (canBrowseLecturers(user) ? <LecturerDirectory user={user} lookups={lookups} /> : <p role="alert">Bạn không có quyền xem danh sách giảng viên.</p>)}
       {tab === 'admin' && (administrator ? <AdminPanel currentAccountId={user.id} onChanged={() => setRetry(x => x + 1)} /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
       {tab === 'conversion-rules' && (administrator ? <ConversionRules /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
