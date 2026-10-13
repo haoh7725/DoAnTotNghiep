@@ -11,6 +11,27 @@ namespace ResearchManagement.Api.Controllers;
 public sealed class ResearchPlansController(
     ResearchPlanService researchPlanService) : ControllerBase
 {
+    [HttpGet]
+    public async Task<ActionResult<ResearchPlanResponse>> GetByLecturerAndAcademicYear(
+        [FromQuery] long lecturerId,
+        [FromQuery] long academicYearId,
+        CancellationToken cancellationToken)
+    {
+        if (lecturerId <= 0 || academicYearId <= 0)
+        {
+            return BadRequest(
+                "Giảng viên và năm học phải hợp lệ.");
+        }
+
+        var result = await researchPlanService.GetByLecturerAndAcademicYearAsync(
+            lecturerId,
+            academicYearId,
+            cancellationToken);
+
+        return result is null ? NoContent() : Ok(result);
+    }
+
+
     [HttpGet("{id:long}")]
     public async Task<ActionResult<ResearchPlanResponse>> GetById(
         long id,
