@@ -24,7 +24,7 @@ export default function App() {
   const [retry, setRetry] = useState(0)
   const administrator = user?.roles.some(p => p.role === 'QUAN_TRI' && p.scope === 'TOAN_TRUONG') ?? false
   const manager = user?.roles.some(p => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'BAN_GIAM_HIEU', 'QUAN_TRI'].includes(p.role)) ?? false
-  const unreadCount = useUnreadCount()
+  //const unreadCount = useUnreadCount()
   useEffect(() => {
     let active = true
     api<Profile>('/auth/me', 'GET', undefined, false)
@@ -164,13 +164,7 @@ export default function App() {
             Kế hoạch & Tiến độ
           </button>
         )}
-        <button
-          className={tab === 'notifications' ? 'active' : ''}
-          onClick={() => setTab('notifications')}
-        >
-          🔔 Thông báo
-          {unreadCount > 0 ? ` (${unreadCount})` : ''}
-        </button>
+        
         {user.roles.some(r => r.role === 'GIANG_VIEN') && <button className={tab === 'products' ? 'active' : ''} onClick={() => setTab('products')}>Sản phẩm khoa học</button>}
         <button className={`notif-nav-btn${tab === 'notifications' ? ' active' : ''}`} onClick={() => setTab('notifications')}>
           Thông báo{unreadCount > 0 && <span className="sidebar-notif-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
@@ -206,7 +200,6 @@ export default function App() {
         <span className="status">Đã đăng nhập</span>
       </div>
     </header>
-
       {error && <p className="alert" role="alert">{error}</p>}
       {tab === 'overview' && <><p className="eyebrow">TỔNG QUAN</p><h1>Xin chào, {user.fullName}</h1><p className="muted">Thông tin tài khoản và phạm vi truy cập của bạn.</p>
         <section className="panel"><h2>Quyền truy cập</h2>{user.roles.length ? <div className="permission-grid">{user.roles.map((p, i) => <article key={i} className="permission"><strong>{roleNames[p.role] ?? p.role}</strong><span>{scopeNames[p.scope] ?? p.scope}</span>{p.facultyId && <small>{lookups?.faculties.find(f => f.id === p.facultyId)?.name ?? `Khoa #${p.facultyId}`}</small>}{p.departmentId && <small>{lookups?.departments.find(d => d.id === p.departmentId)?.name ?? `Bộ môn #${p.departmentId}`}</small>}</article>)}</div> : <p>Tài khoản chưa được gán quyền. Vui lòng liên hệ quản trị viên.</p>}</section>
