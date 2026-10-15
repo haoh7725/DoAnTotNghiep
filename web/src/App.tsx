@@ -8,6 +8,7 @@ import { ConversionRules } from './ConversionRules'
 import { ProductWorkspace } from './Products'
 import { ResearchReports } from './Reports'
 import { ResearchPlans } from './ResearchPlans'
+import { ResearchNorms } from './ResearchNorms'
 import Notifications from './Notifications'
 import './App.css'
 
@@ -24,6 +25,9 @@ export default function App() {
   const [retry, setRetry] = useState(0)
   const administrator = user?.roles.some(p => p.role === 'QUAN_TRI' && p.scope === 'TOAN_TRUONG') ?? false
   const manager = user?.roles.some(p => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'BAN_GIAM_HIEU', 'QUAN_TRI'].includes(p.role)) ?? false
+  const canViewResearchNorms = user?.roles.some(p => ['GIANG_VIEN', 'TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'BAN_GIAM_HIEU'].includes(p.role)) ?? false
+  const canEditResearchNorms = user?.roles.some(p => p.role === 'PHONG_QLKH' && p.scope === 'TOAN_TRUONG') ?? false
+  
   //const unreadCount = useUnreadCount()
   useEffect(() => {
     let active = true
@@ -170,6 +174,7 @@ export default function App() {
           Thông báo{unreadCount > 0 && <span className="sidebar-notif-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
         </button>
         {canBrowseLecturers(user) && <button className={tab === 'lecturers' ? 'active' : ''} onClick={() => setTab('lecturers')}>Hồ sơ giảng viên</button>}
+        {canViewResearchNorms && <button className={tab === 'research-norms' ? 'active' : ''} onClick={() => setTab('research-norms')}>Định mức NCKH</button>}
         {administrator && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>Quản trị dữ liệu nền</button>}
         {administrator && <button className={tab === 'conversion-rules' ? 'active' : ''} onClick={() => setTab('conversion-rules')}>Quy định quy đổi</button>}
         {manager && <button className={tab === 'reports' ? 'active' : ''} onClick={() => setTab('reports')}>Thống kê kết quả</button>}
@@ -215,6 +220,7 @@ export default function App() {
       )}
       {tab === 'products' && <ProductWorkspace user={user} />}
       {tab === 'lecturers' && (canBrowseLecturers(user) ? <LecturerDirectory user={user} lookups={lookups} /> : <p role="alert">Bạn không có quyền xem danh sách giảng viên.</p>)}
+      {tab === 'research-norms' && (canViewResearchNorms ? <ResearchNorms academicYears={lookups?.academicYears ?? []} canEdit={canEditResearchNorms} /> : <p role="alert">Bạn không có quyền xem định mức NCKH.</p>)}
       {tab === 'admin' && (administrator ? <AdminPanel currentAccountId={user.id} onChanged={() => setRetry(x => x + 1)} /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
       {tab === 'conversion-rules' && (administrator ? <ConversionRules /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
       {tab === 'reports' && (manager ? <ResearchReports lookups={lookups} /> : <p role="alert">Bạn không có quyền xem báo cáo.</p>)}
