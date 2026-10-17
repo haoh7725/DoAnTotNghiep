@@ -15,7 +15,9 @@ public interface IResearchNormRepository
 
     Task<List<ResearchNorm>> GetAllAsync(
         CancellationToken cancellationToken);
-
+    Task<Dictionary<long, (string Code, string FullName)>> GetLecturerNamesAsync(
+        IReadOnlyCollection<long> lecturerIds,
+        CancellationToken cancellationToken);
     Task AddAsync(
         ResearchNorm researchNorm,
         CancellationToken cancellationToken);

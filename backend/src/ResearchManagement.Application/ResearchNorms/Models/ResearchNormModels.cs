@@ -15,4 +15,6 @@ public sealed record ResearchNormResponse(
     long LecturerId,
     long AcademicYearId,
     decimal RequiredHours,
-    string? Basis);
+    string? Basis,
+    string? LecturerCode = null,
+    string? LecturerName = null);

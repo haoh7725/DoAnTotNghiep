@@ -4,9 +4,21 @@ import type { FormEvent } from 'react'
 import { api } from './api'
 import type { AcademicYear } from './api'
 
+import type { Lecturer } from './Lecturers'
+
+type Paged<T> = {
+  items: T[]
+  page: number
+  pageSize: number
+  totalCount: number
+  totalPages: number
+}
+
 type ResearchNorm = {
   id: number
   lecturerId: number
+  lecturerCode: string
+  lecturerName: string
   academicYearId: number
   requiredHours: number
   basis: string | null
@@ -19,12 +31,20 @@ type Props = {
 
 export function ResearchNorms({ academicYears, canEdit }: Props) {
   const [norms, setNorms] = useState<ResearchNorm[]>([])
+
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [editing, setEditing] = useState<ResearchNorm | null>(null)
   const [showForm, setShowForm] = useState(false)
+
+  const [lecturerKeyword, setLecturerKeyword] = useState('')
+  const [lecturerPage, setLecturerPage] = useState(1)
+  const [lecturerData, setLecturerData] = useState<Paged<Lecturer> | null>(null)
+  const [lecturerLoading, setLecturerLoading] = useState(false)
+  const [lecturerError, setLecturerError] = useState('')
+  const [selectedLecturer, setSelectedLecturer] = useState<Lecturer | null>(null)
 
   useEffect(() => {
     let active = true
@@ -42,6 +62,47 @@ export function ResearchNorms({ academicYears, canEdit }: Props) {
 
     return () => { active = false }
   }, [])
+
+
+
+  useEffect(() => {
+    if (!showForm || editing || !canEdit) return
+
+    let active = true
+
+    const timer = setTimeout(() => {
+      setLecturerLoading(true)
+      setLecturerError('')
+
+      const q = new URLSearchParams({
+        page: String(lecturerPage),
+        pageSize: '15'
+      })
+
+      if (lecturerKeyword.trim()) {
+        q.set('keyword', lecturerKeyword.trim())
+      }
+
+      api<Paged<Lecturer>>(`/lecturers?${q}`)
+        .then(data => {
+          if (active) setLecturerData(data)
+        })
+        .catch(e => {
+          if (active) {
+            setLecturerError((e as Error).message)
+            setLecturerData(null)
+          }
+        })
+        .finally(() => {
+          if (active) setLecturerLoading(false)
+        })
+    }, 300)
+
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [showForm, editing, canEdit, lecturerKeyword, lecturerPage])
 
   async function saveNorm(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -86,7 +147,10 @@ export function ResearchNorms({ academicYears, canEdit }: Props) {
       } else {
         const lecturerId = Number(form.get('lecturerId'))
         const academicYearId = Number(form.get('academicYearId'))
-
+        if (!selectedLecturer || lecturerId !== selectedLecturer.id) {
+          setError('Vui lòng tìm kiếm và chọn một giảng viên.')
+          return
+        }
         if (
           !Number.isSafeInteger(lecturerId) ||
           lecturerId <= 0 ||
@@ -143,6 +207,7 @@ export function ResearchNorms({ academicYears, canEdit }: Props) {
       </p>
 
       {error && <p className="alert" role="alert">{error}</p>}
+
       {message && <p role="status">{message}</p>}
 
       {canEdit && (
@@ -174,16 +239,88 @@ export function ResearchNorms({ academicYears, canEdit }: Props) {
 
               {!editing && (
                 <>
-                  <label>
-                    Mã giảng viên
+                  <div>
+                    <label>
+                      Tìm kiếm giảng viên
+                      <input
+                        type="text"
+                        value={lecturerKeyword}
+                        onChange={e => {
+                          setLecturerKeyword(e.target.value)
+                          setLecturerPage(1)
+                          setSelectedLecturer(null)
+                        }}
+                        placeholder="Nhập mã hoặc họ tên giảng viên"
+                      />
+                    </label>
+
                     <input
+                      type="hidden"
                       name="lecturerId"
-                      type="number"
-                      min="1"
-                      step="1"
-                      required
+                      value={selectedLecturer?.id ?? ''}
                     />
-                  </label>
+
+                    {selectedLecturer && (
+                      <p role="status">
+                        Đã chọn: {selectedLecturer.code} - {selectedLecturer.fullName}
+                      </p>
+                    )}
+
+                    {lecturerLoading && <p>Đang tải danh sách giảng viên...</p>}
+
+                    {lecturerError && (
+                      <p className="alert" role="alert">{lecturerError}</p>
+                    )}
+
+                    {!lecturerLoading && lecturerData && (
+                      <div>
+                        {lecturerData.items.length === 0 ? (
+                          <p>Không tìm thấy giảng viên phù hợp.</p>
+                        ) : (
+                          <div>
+                            {lecturerData.items.map(lecturer => (
+                              <button
+                                key={lecturer.id}
+                                type="button"
+                                onClick={() => setSelectedLecturer(lecturer)}
+                                style={{
+                                  display: 'block',
+                                  width: '100%',
+                                  textAlign: 'left',
+                                  marginBottom: 6
+                                }}
+                              >
+                                {selectedLecturer?.id === lecturer.id ? '✓ ' : ''}
+                                {lecturer.code} - {lecturer.fullName}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <button
+                            type="button"
+                            disabled={lecturerPage <= 1}
+                            onClick={() => setLecturerPage(p => p - 1)}
+                          >
+                            Trang trước
+                          </button>
+
+                          <span>
+                            Trang {lecturerPage}/{Math.max(1, lecturerData.totalPages)}
+                          </span>
+
+                          <button
+                            type="button"
+                            disabled={lecturerPage >= lecturerData.totalPages}
+                            onClick={() => setLecturerPage(p => p + 1)}
+                          >
+                            Trang sau
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                   <label>
                     Năm học
@@ -270,7 +407,11 @@ export function ResearchNorms({ academicYears, canEdit }: Props) {
               <tbody>
                 {norms.map(norm => (
                   <tr key={norm.id}>
-                    <td>{norm.lecturerId}</td>
+                    <td>
+                      {norm.lecturerCode && norm.lecturerName
+                        ? `${norm.lecturerCode} - ${norm.lecturerName}`
+                        : `Giảng viên #${norm.lecturerId}`}
+                    </td>
 
                     <td>
                       {academicYears.find(

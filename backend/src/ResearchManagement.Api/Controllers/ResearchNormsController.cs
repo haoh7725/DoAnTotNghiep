@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ResearchManagement.Application.ResearchNorms;
 using ResearchManagement.Application.ResearchNorms.Models;
-
+using ResearchManagement.Api.Authorization;
 namespace ResearchManagement.Api.Controllers;
 
 [ApiController]
@@ -34,6 +34,7 @@ public sealed class ResearchNormsController(
     }
 
     [HttpPost]
+    [Authorize(Policy = Policies.ResearchOffice)]
     public async Task<ActionResult<ResearchNormResponse>> Create(
         CreateResearchNormRequest request,
         CancellationToken cancellationToken)
@@ -49,6 +50,7 @@ public sealed class ResearchNormsController(
     }
 
     [HttpPut("{id:long}")]
+    [Authorize(Policy = Policies.ResearchOffice)]
     public async Task<ActionResult<ResearchNormResponse>> Update(
         long id,
         UpdateResearchNormRequest request,
