@@ -30,7 +30,23 @@ public sealed class ResearchNormRepository(
         dbContext.ResearchNorms
             .OrderBy(x => x.Id)
             .ToListAsync(cancellationToken);
+    public async Task<Dictionary<long, (string Code, string FullName)>> GetLecturerNamesAsync(
+    IReadOnlyCollection<long> lecturerIds,
+    CancellationToken cancellationToken)
+    {
+        if (lecturerIds.Count == 0)
+            return new Dictionary<long, (string Code, string FullName)>();
 
+        var lecturers = await dbContext.Lecturers
+            .AsNoTracking()
+            .Where(x => lecturerIds.Contains(x.Id))
+            .Select(x => new { x.Id, x.Code, x.FullName })
+            .ToListAsync(cancellationToken);
+
+        return lecturers.ToDictionary(
+            x => x.Id,
+            x => (x.Code, x.FullName));
+    }
     public async Task AddAsync(
         ResearchNorm researchNorm,
         CancellationToken cancellationToken)

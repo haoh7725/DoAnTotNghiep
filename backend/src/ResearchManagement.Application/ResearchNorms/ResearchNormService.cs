@@ -9,16 +9,37 @@ public sealed class ResearchNormService(
     IResearchNormRepository researchNorms)
 {
     public async Task<IReadOnlyList<ResearchNormResponse>> GetAllAsync(
-        CancellationToken cancellationToken)
+    CancellationToken cancellationToken)
     {
         var result = await researchNorms.GetAllAsync(cancellationToken);
 
-        return result.Select(ToResponse).ToList();
+        var lecturerIds = result
+            .Select(x => x.LecturerId)
+            .Distinct()
+            .ToArray();
+
+        var lecturers = await researchNorms.GetLecturerNamesAsync(
+            lecturerIds,
+            cancellationToken);
+
+        return result.Select(norm =>
+        {
+            var response = ToResponse(norm);
+
+            if (!lecturers.TryGetValue(norm.LecturerId, out var lecturer))
+                return response;
+
+            return response with
+            {
+                LecturerCode = lecturer.Code,
+                LecturerName = lecturer.FullName
+            };
+        }).ToList();
     }
 
     public async Task<ResearchNormResponse> GetByIdAsync(
-        long id,
-        CancellationToken cancellationToken)
+    long id,
+    CancellationToken cancellationToken)
     {
         var researchNorm = await researchNorms.GetByIdAsync(
             id,
@@ -26,7 +47,20 @@ public sealed class ResearchNormService(
             ?? throw new NotFoundException(
                 "Không tìm thấy định mức NCKH.");
 
-        return ToResponse(researchNorm);
+        var lecturers = await researchNorms.GetLecturerNamesAsync(
+            new[] { researchNorm.LecturerId },
+            cancellationToken);
+
+        var response = ToResponse(researchNorm);
+
+        if (!lecturers.TryGetValue(researchNorm.LecturerId, out var lecturer))
+            return response;
+
+        return response with
+        {
+            LecturerCode = lecturer.Code,
+            LecturerName = lecturer.FullName
+        };
     }
 
     public async Task<ResearchNormResponse> CreateAsync(

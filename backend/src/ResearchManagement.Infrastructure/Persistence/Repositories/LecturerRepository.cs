@@ -49,7 +49,9 @@ public sealed class LecturerRepository(ApplicationDbContext db) : ILecturerRepos
         if (CleanKeyword(query.Keyword) is { } keyword)
         {
             var pattern = "%" + keyword.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
-            rows = rows.Where(x => EF.Functions.ILike(x.L.FullName, pattern) || EF.Functions.ILike(x.L.Code, pattern));
+            rows = rows.Where(x =>
+                EF.Functions.ILike(x.L.FullName, pattern, "\\") ||
+                EF.Functions.ILike(x.L.Code, pattern, "\\"));
         }
 
         var total = await rows.CountAsync(cancellationToken);
