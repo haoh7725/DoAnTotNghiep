@@ -135,7 +135,7 @@ class _ProductCard extends StatelessWidget {
                   if (articleStatus != null && articleStatus.isNotEmpty)
                     StatusChip(
                       label: articleStatusLabel(articleStatus),
-                      color: Colors.blueGrey,
+                      color: articleStatusColor(articleStatus),
                     ),
                   if (score != null)
                     StatusChip(
