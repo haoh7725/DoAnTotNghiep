@@ -2,8 +2,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ResearchManagement.Application.ResearchTargets;
 using ResearchManagement.Application.ResearchTargets.Models;
-
+using ResearchManagement.Api.Authorization;
 namespace ResearchManagement.Api.Controllers;
+
+
 
 [ApiController]
 [Route("api/research-targets")]
@@ -12,6 +14,8 @@ public sealed class ResearchTargetsController(
     ResearchTargetService researchTargetService) : ControllerBase
 {
     [HttpGet]
+    [HttpGet]
+    [Authorize(Policy = Policies.Management)]
     public async Task<ActionResult<List<ResearchTargetResponse>>> GetAll(
         CancellationToken cancellationToken)
     {
@@ -20,6 +24,7 @@ public sealed class ResearchTargetsController(
     }
 
     [HttpGet("{id:long}")]
+    [Authorize(Policy = Policies.Management)]
     public async Task<ActionResult<ResearchTargetResponse>> GetById(
         long id,
         CancellationToken cancellationToken)
@@ -32,6 +37,7 @@ public sealed class ResearchTargetsController(
     }
 
     [HttpPost]
+    [Authorize(Policy = Policies.ResearchOffice)]
     public async Task<ActionResult<ResearchTargetResponse>> Create(
         CreateResearchTargetRequest request,
         CancellationToken cancellationToken)
@@ -47,6 +53,7 @@ public sealed class ResearchTargetsController(
     }
 
     [HttpPut("{id:long}")]
+    [Authorize(Policy = Policies.ResearchOffice)]
     public async Task<ActionResult<ResearchTargetResponse>> Update(
         long id,
         UpdateResearchTargetRequest request,
