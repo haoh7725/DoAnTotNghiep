@@ -40,6 +40,7 @@ const canManagerReview = (user: Profile | null, p: Product) => {
   if (!reviewableStatuses.includes(p.status)) return false
   return user.roles.some(r => {
     if (r.role === 'QUAN_TRI') return true
+    if (r.role === 'PHONG_QLKH' && p.status === 'PHONG_QLKH_DUYET') return true
     const fromStatus = roleCanApproveFrom[r.role]
     return fromStatus === p.status
   })

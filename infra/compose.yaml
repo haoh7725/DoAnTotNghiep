@@ -12,6 +12,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./database/01_schema_postgresql.sql:/docker-entrypoint-initdb.d/01_schema_postgresql.sql:ro
       - ./database/02_products_evaluations.sql:/docker-entrypoint-initdb.d/02_products_evaluations.sql:ro
+      - ./database/03_product_snapshots.sql:/docker-entrypoint-initdb.d/03_product_snapshots.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
