@@ -24,6 +24,17 @@ Khi volume PostgreSQL được tạo lần đầu, Docker tự chạy `infra/dat
 PostgreSQL của đồ án được công bố tại cổng `5433` trên máy phát triển để không xung đột với dự án TaskManagement đang dùng cổng `5432`.
 Khi chạy toàn bộ Docker Compose, REST API khả dụng tại `http://localhost:8081`.
 
+Database đã tồn tại cần áp dụng bảng phiên bản sản phẩm mới một lần (giữ nguyên dữ liệu):
+
+```powershell
+Get-Content -Raw infra/database/02_products_evaluations.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw infra/database/03_product_snapshots.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+```
+
+Nếu đã thay đổi `POSTGRES_USER` hoặc `POSTGRES_DB` trong `.env`, thay hai giá trị
+tương ứng trong lệnh trên. Database mới tự chạy script này khi khởi tạo.
+Phiên bản được lưu từ các lần nộp/xét duyệt sau khi cập nhật; lịch sử cũ không được tạo lại.
+
 ### Web React
 
 ```bash
