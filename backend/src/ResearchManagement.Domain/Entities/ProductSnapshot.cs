@@ -1,7 +1,7 @@
 namespace ResearchManagement.Domain.Entities;
 
 /// <summary>
-/// Bảng nckh.san_pham_phien_ban.
+/// Bảng nckh.san_pham_phien_ban_ung_dung.
 /// Lưu ảnh chụp nội dung sản phẩm mỗi lần nộp hoặc chuyển trạng thái.
 /// </summary>
 public sealed class ProductSnapshot
