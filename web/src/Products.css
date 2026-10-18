@@ -1,20 +1,20 @@
 .product-sub{margin:0}.product-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:18px}.product-grid div{padding:14px;background:#f7f9f4;border-radius:8px}.product-grid dt{font-size:.72rem;color:#6d7d70;margin-bottom:7px}.product-grid dd{margin:0;font-weight:600}.product-list{list-style:none;padding:0;margin:16px 0}.product-list li{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #e6eae4}.product-list li span:first-child,.product-list li a{flex:1}.product-author{grid-template-columns:2fr 1fr 2fr auto}.product-upload{display:grid;grid-template-columns:2fr 2fr auto;gap:14px;align-items:end}.product-upload label{margin:0}.wide{grid-column:1/-1}
 /* ── Status chips ─────────────────────────────────── */
 .status-chip{display:inline-block;padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:700;letter-spacing:.04em;background:#e8f0ec;color:#4a6259}
-.status-chip--da_duyet{background:#e1f3e9;color:#17663e}
-.status-chip--tra_lai{background:#fff2d8;color:#8a5a0a}
-.status-chip--nhap{background:#edf1f4;color:#526273}
-.status-chip--nop{background:#e0eff8;color:#245d7e}
-.status-chip--truong_bo_mon_duyet,.status-chip--truong_khoa_duyet{background:#e5edf8;color:#345b86}
-.status-chip--phong_qlkh_duyet{background:#dff1ef;color:#176d70}
+.status-chip--da_duyet{background:#d4edda;color:#155724}
+.status-chip--tra_lai{background:#fff3cd;color:#856404}
+.status-chip--nhap{background:#e9ecef;color:#495057}
+.status-chip--nop{background:#cfe2ff;color:#084298}
+.status-chip--truong_bo_mon_duyet,.status-chip--truong_khoa_duyet{background:#d8e6f8;color:#1a3e7e}
+.status-chip--phong_qlkh_duyet{background:#d1e7dd;color:#0f5132}
 /* ── Review panel ─────────────────────────────────── */
-.review-panel{border:1px solid #b9d9d7;background:#f4fafa}
+.review-panel{border:2px solid #aec9b9;background:#f4faf6}
 .review-alert{margin-bottom:0}
 .review-form{display:grid;gap:16px;margin-top:20px}
 .review-actions{display:flex;gap:12px;flex-wrap:wrap}
 .review-radio{display:flex;align-items:center;gap:8px;padding:12px 16px;border:2px solid #d0dcd4;border-radius:10px;cursor:pointer;font-weight:600;flex:1;min-width:200px;transition:border-color .15s,background .15s}
-.review-radio input[type=radio]{accent-color:#168c8c;width:16px;height:16px;flex-shrink:0}
-.review-radio.selected{border-color:#168c8c;background:#edf8f7}
+.review-radio input[type=radio]{accent-color:#176b50;width:16px;height:16px;flex-shrink:0}
+.review-radio.selected{border-color:#176b50;background:#eef7f2}
 /* ── Review timeline ──────────────────────────────── */
 .review-timeline{list-style:none;padding:0;margin:20px 0;display:grid;gap:0}
 .timeline-item{display:flex;gap:14px;padding:16px 0;border-bottom:1px solid #e6eae4}
@@ -31,7 +31,7 @@
 .snapshot-item{border:1px solid #dee6dd;border-radius:10px;margin-bottom:10px;overflow:hidden}
 .snapshot-header{width:100%;display:flex;align-items:center;gap:12px;padding:14px 16px;background:transparent;border:none;cursor:pointer;text-align:left;font-weight:normal}
 .snapshot-header:hover{background:#f3f8f4}
-.snapshot-ver{font-size:.75rem;font-weight:700;color:#176d70;background:#dff1ef;border-radius:6px;padding:2px 8px;flex-shrink:0}
+.snapshot-ver{font-size:.75rem;font-weight:700;color:#176b50;background:#d4eede;border-radius:6px;padding:2px 8px;flex-shrink:0}
 .snapshot-title{flex:1;font-weight:600;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .snapshot-time{font-size:.75rem;color:#8a9d93;flex-shrink:0}
 .snapshot-toggle{font-size:.7rem;color:#aab8ae;flex-shrink:0}

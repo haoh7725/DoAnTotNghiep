@@ -1,25 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap');
-
-:root {
-  font-family: 'Be Vietnam Pro', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  color: #203247;
-  background: #f4f7fa;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  --ink: #203247;
-  --muted: #6b7b8c;
-  --navy: #17324d;
-  --navy-strong: #10283e;
-  --teal: #168c8c;
-  --teal-dark: #107474;
-  --canvas: #f4f7fa;
-  --line: #e1e8ef;
-  --surface: #ffffff;
-  --soft: #eef4f7;
-  --focus: #81c9c2;
-  --shadow: 0 10px 28px rgba(24, 47, 69, .055);
-}
-
+:root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #203a33; background: #f3f6f2; font-synthesis: none; text-rendering: optimizeLegibility; }
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--canvas); }
+body { margin: 0; min-width: 320px; min-height: 100vh; background-image: radial-gradient(circle at 80% 15%, rgba(126, 196, 164, .2), transparent 32%); }
 button, input, textarea, select { font: inherit; }

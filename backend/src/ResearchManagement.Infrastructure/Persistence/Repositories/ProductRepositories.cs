@@ -26,30 +26,8 @@ public sealed class ProductRepository(ApplicationDbContext db) : IProductReposit
     public async Task AddAsync(Product product, CancellationToken cancellationToken) =>
         await db.Products.AddAsync(product, cancellationToken);
 
-    public async Task SaveChangesAsync(CancellationToken cancellationToken)
-    {
-        var histories = db.ChangeTracker.Entries<ReviewHistory>()
-            .Where(e => e.State == EntityState.Added).Select(e => e.Entity).ToList();
-        if (histories.Count == 0)
-        {
-            await db.SaveChangesAsync(cancellationToken);
-            return;
-        }
-
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        foreach (var history in histories.OrderBy(h => h.ProductId))
-        {
-            // Serialize version allocation for this product across concurrent requests.
-            await db.Database.ExecuteSqlInterpolatedAsync(
-                $"SELECT pg_advisory_xact_lock({history.ProductId})", cancellationToken);
-            var product = db.Products.Local.Single(p => p.Id == history.ProductId);
-            var version = await db.ProductSnapshots.Where(s => s.ProductId == product.Id)
-                .MaxAsync(s => (int?)s.Version, cancellationToken) ?? 0;
-            db.ProductSnapshots.Add(new ProductSnapshot(product, history.ActorAccountId, version + 1));
-        }
-        await db.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-    }
+    public Task SaveChangesAsync(CancellationToken cancellationToken) =>
+        db.SaveChangesAsync(cancellationToken);
 }
 
 public sealed class ProductCoAuthorRepository(ApplicationDbContext db) : IProductCoAuthorRepository

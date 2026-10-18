@@ -10,7 +10,6 @@ import { ResearchReports } from './Reports'
 import { ResearchPlans } from './ResearchPlans'
 import { ResearchNorms } from './ResearchNorms'
 import Notifications from './Notifications'
-import { Evaluations } from './Evaluations'
 import './App.css'
 
 export default function App() {
@@ -28,7 +27,8 @@ export default function App() {
   const manager = user?.roles.some(p => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'BAN_GIAM_HIEU', 'QUAN_TRI'].includes(p.role)) ?? false
   const canViewResearchNorms = user?.roles.some(p => ['GIANG_VIEN', 'TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'BAN_GIAM_HIEU'].includes(p.role)) ?? false
   const canEditResearchNorms = user?.roles.some(p => p.role === 'PHONG_QLKH' && p.scope === 'TOAN_TRUONG') ?? false
-  const canEvaluate = user?.roles.some(p => p.role === 'PHONG_QLKH' || p.role === 'QUAN_TRI') ?? false
+  
+  //const unreadCount = useUnreadCount()
   useEffect(() => {
     let active = true
     api<Profile>('/auth/me', 'GET', undefined, false)
@@ -168,15 +168,11 @@ export default function App() {
             Kế hoạch & Tiến độ
           </button>
         )}
-        <button
-          className={tab === 'notifications' ? 'active' : ''}
-          onClick={() => setTab('notifications')}
-        >
-          🔔 Thông báo
-          {unreadCount > 0 ? ` (${unreadCount})` : ''}
-        </button>
+        
         {user.roles.some(r => r.role === 'GIANG_VIEN') && <button className={tab === 'products' ? 'active' : ''} onClick={() => setTab('products')}>Sản phẩm khoa học</button>}
-        {(canEvaluate || user.roles.some(r => r.role === 'GIANG_VIEN')) && <button className={tab === 'evaluations' ? 'active' : ''} onClick={() => setTab('evaluations')}>{canEvaluate ? 'Đánh giá thi đua' : 'Kết quả thi đua của tôi'}</button>}
+        <button className={`notif-nav-btn${tab === 'notifications' ? ' active' : ''}`} onClick={() => setTab('notifications')}>
+          Thông báo{unreadCount > 0 && <span className="sidebar-notif-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+        </button>
         {canBrowseLecturers(user) && <button className={tab === 'lecturers' ? 'active' : ''} onClick={() => setTab('lecturers')}>Hồ sơ giảng viên</button>}
         {canViewResearchNorms && <button className={tab === 'research-norms' ? 'active' : ''} onClick={() => setTab('research-norms')}>Định mức NCKH</button>}
         {administrator && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>Quản trị dữ liệu nền</button>}
@@ -223,7 +219,6 @@ export default function App() {
         <Notifications onUnreadCountChange={setUnreadCount} />
       )}
       {tab === 'products' && <ProductWorkspace user={user} />}
-      {tab === 'evaluations' && <Evaluations user={user} lookups={lookups} />}
       {tab === 'lecturers' && (canBrowseLecturers(user) ? <LecturerDirectory user={user} lookups={lookups} /> : <p role="alert">Bạn không có quyền xem danh sách giảng viên.</p>)}
       {tab === 'research-norms' && (canViewResearchNorms ? <ResearchNorms academicYears={lookups?.academicYears ?? []} canEdit={canEditResearchNorms} /> : <p role="alert">Bạn không có quyền xem định mức NCKH.</p>)}
       {tab === 'admin' && (administrator ? <AdminPanel currentAccountId={user.id} onChanged={() => setRetry(x => x + 1)} /> : <p role="alert">Bạn không có quyền quản trị.</p>)}

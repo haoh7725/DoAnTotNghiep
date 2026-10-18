@@ -8,7 +8,7 @@ public sealed class ProductSnapshotConfiguration : IEntityTypeConfiguration<Prod
 {
     public void Configure(EntityTypeBuilder<ProductSnapshot> builder)
     {
-        builder.ToTable("san_pham_phien_ban_ung_dung", "nckh");
+        builder.ToTable("san_pham_phien_ban", "nckh");
 
         // Composite PK: (ProductId, Version)
         builder.HasKey(x => new { x.ProductId, x.Version });
