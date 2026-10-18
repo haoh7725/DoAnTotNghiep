@@ -97,6 +97,23 @@ public sealed class ProductsController(ProductService productService, Applicatio
     }
 
     // GET /api/products/{id}/review-history
+    [HttpGet("api/products/{id:long}/snapshots")]
+    public async Task<IActionResult> Snapshots(long id, CancellationToken cancellationToken)
+    {
+        var product = await db.Products.AsNoTracking().SingleOrDefaultAsync(p => p.Id == id, cancellationToken);
+        if (product is null) return NotFound();
+        var owner = await db.Lecturers.AsNoTracking()
+            .SingleAsync(l => l.Id == product.SubmittedByLecturerId, cancellationToken);
+        var department = await db.Departments.AsNoTracking()
+            .SingleAsync(d => d.Id == owner.DepartmentId, cancellationToken);
+        var isCoAuthor = await db.ProductCoAuthors.AnyAsync(a => a.ProductId == id &&
+            db.Lecturers.Any(l => l.Id == a.LecturerId && l.AccountId == currentUser.Id), cancellationToken);
+        if (owner.AccountId != currentUser.Id && !isCoAuthor &&
+            !currentUser.CanAccess(department.FacultyId, department.Id)) return Forbid();
+        return Ok(await db.ProductSnapshots.AsNoTracking().Where(s => s.ProductId == id)
+            .OrderBy(s => s.Version).ToListAsync(cancellationToken));
+    }
+
     [HttpGet("api/products/{id:long}/review-history")]
     public async Task<ActionResult<IReadOnlyList<ReviewHistoryResponse>>> GetReviewHistory(
         long id, CancellationToken cancellationToken)
