@@ -8,6 +8,8 @@ class ApiClient {
   final String token;
 
   Future<dynamic> get(String path) => _request('GET', path);
+  Future<dynamic> post(String path, [Object? body]) => _request('POST', path, body);
+  Future<dynamic> put(String path, [Object? body]) => _request('PUT', path, body);
 
   Future<dynamic> _request(String method, String path, [Object? body]) async {
     final client = HttpClient();
@@ -70,6 +72,9 @@ class ApiClient {
   Future<dynamic> getScientificProfile(int lecturerId) =>
       get('/lecturers/$lecturerId/scientific-profile');
 
+  // Lookups
+  Future<dynamic> getLookups() => get('/lookups');
+
   // Products
   Future<List<dynamic>> getMyProducts() async {
     final data = await get('/products/mine');
@@ -78,10 +83,24 @@ class ApiClient {
 
   Future<dynamic> getProduct(int id) => get('/products/$id');
 
+  Future<dynamic> updateProduct(int id, Map<String, dynamic> data) =>
+      put('/products/$id', data);
+
+  Future<dynamic> submitProduct(int id) => post('/products/$id/submit');
+
   Future<List<dynamic>> getReviewHistory(int id) async {
     final data = await get('/products/$id/review-history');
     return data as List<dynamic>;
   }
+
+  Future<List<dynamic>> getProductSnapshots(int id) async {
+    final data = await get('/products/$id/snapshots');
+    return data as List<dynamic>;
+  }
+
+  // Evaluations / Emulation
+  Future<dynamic> getMyEvaluation(int academicYearId) =>
+      get('/evaluations/me?academicYearId=$academicYearId');
 }
 
 class ApiException implements Exception {
