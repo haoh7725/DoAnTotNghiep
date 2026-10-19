@@ -9,6 +9,7 @@ import { ProductWorkspace } from './Products'
 import { ResearchReports } from './Reports'
 import { ResearchPlans } from './ResearchPlans'
 import { ResearchNorms } from './ResearchNorms'
+import { ResearchTargets } from './ResearchTargets'
 import Notifications from './Notifications'
 import { Evaluations } from './Evaluations'
 import './App.css'
@@ -28,7 +29,17 @@ export default function App() {
   const manager = user?.roles.some(p => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'BAN_GIAM_HIEU', 'QUAN_TRI'].includes(p.role)) ?? false
   const canViewResearchNorms = user?.roles.some(p => ['GIANG_VIEN', 'TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'BAN_GIAM_HIEU'].includes(p.role)) ?? false
   const canEditResearchNorms = user?.roles.some(p => p.role === 'PHONG_QLKH' && p.scope === 'TOAN_TRUONG') ?? false
-  const canEvaluate = user?.roles.some(p => p.role === 'PHONG_QLKH' || p.role === 'QUAN_TRI') ?? false
+  const canViewResearchTargets = user?.roles.some(p =>
+    ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'BAN_GIAM_HIEU', 'QUAN_TRI'].includes(p.role)
+  ) ?? false
+
+  const canEditResearchTargets = user?.roles.some(p =>
+    ['PHONG_QLKH', 'QUAN_TRI'].includes(p.role)
+  ) ?? false
+
+  const canEvaluate = user?.roles.some(p =>
+    p.role === 'PHONG_QLKH' || p.role === 'QUAN_TRI'
+  ) ?? false
   useEffect(() => {
     let active = true
     api<Profile>('/auth/me', 'GET', undefined, false)
@@ -169,16 +180,28 @@ export default function App() {
           </button>
         )}
         <button
-          className={tab === 'notifications' ? 'active' : ''}
+          className={`notif-nav-btn${tab === 'notifications' ? ' active' : ''}`}
           onClick={() => setTab('notifications')}
         >
           🔔 Thông báo
-          {unreadCount > 0 ? ` (${unreadCount})` : ''}
+          {unreadCount > 0 && (
+            <span className="sidebar-notif-badge">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
         </button>
         {user.roles.some(r => r.role === 'GIANG_VIEN') && <button className={tab === 'products' ? 'active' : ''} onClick={() => setTab('products')}>Sản phẩm khoa học</button>}
         {(canEvaluate || user.roles.some(r => r.role === 'GIANG_VIEN')) && <button className={tab === 'evaluations' ? 'active' : ''} onClick={() => setTab('evaluations')}>{canEvaluate ? 'Đánh giá thi đua' : 'Kết quả thi đua của tôi'}</button>}
         {canBrowseLecturers(user) && <button className={tab === 'lecturers' ? 'active' : ''} onClick={() => setTab('lecturers')}>Hồ sơ giảng viên</button>}
         {canViewResearchNorms && <button className={tab === 'research-norms' ? 'active' : ''} onClick={() => setTab('research-norms')}>Định mức NCKH</button>}
+        {canViewResearchTargets && (
+          <button
+            className={tab === 'research-targets' ? 'active' : ''}
+            onClick={() => setTab('research-targets')}
+          >
+            Chỉ tiêu và phân bổ NCKH
+          </button>
+        )}
         {administrator && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>Quản trị dữ liệu nền</button>}
         {administrator && <button className={tab === 'conversion-rules' ? 'active' : ''} onClick={() => setTab('conversion-rules')}>Quy định quy đổi</button>}
         {manager && <button className={tab === 'reports' ? 'active' : ''} onClick={() => setTab('reports')}>Thống kê kết quả</button>}
@@ -186,29 +209,29 @@ export default function App() {
       <div className="sidebar-bottom"><strong>{user.fullName}</strong><span>@{user.username}</span><button onClick={logout} disabled={busy}>Đăng xuất</button></div>
     </aside>
     <main className="content">
-    <header className="page-top">
-      <span>HUIT / Nghiên cứu khoa học</span>
+      <header className="page-top">
+        <span>HUIT / Nghiên cứu khoa học</span>
 
-      <div className="notification-header-action">
-        <button
-          type="button"
-          className="notification-bell"
-          title="Xem thông báo"
-          aria-label={`Thông báo, ${unreadCount} chưa đọc`}
-          onClick={() => setTab('notifications')}
-        >
-          🔔
+        <div className="notification-header-action">
+          <button
+            type="button"
+            className="notification-bell"
+            title="Xem thông báo"
+            aria-label={`Thông báo, ${unreadCount} chưa đọc`}
+            onClick={() => setTab('notifications')}
+          >
+            🔔
 
-          {unreadCount > 0 && (
-            <span className="notification-bell-count">
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </span>
-          )}
-        </button>
+            {unreadCount > 0 && (
+              <span className="notification-bell-count">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </button>
 
-        <span className="status">Đã đăng nhập</span>
-      </div>
-    </header>
+          <span className="status">Đã đăng nhập</span>
+        </div>
+      </header>
       {error && <p className="alert" role="alert">{error}</p>}
       {tab === 'overview' && <><p className="eyebrow">TỔNG QUAN</p><h1>Xin chào, {user.fullName}</h1><p className="muted">Thông tin tài khoản và phạm vi truy cập của bạn.</p>
         <section className="panel"><h2>Quyền truy cập</h2>{user.roles.length ? <div className="permission-grid">{user.roles.map((p, i) => <article key={i} className="permission"><strong>{roleNames[p.role] ?? p.role}</strong><span>{scopeNames[p.scope] ?? p.scope}</span>{p.facultyId && <small>{lookups?.faculties.find(f => f.id === p.facultyId)?.name ?? `Khoa #${p.facultyId}`}</small>}{p.departmentId && <small>{lookups?.departments.find(d => d.id === p.departmentId)?.name ?? `Bộ môn #${p.departmentId}`}</small>}</article>)}</div> : <p>Tài khoản chưa được gán quyền. Vui lòng liên hệ quản trị viên.</p>}</section>
@@ -226,6 +249,11 @@ export default function App() {
       {tab === 'evaluations' && <Evaluations user={user} lookups={lookups} />}
       {tab === 'lecturers' && (canBrowseLecturers(user) ? <LecturerDirectory user={user} lookups={lookups} /> : <p role="alert">Bạn không có quyền xem danh sách giảng viên.</p>)}
       {tab === 'research-norms' && (canViewResearchNorms ? <ResearchNorms academicYears={lookups?.academicYears ?? []} canEdit={canEditResearchNorms} /> : <p role="alert">Bạn không có quyền xem định mức NCKH.</p>)}
+      {tab === 'research-targets' && (
+        canViewResearchTargets
+          ? <ResearchTargets lookups={lookups} canEdit={canEditResearchTargets} />
+          : <p role="alert">Bạn không có quyền xem chỉ tiêu NCKH.</p>
+      )}
       {tab === 'admin' && (administrator ? <AdminPanel currentAccountId={user.id} onChanged={() => setRetry(x => x + 1)} /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
       {tab === 'conversion-rules' && (administrator ? <ConversionRules /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
       {tab === 'reports' && (manager ? <ResearchReports lookups={lookups} /> : <p role="alert">Bạn không có quyền xem báo cáo.</p>)}

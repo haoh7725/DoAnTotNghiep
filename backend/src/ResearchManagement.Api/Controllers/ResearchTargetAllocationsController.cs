@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ResearchManagement.Application.ResearchTargetAllocations;
 using ResearchManagement.Application.ResearchTargetAllocations.Models;
-
+using ResearchManagement.Api.Authorization;
 namespace ResearchManagement.Api.Controllers;
 
 [ApiController]
@@ -12,6 +12,7 @@ public sealed class ResearchTargetAllocationsController(
     ResearchTargetAllocationService service) : ControllerBase
 {
     [HttpGet("{id:long}")]
+    [Authorize(Policy = Policies.Management)]
     public async Task<ActionResult<ResearchTargetAllocationResponse>> GetById(
         long id,
         CancellationToken cancellationToken)
@@ -21,6 +22,7 @@ public sealed class ResearchTargetAllocationsController(
     }
 
     [HttpGet]
+    [Authorize(Policy = Policies.Management)]
     public async Task<ActionResult<List<ResearchTargetAllocationResponse>>> GetByResearchTarget(
         [FromQuery] long researchTargetId,
         CancellationToken cancellationToken)
@@ -33,6 +35,7 @@ public sealed class ResearchTargetAllocationsController(
     }
 
     [HttpPost]
+    [Authorize(Policy = Policies.ResearchOffice)]
     public async Task<ActionResult<ResearchTargetAllocationResponse>> Create(
         CreateResearchTargetAllocationRequest request,
         CancellationToken cancellationToken)
@@ -46,6 +49,7 @@ public sealed class ResearchTargetAllocationsController(
     }
 
     [HttpPut("{id:long}")]
+    [Authorize(Policy = Policies.ResearchOffice)]
     public async Task<ActionResult<ResearchTargetAllocationResponse>> Update(
         long id,
         UpdateResearchTargetAllocationRequest request,
