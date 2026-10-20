@@ -10,6 +10,7 @@ import { ResearchReports } from './Reports'
 import { ResearchPlans } from './ResearchPlans'
 import { ResearchNorms } from './ResearchNorms'
 import { ResearchTargets } from './ResearchTargets'
+import JournalConferences from './JournalConferences'
 import Notifications from './Notifications'
 import { Evaluations } from './Evaluations'
 import './App.css'
@@ -34,6 +35,13 @@ export default function App() {
   ) ?? false
 
   const canEditResearchTargets = user?.roles.some(p =>
+    ['PHONG_QLKH', 'QUAN_TRI'].includes(p.role)
+  ) ?? false
+  const canViewJournalConferences = user?.roles.some(p =>
+    ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'BAN_GIAM_HIEU', 'QUAN_TRI'].includes(p.role)
+  ) ?? false
+
+  const canEditJournalConferences = user?.roles.some(p =>
     ['PHONG_QLKH', 'QUAN_TRI'].includes(p.role)
   ) ?? false
 
@@ -202,6 +210,14 @@ export default function App() {
             Chỉ tiêu và phân bổ NCKH
           </button>
         )}
+        {canViewJournalConferences && (
+          <button
+            className={tab === 'journal-conferences' ? 'active' : ''}
+            onClick={() => setTab('journal-conferences')}
+          >
+            Danh mục tạp chí/hội nghị
+          </button>
+        )}
         {administrator && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>Quản trị dữ liệu nền</button>}
         {administrator && <button className={tab === 'conversion-rules' ? 'active' : ''} onClick={() => setTab('conversion-rules')}>Quy định quy đổi</button>}
         {manager && <button className={tab === 'reports' ? 'active' : ''} onClick={() => setTab('reports')}>Thống kê kết quả</button>}
@@ -253,6 +269,11 @@ export default function App() {
         canViewResearchTargets
           ? <ResearchTargets lookups={lookups} canEdit={canEditResearchTargets} />
           : <p role="alert">Bạn không có quyền xem chỉ tiêu NCKH.</p>
+      )}
+      {tab === 'journal-conferences' && (
+        canViewJournalConferences
+          ? <JournalConferences canEdit={canEditJournalConferences} />
+          : <p role="alert">Bạn không có quyền xem danh mục tạp chí/hội nghị.</p>
       )}
       {tab === 'admin' && (administrator ? <AdminPanel currentAccountId={user.id} onChanged={() => setRetry(x => x + 1)} /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
       {tab === 'conversion-rules' && (administrator ? <ConversionRules /> : <p role="alert">Bạn không có quyền quản trị.</p>)}

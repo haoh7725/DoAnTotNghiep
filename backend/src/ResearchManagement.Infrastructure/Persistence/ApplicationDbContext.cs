@@ -33,6 +33,9 @@ public sealed class ApplicationDbContext(
     // Lecturers and scientific profiles
     public DbSet<ScientificProfile> ScientificProfiles => Set<ScientificProfile>();
     public DbSet<ProductType> ProductTypes => Set<ProductType>();
+    // Journal and conference catalog
+    public DbSet<JournalConference> JournalConferences
+        => Set<JournalConference>();
 
     // Scientific products
     public DbSet<Product> Products => Set<Product>();
