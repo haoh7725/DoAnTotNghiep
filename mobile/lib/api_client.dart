@@ -1,15 +1,20 @@
 import 'dart:convert';
 import 'dart:io';
 
-const apiUrl = String.fromEnvironment('API_URL', defaultValue: 'http://10.0.2.2:8081/api');
+const apiUrl = String.fromEnvironment(
+  'API_URL',
+  defaultValue: 'http://10.0.2.2:8081/api',
+);
 
 class ApiClient {
   ApiClient(this.token);
   final String token;
 
   Future<dynamic> get(String path) => _request('GET', path);
-  Future<dynamic> post(String path, [Object? body]) => _request('POST', path, body);
-  Future<dynamic> put(String path, [Object? body]) => _request('PUT', path, body);
+  Future<dynamic> post(String path, [Object? body]) =>
+      _request('POST', path, body);
+  Future<dynamic> put(String path, [Object? body]) =>
+      _request('PUT', path, body);
 
   Future<dynamic> _request(String method, String path, [Object? body]) async {
     final client = HttpClient();
@@ -101,6 +106,23 @@ class ApiClient {
   // Evaluations / Emulation
   Future<dynamic> getMyEvaluation(int academicYearId) =>
       get('/evaluations/me?academicYearId=$academicYearId');
+      
+  // Notifications
+  Future<List<dynamic>> getNotifications() async {
+    final data = await get('/notifications');
+    return data as List<dynamic>;
+  }
+
+  Future<int> getUnreadNotificationCount() async {
+    final data = await get('/notifications/unread-count');
+    return (data['unreadCount'] as num).toInt();
+  }
+
+  Future<dynamic> markNotificationAsRead(int id) =>
+      put('/notifications/$id/read');
+
+  Future<dynamic> markAllNotificationsAsRead() =>
+      put('/notifications/read-all');
 }
 
 class ApiException implements Exception {
