@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'api_client.dart';
 import 'products_screen.dart';
 import 'profile_screen.dart';
+import 'notifications_screen.dart';
 import 'product_detail_screen.dart' show MessageWidget;
 
 // ---------------------------------------------------------------------------
@@ -28,10 +29,13 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           _EvaluationTab(client: widget.client, onLogout: widget.onLogout),
           ProductsScreen(client: widget.client),
+          NotificationsScreen(api: widget.client),
           ProfileScreen(client: widget.client, onLogout: widget.onLogout),
         ],
       ),
+      
       bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
         currentIndex: _currentIndex,
         selectedItemColor: const Color(0xFF177158),
         unselectedItemColor: Colors.grey,
@@ -46,6 +50,11 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.article_outlined),
             activeIcon: Icon(Icons.article),
             label: 'Sản phẩm',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.notifications_none),
+            activeIcon: Icon(Icons.notifications),
+            label: 'Thông báo',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outlined),
