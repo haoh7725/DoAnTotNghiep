@@ -106,7 +106,15 @@ class ApiClient {
   // Evaluations / Emulation
   Future<dynamic> getMyEvaluation(int academicYearId) =>
       get('/evaluations/me?academicYearId=$academicYearId');
-      
+
+  // Research Plans / Dashboard
+  Future<dynamic> getResearchPlan(int lecturerId, int academicYearId) => get(
+    '/research-plans?lecturerId=$lecturerId&academicYearId=$academicYearId',
+  );
+
+  Future<dynamic> getResearchPlanItems(int researchPlanId) =>
+      get('/research-plans/$researchPlanId/items');
+
   // Notifications
   Future<List<dynamic>> getNotifications() async {
     final data = await get('/notifications');

@@ -3,6 +3,7 @@ import 'api_client.dart';
 import 'products_screen.dart';
 import 'profile_screen.dart';
 import 'notifications_screen.dart';
+import 'dashboard_screen.dart';
 import 'product_detail_screen.dart' show MessageWidget;
 
 // ---------------------------------------------------------------------------
@@ -10,11 +11,7 @@ import 'product_detail_screen.dart' show MessageWidget;
 // ---------------------------------------------------------------------------
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({
-    super.key,
-    required this.client,
-    required this.onLogout,
-  });
+  const HomeScreen({super.key, required this.client, required this.onLogout});
   final ApiClient client;
   final VoidCallback onLogout;
 
@@ -31,20 +28,30 @@ class _HomeScreenState extends State<HomeScreen> {
       body: IndexedStack(
         index: _currentIndex,
         children: [
+          DashboardScreen(client: widget.client),
           _EvaluationTab(client: widget.client, onLogout: widget.onLogout),
           ProductsScreen(client: widget.client),
           NotificationsScreen(api: widget.client),
           ProfileScreen(client: widget.client, onLogout: widget.onLogout),
         ],
       ),
-      
+
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _currentIndex,
         selectedItemColor: const Color(0xFF177158),
         unselectedItemColor: Colors.grey,
+        selectedFontSize: 10,
+        unselectedFontSize: 10,
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
+        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500),
         onTap: (i) => setState(() => _currentIndex = i),
         items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard_outlined),
+            activeIcon: Icon(Icons.dashboard),
+            label: 'Tổng quan',
+          ),
           BottomNavigationBarItem(
             icon: Icon(Icons.emoji_events_outlined),
             activeIcon: Icon(Icons.emoji_events),
@@ -197,22 +204,32 @@ class _EvaluationTabState extends State<_EvaluationTab> {
           children: [
             if (years.isNotEmpty)
               DropdownButtonFormField<int>(
-                value: yearId,
+                initialValue: yearId,
                 isExpanded: true,
                 decoration: InputDecoration(
                   labelText: 'Năm học',
-                  prefixIcon: const Icon(Icons.calendar_today_outlined, size: 20),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  prefixIcon: const Icon(
+                    Icons.calendar_today_outlined,
+                    size: 20,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                 ),
                 items: years
-                    .map((x) => DropdownMenuItem<int>(
-                          value: x['id'] as int,
-                          child: Text(
-                            'Năm học ${x['code']}',
-                            style: const TextStyle(fontWeight: FontWeight.w500),
-                          ),
-                        ))
+                    .map(
+                      (x) => DropdownMenuItem<int>(
+                        value: x['id'] as int,
+                        child: Text(
+                          'Năm học ${x['code']}',
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    )
                     .toList(),
                 onChanged: (v) {
                   if (v != null && v != yearId) {
@@ -279,14 +296,18 @@ class _EmptyEvaluationWidget extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
-              Icon(Icons.person_off_outlined, size: 48, color: Colors.amber.shade800),
+              Icon(
+                Icons.person_off_outlined,
+                size: 48,
+                color: Colors.amber.shade800,
+              ),
               const SizedBox(height: 12),
               Text(
                 'Tài khoản chưa liên kết giảng viên',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.amber.shade900,
-                    ),
+                  fontWeight: FontWeight.bold,
+                  color: Colors.amber.shade900,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
@@ -316,7 +337,7 @@ class _EmptyEvaluationWidget extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF177158).withOpacity(0.08),
+                color: const Color(0xFF177158).withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -329,14 +350,15 @@ class _EmptyEvaluationWidget extends StatelessWidget {
             Text(
               'Chưa có đánh giá',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF173F32),
-                  ),
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF173F32),
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              message ?? 'Năm học này chưa có kết quả đánh giá thi đua đã chốt.',
+              message ??
+                  'Năm học này chưa có kết quả đánh giá thi đua đã chốt.',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 14, color: Colors.black87),
             ),
@@ -356,7 +378,11 @@ class _EmptyEvaluationWidget extends StatelessWidget {
                   Expanded(
                     child: Text(
                       'Kết quả thi đua sẽ được hiển thị sau khi Phòng Quản lý khoa học tiến hành đánh giá và chốt kết quả xếp loại.',
-                      style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.35),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.black87,
+                        height: 1.35,
+                      ),
                     ),
                   ),
                 ],
@@ -389,11 +415,13 @@ class _EvaluationView extends StatelessWidget {
     final isFinalized = status == 'CHOT';
     final statusLabel = isFinalized ? 'Đã chốt' : 'Bản nháp';
     final classification = data['classification'] as String?;
-    final classificationText = (classification != null && classification.isNotEmpty)
+    final classificationText =
+        (classification != null && classification.isNotEmpty)
         ? classification
         : 'Chưa xếp loại';
     final classificationBasis = data['classificationBasis'] as String? ?? '';
-    final lecturerName = data['lecturerNameSnapshot'] as String? ?? 'Giảng viên';
+    final lecturerName =
+        data['lecturerNameSnapshot'] as String? ?? 'Giảng viên';
     final lecturerCode = data['lecturerCodeSnapshot'] as String? ?? '';
     final academicRank = data['academicRankSnapshot'] as String?;
     final degree = data['degreeSnapshot'] as String?;
@@ -415,7 +443,9 @@ class _EvaluationView extends StatelessWidget {
         // ── Card tổng quan kết quả & trạng thái thi đua ──
         Card(
           color: const Color(0xFF173F32),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -452,7 +482,10 @@ class _EvaluationView extends StatelessWidget {
                     const SizedBox(width: 8),
                     // Badge trạng thái thi đua (Đã chốt / Bản nháp)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
                         color: isFinalized
                             ? const Color(0xFF2E7D32)
@@ -463,7 +496,9 @@ class _EvaluationView extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            isFinalized ? Icons.check_circle_outline : Icons.edit_note,
+                            isFinalized
+                                ? Icons.check_circle_outline
+                                : Icons.edit_note,
                             size: 14,
                             color: Colors.white,
                           ),
@@ -505,13 +540,17 @@ class _EvaluationView extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.18),
+                      color: Colors.black.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.info_outline, size: 16, color: Color(0xFFD5E5DB)),
+                        const Icon(
+                          Icons.info_outline,
+                          size: 16,
+                          color: Color(0xFFD5E5DB),
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -530,17 +569,27 @@ class _EvaluationView extends StatelessWidget {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    const Icon(Icons.history_outlined, size: 14, color: Color(0xFFD5E5DB)),
+                    const Icon(
+                      Icons.history_outlined,
+                      size: 14,
+                      color: Color(0xFFD5E5DB),
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       'Lần đánh giá: $attempt · Năm học $academicYearCode',
-                      style: const TextStyle(color: Color(0xFFD5E5DB), fontSize: 12),
+                      style: const TextStyle(
+                        color: Color(0xFFD5E5DB),
+                        fontSize: 12,
+                      ),
                     ),
                     if (evaluatedAtText.isNotEmpty) ...[
                       const Spacer(),
                       Text(
                         evaluatedAtText,
-                        style: const TextStyle(color: Color(0xFFD5E5DB), fontSize: 12),
+                        style: const TextStyle(
+                          color: Color(0xFFD5E5DB),
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ],
@@ -584,14 +633,14 @@ class _EvaluationView extends StatelessWidget {
             Text(
               'Sản phẩm được quy đổi',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF173F32),
-                  ),
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF173F32),
+              ),
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: const Color(0xFF177158).withOpacity(0.1),
+                color: const Color(0xFF177158).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -608,7 +657,9 @@ class _EvaluationView extends StatelessWidget {
         const SizedBox(height: 10),
         if (details.isEmpty)
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: const Padding(
               padding: EdgeInsets.all(24),
               child: Center(
@@ -641,10 +692,15 @@ class _EvaluationView extends StatelessWidget {
                       children: [
                         if (x['productTypeName'] != null)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                             margin: const EdgeInsets.only(right: 8),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF177158).withOpacity(0.08),
+                              color: const Color(
+                                0xFF177158,
+                              ).withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -691,12 +747,18 @@ class _EvaluationView extends StatelessWidget {
                               Expanded(
                                 child: Text(
                                   'Quy định: ${x['ruleCode']} (v${x['ruleVersion']})',
-                                  style: const TextStyle(fontSize: 12, color: Colors.black87),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.black87,
+                                  ),
                                 ),
                               ),
                               Text(
                                 'Gốc: ${_formatNumber(x['baseValue'])} $unitLabel',
-                                style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black54,
+                                ),
                               ),
                             ],
                           ),
@@ -707,14 +769,20 @@ class _EvaluationView extends StatelessWidget {
                               Expanded(
                                 child: Text(
                                   'Căn cứ: ${x['calculationBasis'] ?? ''}',
-                                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.black54,
+                                  ),
                                 ),
                               ),
                               if (x['authorCoefficient'] != null) ...[
                                 const SizedBox(width: 8),
                                 Text(
                                   'Hệ số: ${_formatNumber(x['authorCoefficient'])}',
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ],
                             ],
@@ -789,9 +857,9 @@ class _MetricCard extends StatelessWidget {
                 Text(
                   value,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF173F32),
-                      ),
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF173F32),
+                  ),
                 ),
                 const SizedBox(width: 4),
                 Text(
