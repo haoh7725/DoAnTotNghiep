@@ -164,14 +164,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
 
-        // ── Lecturer details ───────────────────────────────────────────────
+                // ── Lecturer details ──
         if (_lecturer != null) ...[
           const SizedBox(height: 4),
           SectionCard(
             title: 'Thông tin cá nhân',
             children: [
-              DetailRow('Ngày sinh', _formatDate(_lecturer!['birthDate'] as String?)),
-              DetailRow('Giới tính', _genderLabel(_lecturer!['gender'] as String?)),
+              if ([
+                _lecturer!['birthDate'],
+                _lecturer!['gender'],
+                _lecturer!['email'],
+                _lecturer!['phone'],
+                _lecturer!['academicRank'],
+                _lecturer!['degree'],
+                _lecturer!['position'],
+              ].every((value) =>
+                  value == null || value.toString().trim().isEmpty))
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    'Chưa cập nhật thông tin cá nhân.',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 13,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+              DetailRow(
+                'Ngày sinh',
+                _formatDate(_lecturer!['birthDate'] as String?),
+              ),
+              DetailRow(
+                'Giới tính',
+                _genderLabel(_lecturer!['gender'] as String?),
+              ),
               DetailRow('Email', _lecturer!['email'] as String?),
               DetailRow('Điện thoại', _lecturer!['phone'] as String?),
               DetailRow('Học hàm', _lecturer!['academicRank'] as String?),
@@ -181,12 +208,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
 
-        // ── Scientific profile ─────────────────────────────────────────────
+        // ── Scientific profile ──
         if (_scientificProfile != null) ...[
           const SizedBox(height: 12),
           SectionCard(
             title: 'Lý lịch khoa học',
             children: [
+              if ([
+                _scientificProfile!['expertise'],
+                _scientificProfile!['researchFields'],
+                _scientificProfile!['researchDirections'],
+                _scientificProfile!['activitySummary'],
+              ].every((value) =>
+                  value == null || value.toString().trim().isEmpty))
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    'Chưa cập nhật lý lịch khoa học.',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 13,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
               _ScientificField(
                 label: 'Chuyên môn',
                 text: _scientificProfile!['expertise'] as String?,
