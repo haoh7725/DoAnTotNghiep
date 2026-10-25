@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -16,57 +17,63 @@ class ApiClient {
   Future<dynamic> put(String path, [Object? body]) =>
       _request('PUT', path, body);
 
-  Future<dynamic> _request(String method, String path, [Object? body]) async {
+  static Future<T> _withClient<T>(Future<T> Function(HttpClient) action) async {
     final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 15);
     try {
-      final request = await client.openUrl(method, Uri.parse('$apiUrl$path'));
-      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-      request.headers.set('X-Requested-With', 'ResearchHub');
-      if (body != null) {
-        request.headers.contentType = ContentType.json;
-        request.write(jsonEncode(body));
-      }
-      final response = await request.close();
-      final text = await response.transform(utf8.decoder).join();
-      final data = text.isEmpty ? null : jsonDecode(text);
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw ApiException(
-          response.statusCode,
-          data is Map
-              ? (data['detail'] ?? data['title'] ?? 'Không thể xử lý yêu cầu.')
-              : 'Không thể xử lý yêu cầu.',
-        );
-      }
-      return data;
+      return await action(client).timeout(const Duration(seconds: 30));
+    } on TimeoutException {
+      throw ApiException(408, 'Yêu cầu quá thời gian chờ. Vui lòng thử lại.');
     } finally {
-      client.close();
+      client.close(force: true);
     }
   }
 
-  static Future<String> login(String username, String password) async {
-    final client = HttpClient();
-    try {
-      final request = await client.postUrl(Uri.parse('$apiUrl/auth/login'));
-      request.headers.contentType = ContentType.json;
-      request.headers.set('X-Requested-With', 'ResearchHub');
-      request.write(jsonEncode({'username': username, 'password': password}));
-      final response = await request.close();
-      final text = await response.transform(utf8.decoder).join();
-      final data = text.isEmpty ? null : jsonDecode(text);
-      if (response.statusCode != 200) {
-        throw ApiException(
-          response.statusCode,
-          data is Map
-              ? (data['detail'] ?? data['title'] ?? 'Đăng nhập thất bại.')
-              : 'Đăng nhập thất bại.',
-        );
-      }
-      return data['accessToken'] as String;
-    } finally {
-      client.close();
-    }
-  }
+  Future<dynamic> _request(String method, String path, [Object? body]) =>
+      _withClient((client) async {
+        final request = await client.openUrl(method, Uri.parse('$apiUrl$path'));
+        request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+        request.headers.set('X-Requested-With', 'ResearchHub');
+        if (body != null) {
+          request.headers.contentType = ContentType.json;
+          request.write(jsonEncode(body));
+        }
+        final response = await request.close();
+        final text = await response.transform(utf8.decoder).join();
+        final data = text.isEmpty ? null : jsonDecode(text);
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw ApiException(
+            response.statusCode,
+            data is Map
+                ? (data['detail'] ??
+                      data['title'] ??
+                      'Không thể xử lý yêu cầu.')
+                : 'Không thể xử lý yêu cầu.',
+          );
+        }
+        return data;
+      });
+
+  static Future<String> login(String username, String password) =>
+      _withClient((client) async {
+        final request = await client.postUrl(Uri.parse('$apiUrl/auth/login'));
+        request.headers.contentType = ContentType.json;
+        request.headers.set('X-Requested-With', 'ResearchHub');
+        request.write(jsonEncode({'username': username, 'password': password}));
+        final response = await request.close();
+        final text = await response.transform(utf8.decoder).join();
+        final data = text.isEmpty ? null : jsonDecode(text);
+        if (response.statusCode != 200) {
+          throw ApiException(
+            response.statusCode,
+            data is Map
+                ? (data['detail'] ?? data['title'] ?? 'Đăng nhập thất bại.')
+                : 'Đăng nhập thất bại.',
+          );
+        }
+        return data['accessToken'] as String;
+      });
 
   // Auth / Profile
   Future<dynamic> getMe() => get('/auth/me');
@@ -106,7 +113,7 @@ class ApiClient {
   // Evaluations / Emulation
   Future<dynamic> getMyEvaluation(int academicYearId) =>
       get('/evaluations/me?academicYearId=$academicYearId');
-      
+
   // Notifications
   Future<List<dynamic>> getNotifications() async {
     final data = await get('/notifications');
