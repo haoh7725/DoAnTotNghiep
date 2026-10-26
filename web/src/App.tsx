@@ -191,12 +191,7 @@ export default function App() {
           className={`notif-nav-btn${tab === 'notifications' ? ' active' : ''}`}
           onClick={() => setTab('notifications')}
         >
-          🔔 Thông báo
-          {unreadCount > 0 && (
-            <span className="sidebar-notif-badge">
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </span>
-          )}
+          Thông báo
         </button>
         {user.roles.some(r => r.role === 'GIANG_VIEN') && <button className={tab === 'products' ? 'active' : ''} onClick={() => setTab('products')}>Sản phẩm khoa học</button>}
         {(canEvaluate || user.roles.some(r => r.role === 'GIANG_VIEN')) && <button className={tab === 'evaluations' ? 'active' : ''} onClick={() => setTab('evaluations')}>{canEvaluate ? 'Đánh giá thi đua' : 'Kết quả thi đua của tôi'}</button>}
