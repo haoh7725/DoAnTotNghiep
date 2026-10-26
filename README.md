@@ -76,6 +76,13 @@ Backend đã có xác thực JWT và phân quyền theo vai trò/phạm vi:
 - `GET /api/auth/me`: thông tin tài khoản và các phân quyền hiện tại (Web dùng cookie HttpOnly, Mobile dùng header `Authorization: Bearer <token>`).
 - Policy: `Admin`, `ResearchOffice`, `Management` (xem `Api/Authorization/Policies.cs`). Kiểm tra phạm vi khoa/bộ môn qua `ICurrentUser.CanAccess(facultyId, departmentId)`.
 - Lần chạy đầu, nếu đặt `SEED_ADMIN_PASSWORD` trong `.env`, hệ thống tạo tài khoản QUAN_TRI (mặc định tên `admin`).
+- Trong môi trường Development, hệ thống tự tạo bộ dữ liệu demo xuyên suốt nghiệp vụ. Các tài khoản
+  `demo.qlkh`, `demo.bgh`, `demo.truongkhoa`, `demo.truongbomon` và `demo.gv01` đến `demo.gv04`
+  dùng chung mật khẩu `Demo@123456`. Seeder chạy lặp lại an toàn và có thể tắt bằng cấu hình
+  `Seed:DemoData=false`. Khoa, bộ môn và năm học demo dùng mã có tiền tố `DEMO_`/`DEMO-`
+  để không xung đột với dữ liệu người dùng đã nhập.
+  Hai PDF minh chứng demo được đóng gói trong `ResearchManagement.Api/DemoEvidence` và tự sao chép
+  vào `wwwroot/uploads/products/{productId}` khi seed, nên endpoint tải xuống hoạt động cả local và Docker.
 - Lỗi trả về theo chuẩn ProblemDetails; danh sách có phân trang dùng `PagedQuery` / `PagedResult<T>`.
 
 ## Phạm vi

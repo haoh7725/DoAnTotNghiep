@@ -22,4 +22,8 @@
     <ProjectReference Include="..\ResearchManagement.Infrastructure\ResearchManagement.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="DemoEvidence\*.pdf" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

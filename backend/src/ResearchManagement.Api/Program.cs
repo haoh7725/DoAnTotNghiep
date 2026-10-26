@@ -110,6 +110,10 @@ app.UseAuthorization();
 app.MapControllers();
 
 await AdminSeeder.SeedAdminAsync(app.Services);
+if (app.Environment.IsDevelopment())
+{
+    await DemoDataSeeder.SeedAsync(app.Services);
+}
 
 app.Run();
 
