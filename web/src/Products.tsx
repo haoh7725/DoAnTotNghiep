@@ -50,6 +50,100 @@ const needsScore = (user: Profile | null, p: Product) =>
   p.status === 'PHONG_QLKH_DUYET' &&
   user?.roles.some(r => r.role === 'PHONG_QLKH' || r.role === 'QUAN_TRI')
 
+
+type PendingProduct = {
+  id: number
+  title: string
+  status: string
+  lecturerName: string
+  departmentName: string
+}
+
+export function ProductReviewWorkspace({ user }: { user: Profile }) {
+  const [items, setItems] = useState<PendingProduct[]>([])
+  const [selected, setSelected] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [revision, setRevision] = useState(0)
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setError('')
+
+    api<PendingProduct[]>('/products/pending-review')
+      .then(data => { if (active) setItems(data) })
+      .catch(err => {
+        if (active) setError((err as Error).message)
+      })
+      .finally(() => { if (active) setLoading(false) })
+
+    return () => { active = false }
+  }, [revision])
+
+  if (selected !== null) {
+    return <ProductDetail
+      key={selected}
+      id={selected}
+      user={user}
+      onBack={() => {
+        setSelected(null)
+        setRevision(value => value + 1)
+      }}
+    />
+  }
+
+  return <>
+    <h1>Sản phẩm chờ duyệt</h1>
+    <p className="muted">
+      Hồ sơ chờ xét duyệt trong phạm vi được phân quyền.
+    </p>
+
+    <section className="panel">
+      <button
+        disabled={loading}
+        onClick={() => setRevision(value => value + 1)}
+      >
+        Làm mới
+      </button>
+
+      {error && <p className="alert" role="alert">{error}</p>}
+
+      {loading ? <p>Đang tải…</p> : !error && <>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Sản phẩm</th>
+                <th>Giảng viên</th>
+                <th>Bộ môn</th>
+                <th>Trạng thái</th>
+                <th>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(item => <tr key={item.id}>
+                <td>{item.title}</td>
+                <td>{item.lecturerName}</td>
+                <td>{item.departmentName}</td>
+                <td>{workflow[item.status] ?? item.status}</td>
+                <td>
+                  <button onClick={() => setSelected(item.id)}>
+                    Xem và xét duyệt
+                  </button>
+                </td>
+              </tr>)}
+            </tbody>
+          </table>
+        </div>
+
+        {items.length === 0 &&
+          <p>Không có sản phẩm đang chờ bạn xét duyệt.</p>}
+      </>}
+    </section>
+  </>
+}
+
 // ── ProductWorkspace (entry) ───────────────────────────────────────────────────
 export function ProductWorkspace({ user }: { user?: Profile | null }) {
   const [items, setItems] = useState<Summary[]>([])
@@ -82,15 +176,15 @@ export function ProductWorkspace({ user }: { user?: Profile | null }) {
         <div className="table-wrap"><table><thead><tr>
           <th>Tên sản phẩm</th><th>Trạng thái bài viết</th><th>Xét duyệt</th><th>Điểm quy đổi</th><th>Cập nhật</th><th></th>
         </tr></thead><tbody>
-          {items.map(p => <tr key={p.id}>
-            <td><strong>{p.title}</strong><br /><small>Kế hoạch #{p.researchPlanItemId}</small></td>
-            <td>{p.articleStatus ? article[p.articleStatus] ?? p.articleStatus : '—'}</td>
-            <td><span className={`status-chip status-chip--${p.status.toLowerCase()}`}>{workflow[p.status] ?? p.status}</span></td>
-            <td>{p.scoreEquivalent !== null ? p.scoreEquivalent : '—'}</td>
-            <td>{new Date(p.updatedAt).toLocaleString('vi-VN')}</td>
-            <td><button onClick={() => setSelected(p.id)}>Chi tiết</button></td>
-          </tr>)}
-        </tbody></table></div>
+            {items.map(p => <tr key={p.id}>
+              <td><strong>{p.title}</strong><br /><small>Kế hoạch #{p.researchPlanItemId}</small></td>
+              <td>{p.articleStatus ? article[p.articleStatus] ?? p.articleStatus : '—'}</td>
+              <td><span className={`status-chip status-chip--${p.status.toLowerCase()}`}>{workflow[p.status] ?? p.status}</span></td>
+              <td>{p.scoreEquivalent !== null ? p.scoreEquivalent : '—'}</td>
+              <td>{new Date(p.updatedAt).toLocaleString('vi-VN')}</td>
+              <td><button onClick={() => setSelected(p.id)}>Chi tiết</button></td>
+            </tr>)}
+          </tbody></table></div>
         {!items.length && <p className="empty">Chưa có sản phẩm.</p>}
       </>}
     </section>
@@ -187,32 +281,32 @@ function ProductDetail({ id, user, onBack }: { id: number; user: Profile | null;
         {/* Product info */}
         {editing
           ? <section className="panel">
-              <ProductForm product={p} onSubmit={save} busy={busy} error={error} />
-              <button disabled={busy} onClick={() => setEditing(false)}>Hủy</button>
-            </section>
+            <ProductForm product={p} onSubmit={save} busy={busy} error={error} />
+            <button disabled={busy} onClick={() => setEditing(false)}>Hủy</button>
+          </section>
           : <section className="panel">
-              <div className="section-top">
-                <h2>Thông tin</h2>
-                {editable(p) && <div className="actions">
-                  <button onClick={() => setEditing(true)}>Chỉnh sửa</button>
-                  <button className="primary" disabled={busy} onClick={submitProduct}>Gửi duyệt</button>
-                </div>}
-              </div>
-              {p.status === 'TRA_LAI' && (
-                <p className="alert review-alert" role="alert">
-                  ⚠️ Sản phẩm được yêu cầu bổ sung. Vui lòng chỉnh sửa và gửi duyệt lại.
-                </p>
-              )}
-              <dl className="product-grid">
-                <div><dt>Trạng thái bài viết</dt><dd>{p.articleStatus ? article[p.articleStatus] : '—'}</dd></div>
-                <div><dt>Ngày công bố</dt><dd>{p.publishedDate ?? '—'}</dd></div>
-                <div><dt>Nơi công bố</dt><dd>{p.publicationInfo ?? '—'}</dd></div>
-                <div><dt>Chỉ số tạp chí</dt><dd>{p.journalIndex ?? '—'}</dd></div>
-                <div><dt>Phân loại tạp chí</dt><dd>{p.journalClassification ?? '—'}</dd></div>
-                <div><dt>Cấp đề tài</dt><dd>{p.projectLevel ?? '—'}</dd></div>
-              </dl>
-              {p.description && <p>{p.description}</p>}
-            </section>
+            <div className="section-top">
+              <h2>Thông tin</h2>
+              {editable(p) && <div className="actions">
+                <button onClick={() => setEditing(true)}>Chỉnh sửa</button>
+                <button className="primary" disabled={busy} onClick={submitProduct}>Gửi duyệt</button>
+              </div>}
+            </div>
+            {p.status === 'TRA_LAI' && (
+              <p className="alert review-alert" role="alert">
+                ⚠️ Sản phẩm được yêu cầu bổ sung. Vui lòng chỉnh sửa và gửi duyệt lại.
+              </p>
+            )}
+            <dl className="product-grid">
+              <div><dt>Trạng thái bài viết</dt><dd>{p.articleStatus ? article[p.articleStatus] : '—'}</dd></div>
+              <div><dt>Ngày công bố</dt><dd>{p.publishedDate ?? '—'}</dd></div>
+              <div><dt>Nơi công bố</dt><dd>{p.publicationInfo ?? '—'}</dd></div>
+              <div><dt>Chỉ số tạp chí</dt><dd>{p.journalIndex ?? '—'}</dd></div>
+              <div><dt>Phân loại tạp chí</dt><dd>{p.journalClassification ?? '—'}</dd></div>
+              <div><dt>Cấp đề tài</dt><dd>{p.projectLevel ?? '—'}</dd></div>
+            </dl>
+            {p.description && <p>{p.description}</p>}
+          </section>
         }
 
         <CoAuthors product={p} onChanged={() => setRevision(x => x + 1)} />
@@ -320,26 +414,26 @@ function ReviewHistoryPanel({ productId }: { productId: number }) {
       <h2>Lịch sử xét duyệt</h2>
       {loading ? <p>Đang tải…</p> : error ? <p className="alert">{error}</p> :
         !history.length ? <p className="empty">Chưa có lịch sử xét duyệt.</p> :
-        <ol className="review-timeline">
-          {history.map(h => (
-            <li key={h.id} className={`timeline-item${h.toStatus === 'TRA_LAI' ? ' timeline-item--reject' : h.toStatus === 'DA_DUYET' ? ' timeline-item--approved' : ''}`}>
-              <span className="timeline-icon">{actionIcon(h.fromStatus, h.toStatus)}</span>
-              <div className="timeline-body">
-                <div className="timeline-title">
-                  <strong>{workflow[h.fromStatus] ?? h.fromStatus}</strong>
-                  {' → '}
-                  <strong>{workflow[h.toStatus] ?? h.toStatus}</strong>
+          <ol className="review-timeline">
+            {history.map(h => (
+              <li key={h.id} className={`timeline-item${h.toStatus === 'TRA_LAI' ? ' timeline-item--reject' : h.toStatus === 'DA_DUYET' ? ' timeline-item--approved' : ''}`}>
+                <span className="timeline-icon">{actionIcon(h.fromStatus, h.toStatus)}</span>
+                <div className="timeline-body">
+                  <div className="timeline-title">
+                    <strong>{workflow[h.fromStatus] ?? h.fromStatus}</strong>
+                    {' → '}
+                    <strong>{workflow[h.toStatus] ?? h.toStatus}</strong>
+                  </div>
+                  <div className="timeline-meta">
+                    {h.actorUsername ? `@${h.actorUsername}` : `Tài khoản #${h.actorAccountId}`}
+                    {' · '}
+                    {new Date(h.occurredAt).toLocaleString('vi-VN')}
+                  </div>
+                  {h.comment && <p className="timeline-comment">"{h.comment}"</p>}
                 </div>
-                <div className="timeline-meta">
-                  {h.actorUsername ? `@${h.actorUsername}` : `Tài khoản #${h.actorAccountId}`}
-                  {' · '}
-                  {new Date(h.occurredAt).toLocaleString('vi-VN')}
-                </div>
-                {h.comment && <p className="timeline-comment">"{h.comment}"</p>}
-              </div>
-            </li>
-          ))}
-        </ol>
+              </li>
+            ))}
+          </ol>
       }
     </section>
   )
@@ -366,31 +460,31 @@ function SnapshotPanel({ productId }: { productId: number }) {
       <p className="muted">Mỗi lần gửi duyệt hoặc chuyển trạng thái, hệ thống lưu một bản chụp nội dung.</p>
       {loading ? <p>Đang tải…</p> : error ? <p className="alert">{error}</p> :
         !snapshots.length ? <p className="empty">Chưa có phiên bản nào được lưu.</p> :
-        <ul className="snapshot-list">
-          {[...snapshots].reverse().map(s => (
-            <li key={s.version} className="snapshot-item">
-              <button className="snapshot-header" onClick={() => setExpanded(expanded === s.version ? null : s.version)}>
-                <span className="snapshot-ver">v{s.version}</span>
-                <span className="snapshot-title">{s.title}</span>
-                <span className={`status-chip status-chip--${s.status.toLowerCase()}`}>{workflow[s.status] ?? s.status}</span>
-                <span className="snapshot-time">{new Date(s.snapshotAt).toLocaleString('vi-VN')}</span>
-                <span className="snapshot-toggle">{expanded === s.version ? '▲' : '▼'}</span>
-              </button>
-              {expanded === s.version && (
-                <dl className="product-grid snapshot-detail">
-                  <div><dt>Tên</dt><dd>{s.title}</dd></div>
-                  <div><dt>Trạng thái bài viết</dt><dd>{s.articleStatus ? article[s.articleStatus] : '—'}</dd></div>
-                  <div><dt>Ngày công bố</dt><dd>{s.publishedDate ?? '—'}</dd></div>
-                  <div><dt>Nơi công bố</dt><dd>{s.publicationInfo ?? '—'}</dd></div>
-                  <div><dt>Chỉ số tạp chí</dt><dd>{s.journalIndex ?? '—'}</dd></div>
-                  <div><dt>Phân loại tạp chí</dt><dd>{s.journalClassification ?? '—'}</dd></div>
-                  <div><dt>Cấp đề tài</dt><dd>{s.projectLevel ?? '—'}</dd></div>
-                  {s.description && <div className="wide"><dt>Mô tả</dt><dd>{s.description}</dd></div>}
-                </dl>
-              )}
-            </li>
-          ))}
-        </ul>
+          <ul className="snapshot-list">
+            {[...snapshots].reverse().map(s => (
+              <li key={s.version} className="snapshot-item">
+                <button className="snapshot-header" onClick={() => setExpanded(expanded === s.version ? null : s.version)}>
+                  <span className="snapshot-ver">v{s.version}</span>
+                  <span className="snapshot-title">{s.title}</span>
+                  <span className={`status-chip status-chip--${s.status.toLowerCase()}`}>{workflow[s.status] ?? s.status}</span>
+                  <span className="snapshot-time">{new Date(s.snapshotAt).toLocaleString('vi-VN')}</span>
+                  <span className="snapshot-toggle">{expanded === s.version ? '▲' : '▼'}</span>
+                </button>
+                {expanded === s.version && (
+                  <dl className="product-grid snapshot-detail">
+                    <div><dt>Tên</dt><dd>{s.title}</dd></div>
+                    <div><dt>Trạng thái bài viết</dt><dd>{s.articleStatus ? article[s.articleStatus] : '—'}</dd></div>
+                    <div><dt>Ngày công bố</dt><dd>{s.publishedDate ?? '—'}</dd></div>
+                    <div><dt>Nơi công bố</dt><dd>{s.publicationInfo ?? '—'}</dd></div>
+                    <div><dt>Chỉ số tạp chí</dt><dd>{s.journalIndex ?? '—'}</dd></div>
+                    <div><dt>Phân loại tạp chí</dt><dd>{s.journalClassification ?? '—'}</dd></div>
+                    <div><dt>Cấp đề tài</dt><dd>{s.projectLevel ?? '—'}</dd></div>
+                    {s.description && <div className="wide"><dt>Mô tả</dt><dd>{s.description}</dd></div>}
+                  </dl>
+                )}
+              </li>
+            ))}
+          </ul>
       }
     </section>
   )

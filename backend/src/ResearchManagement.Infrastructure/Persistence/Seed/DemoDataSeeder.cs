@@ -149,15 +149,15 @@ public static class DemoDataSeeder
                 new ResearchPlanItem(plans[3].Id, productTypes["DE_TAI"].Id, "Đề tài chuyển đổi số cấp khoa", 1, new DateOnly(2027, 4, 30))
             };
             items[0].UpdateProgress("DANG_THUC_HIEN", "Đã hoàn thành bản thảo", null);
-            items[2].UpdateProgress("QUA_HAN", "Đã có kết quả thử nghiệm", "Cần bổ sung bộ dữ liệu kiểm thử");
-            items[4].UpdateProgress("HOAN_THANH", "Đã công bố", null);
+            items[2].UpdateProgress("DANG_THUC_HIEN", "Đã có kết quả thử nghiệm", "Cần bổ sung bộ dữ liệu kiểm thử");
+            items[4].UpdateProgress("DA_THUC_HIEN", "Đã công bố", null);
             db.ResearchPlanItems.AddRange(items);
             await db.SaveChangesAsync(cancellationToken);
 
             db.ProgressHistories.AddRange(
                 new ProgressHistory(items[0].Id, lecturer1.Id, "DANG_THUC_HIEN", "Đã hoàn thành bản thảo", null),
-                new ProgressHistory(items[2].Id, lecturer2.Id, "QUA_HAN", "Đã có kết quả thử nghiệm", "Cần bổ sung bộ dữ liệu kiểm thử"),
-                new ProgressHistory(items[4].Id, lecturer3.Id, "HOAN_THANH", "Đã công bố", null));
+                new ProgressHistory(items[2].Id, lecturer2.Id, "DANG_THUC_HIEN", "Đã có kết quả thử nghiệm", "Cần bổ sung bộ dữ liệu kiểm thử"),
+                new ProgressHistory(items[4].Id, lecturer3.Id, "DA_THUC_HIEN", "Đã công bố", null));
 
             var products = new[]
             {
@@ -258,7 +258,7 @@ public static class DemoDataSeeder
     private static Product NewArticle(ResearchPlanItem item, Lecturer lecturer, string title,
         string publication, string? index, string? classification) =>
         new(item.Id, lecturer.Id, title, "Dữ liệu minh họa phục vụ kiểm thử nghiệp vụ.", publication,
-            new DateOnly(2026, 10, 15), "DA_DANG", index, classification);
+            new DateOnly(2026, 10, 15), "DA_XUAT_BAN", index, classification);
 
     private static Product NewProject(ResearchPlanItem item, Lecturer lecturer, string title, string level) =>
         new(item.Id, lecturer.Id, title, "Dữ liệu minh họa phục vụ kiểm thử nghiệp vụ.", null,

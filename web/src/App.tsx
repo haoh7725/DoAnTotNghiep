@@ -5,7 +5,7 @@ import type { Lookups, Profile } from './api'
 import { AdminPanel } from './AdminPanel'
 import { LecturerDirectory, MyLecturerProfile, canBrowseLecturers } from './Lecturers'
 import { ConversionRules } from './ConversionRules'
-import { ProductWorkspace } from './Products'
+import { ProductWorkspace, ProductReviewWorkspace } from './Products'
 import { ResearchReports } from './Reports'
 import { ResearchPlans } from './ResearchPlans'
 import { ResearchNorms } from './ResearchNorms'
@@ -194,6 +194,17 @@ export default function App() {
           Thông báo
         </button>
         {user.roles.some(r => r.role === 'GIANG_VIEN') && <button className={tab === 'products' ? 'active' : ''} onClick={() => setTab('products')}>Sản phẩm khoa học</button>}
+        {user.roles.some(r =>
+          ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'QUAN_TRI']
+            .includes(r.role)
+        ) && (
+            <button
+              className={tab === 'product-reviews' ? 'active' : ''}
+              onClick={() => setTab('product-reviews')}
+            >
+              Sản phẩm chờ duyệt
+            </button>
+          )}
         {(canEvaluate || user.roles.some(r => r.role === 'GIANG_VIEN')) && <button className={tab === 'evaluations' ? 'active' : ''} onClick={() => setTab('evaluations')}>{canEvaluate ? 'Đánh giá thi đua' : 'Kết quả thi đua của tôi'}</button>}
         {canBrowseLecturers(user) && <button className={tab === 'lecturers' ? 'active' : ''} onClick={() => setTab('lecturers')}>Hồ sơ giảng viên</button>}
         {canViewResearchNorms && <button className={tab === 'research-norms' ? 'active' : ''} onClick={() => setTab('research-norms')}>Định mức NCKH</button>}
@@ -257,6 +268,14 @@ export default function App() {
         <Notifications onUnreadCountChange={setUnreadCount} />
       )}
       {tab === 'products' && <ProductWorkspace user={user} />}
+      {tab === 'product-reviews' &&
+        user.roles.some(r =>
+          ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'QUAN_TRI']
+            .includes(r.role)
+        ) && (
+          <ProductReviewWorkspace user={user} />
+        )
+      }
       {tab === 'evaluations' && <Evaluations user={user} lookups={lookups} />}
       {tab === 'lecturers' && (canBrowseLecturers(user) ? <LecturerDirectory user={user} lookups={lookups} /> : <p role="alert">Bạn không có quyền xem danh sách giảng viên.</p>)}
       {tab === 'research-norms' && (canViewResearchNorms ? <ResearchNorms academicYears={lookups?.academicYears ?? []} canEdit={canEditResearchNorms} /> : <p role="alert">Bạn không có quyền xem định mức NCKH.</p>)}
