@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'api_client.dart';
+import 'product_detail_screen.dart';
+import 'research_plan_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   final ApiClient api;
@@ -87,6 +89,51 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  Future<void> openNotification(Map<String, dynamic> item) async {
+    if (busy) return;
+
+    final productId = (item['scientificProductId'] as num?)?.toInt();
+    final planId = (item['researchPlanId'] as num?)?.toInt();
+    final itemId = (item['researchPlanItemId'] as num?)?.toInt();
+
+    if (item['isRead'] != true) {
+      await markAsRead(item);
+    }
+
+    if (!mounted) return;
+
+    Widget? destination;
+
+    if (productId != null) {
+      destination = ProductDetailScreen(
+        client: widget.api,
+        productId: productId,
+      );
+    } else if (itemId != null || planId != null) {
+      destination = ResearchPlanScreen(
+        client: widget.api,
+        planId: planId,
+        itemId: itemId,
+      );
+    }
+
+    if (destination == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Thông báo này không có nội dung liên kết.'),
+        ),
+      );
+      return;
+    }
+
+    final screen = destination;
+
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+
+    if (!mounted) return;
+    await loadNotifications();
+  }
+
   @override
   Widget build(BuildContext context) {
     final unreadCount = notifications
@@ -143,8 +190,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   final content = item['content']?.toString() ?? '';
                   final rawType = item['type']?.toString() ?? '';
                   final type = switch (rawType.toUpperCase()) {
-                    'QUA_HAN' => 'Thông báo quá hạn',
-                    _ => rawType.isEmpty ? 'Thông báo' : rawType,
+                    'NHAC_HAN' => 'Nhắc hạn hoàn thành',
+                    'QUA_HAN' => 'Cảnh báo quá hạn',
+                    'PHAN_HOI' => 'Phản hồi sản phẩm',
+                    'HE_THONG' => 'Thông báo hệ thống',
+                    _ => 'Thông báo',
                   };
 
                   final rawDate = item['sentAt'] ?? item['scheduledAt'];
@@ -199,7 +249,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               size: 10,
                               color: Colors.blue,
                             ),
-                      onTap: busy ? null : () => markAsRead(item),
+                      onTap: busy ? null : () => openNotification(item),
                     ),
                   );
                 },

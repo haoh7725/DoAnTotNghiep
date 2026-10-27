@@ -4,6 +4,7 @@ import 'products_screen.dart';
 import 'profile_screen.dart';
 import 'notifications_screen.dart';
 import 'product_detail_screen.dart' show MessageWidget;
+import 'research_progress_screen.dart';
 
 // ---------------------------------------------------------------------------
 // HomeScreen – BottomNavigationBar with 3 tabs
@@ -30,10 +31,11 @@ class _HomeScreenState extends State<HomeScreen> {
           _EvaluationTab(client: widget.client, onLogout: widget.onLogout),
           ProductsScreen(client: widget.client),
           NotificationsScreen(api: widget.client),
+          ResearchProgressScreen(client: widget.client),
           ProfileScreen(client: widget.client, onLogout: widget.onLogout),
         ],
       ),
-      
+
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _currentIndex,
@@ -55,6 +57,11 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.notifications_none),
             activeIcon: Icon(Icons.notifications),
             label: 'Thông báo',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.bar_chart_outlined),
+            activeIcon: Icon(Icons.bar_chart),
+            label: 'Tiến độ',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outlined),
@@ -89,6 +96,7 @@ class _EvaluationTabState extends State<_EvaluationTab> {
   bool empty = false;
   String? emptyMessage;
   bool notLinkedToLecturer = false;
+  int _evaluationRequestVersion = 0;
 
   @override
   void initState() {
@@ -124,14 +132,11 @@ class _EvaluationTabState extends State<_EvaluationTab> {
   }
 
   Future<void> loadEvaluation() async {
-    if (yearId == null) {
-      setState(() {
-        loading = false;
-        empty = true;
-        emptyMessage = 'Vui lòng chọn năm học.';
-      });
-      return;
-    }
+    if (!mounted) return;
+
+    final requestVersion = ++_evaluationRequestVersion;
+    final requestedYearId = yearId;
+
     setState(() {
       loading = true;
       error = null;
@@ -140,29 +145,59 @@ class _EvaluationTabState extends State<_EvaluationTab> {
       notLinkedToLecturer = false;
       evaluation = null;
     });
+
+    if (requestedYearId == null) {
+      setState(() {
+        loading = false;
+        empty = true;
+        emptyMessage = 'Vui lòng chọn năm học.';
+      });
+      return;
+    }
+
     try {
-      final data = await widget.client.getMyEvaluation(yearId!);
-      if (data is Map) {
-        evaluation = Map<String, dynamic>.from(data);
+      final data = await widget.client.getMyEvaluation(requestedYearId);
+
+      // Bỏ qua phản hồi của lần chọn năm học trước.
+      if (!mounted || requestVersion != _evaluationRequestVersion) {
+        return;
       }
+
+      if (data is! Map) {
+        throw const FormatException('Dữ liệu kết quả đánh giá không hợp lệ.');
+      }
+
+      evaluation = Map<String, dynamic>.from(data);
     } on ApiException catch (e) {
+      if (!mounted || requestVersion != _evaluationRequestVersion) {
+        return;
+      }
+
       if (e.status == 404) {
         empty = true;
+
         if (e.message.toLowerCase().contains('chưa liên kết')) {
           notLinkedToLecturer = true;
           emptyMessage = e.message;
         } else {
           emptyMessage = e.message.isNotEmpty
               ? e.message
-              : 'Năm học này chưa có kết quả đánh giá thi đua đã chốt.';
+              : 'Năm học này chưa có kết quả đánh giá '
+                    'thi đua đã chốt.';
         }
       } else {
         error = e.message;
       }
     } catch (e) {
+      if (!mounted || requestVersion != _evaluationRequestVersion) {
+        return;
+      }
+
       error = e.toString();
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted && requestVersion == _evaluationRequestVersion) {
+        setState(() => loading = false);
+      }
     }
   }
 
@@ -400,9 +435,13 @@ class _EvaluationView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = data['status'] as String? ?? 'CHOT';
+    final status = data['status'] as String?;
     final isFinalized = status == 'CHOT';
-    final statusLabel = isFinalized ? 'Đã chốt' : 'Bản nháp';
+    final statusLabel = switch (status) {
+      'CHOT' => 'Đã chốt',
+      'NHAP' => 'Bản nháp',
+      _ => 'Chưa xác định',
+    };
     final classification = data['classification'] as String?;
     final classificationText =
         (classification != null && classification.isNotEmpty)
@@ -425,6 +464,12 @@ class _EvaluationView extends StatelessWidget {
     ].join(' · ');
 
     final details = data['details'] as List<dynamic>? ?? [];
+
+    final productCount = details
+        .map((raw) => (raw as Map)['productId'])
+        .where((id) => id != null)
+        .toSet()
+        .length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -636,7 +681,7 @@ class _EvaluationView extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                '${details.length} sản phẩm',
+                '$productCount sản phẩm',
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
