@@ -11,6 +11,9 @@ class ApiClient {
   ApiClient(this.token);
   final String token;
 
+  Future<dynamic> getMyResearchProgress(int academicYearId) =>
+    get('/research-progress/me?academicYearId=$academicYearId');
+
   Future<dynamic> get(String path) => _request('GET', path);
   Future<dynamic> post(String path, [Object? body]) =>
       _request('POST', path, body);
@@ -113,6 +116,17 @@ class ApiClient {
   // Evaluations / Emulation
   Future<dynamic> getMyEvaluation(int academicYearId) =>
       get('/evaluations/me?academicYearId=$academicYearId');
+
+  // Research plans
+  Future<dynamic> getResearchPlan(int id) => get('/research-plans/$id');
+
+  Future<dynamic> getResearchPlanItem(int id) =>
+      get('/research-plan-items/$id');
+
+  Future<List<dynamic>> getResearchPlanItems(int planId) async {
+    final data = await get('/research-plans/$planId/items');
+    return data as List<dynamic>;
+  }
 
   // Notifications
   Future<List<dynamic>> getNotifications() async {
