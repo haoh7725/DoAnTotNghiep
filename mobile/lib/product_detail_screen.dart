@@ -837,25 +837,51 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
                 // Hành động chỉnh sửa hoặc thông báo khóa quyền
                 if (canEdit) ...[
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _showUpdateArticleStatusDialog,
-                          icon: const Icon(Icons.edit_outlined, size: 18),
-                          label: const Text('Cập nhật trạng thái'),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF177158),
+                        minimumSize: const Size(0, 48),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF177158),
-                        ),
-                        onPressed: _submitProduct,
-                        icon: const Icon(Icons.send_outlined, size: 18),
-                        label: const Text('Gửi duyệt'),
+                      onPressed: _showUpdateArticleStatusDialog,
+                      icon: const Icon(Icons.edit_outlined, size: 20),
+                      label: const Text(
+                        'Cập nhật trạng thái',
+                        textAlign: TextAlign.center,
                       ),
-                    ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF177158),
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(0, 48),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: _submitProduct,
+                      icon: const Icon(Icons.send_outlined, size: 20),
+                      label: const Text(
+                        'Gửi duyệt',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                   ),
                 ] else ...[
                   Container(
