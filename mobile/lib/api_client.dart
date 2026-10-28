@@ -11,8 +11,16 @@ class ApiClient {
   ApiClient(this.token);
   final String token;
 
+  Future<dynamic> getMyDepartmentTargetProgress(int academicYearId) => get(
+    '/research-progress/targets/my-department'
+    '?academicYearId=$academicYearId',
+  );
+
   Future<dynamic> getMyResearchProgress(int academicYearId) =>
-    get('/research-progress/me?academicYearId=$academicYearId');
+      get('/research-progress/me?academicYearId=$academicYearId');
+
+  Future<dynamic> getMyProductTargetProgress(int academicYearId) =>
+      get('/research-progress/targets/me?academicYearId=$academicYearId');
 
   Future<dynamic> get(String path) => _request('GET', path);
   Future<dynamic> post(String path, [Object? body]) =>
