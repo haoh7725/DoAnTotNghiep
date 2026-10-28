@@ -7,10 +7,14 @@ import 'product_detail_screen.dart' show SectionCard, DetailRow, MessageWidget;
 // ---------------------------------------------------------------------------
 String _genderLabel(String? g) {
   switch (g) {
-    case 'NAM': return 'Nam';
-    case 'NU': return 'Nữ';
-    case 'KHAC': return 'Khác';
-    default: return g ?? '';
+    case 'NAM':
+      return 'Nam';
+    case 'NU':
+      return 'Nữ';
+    case 'KHAC':
+      return 'Khác';
+    default:
+      return g ?? '';
   }
 }
 
@@ -60,6 +64,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _loading = true;
       _error = null;
       _noLecturer = false;
+      _me = null;
+      _lecturer = null;
+      _scientificProfile = null;
     });
     try {
       final me = await widget.client.getMe();
@@ -86,8 +93,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _scientificProfile = sp != null
                 ? Map<String, dynamic>.from(sp as Map)
                 : null;
-          } catch (_) {
-            // scientific profile may not exist — silently ignore
+          } on ApiException catch (e) {
+            if (e.status == 404) {
+              _scientificProfile = null;
+            } else {
+              rethrow;
+            }
           }
         }
       }
@@ -115,10 +126,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: _buildBody(),
-      ),
+      body: RefreshIndicator(onRefresh: _load, child: _buildBody()),
     );
   }
 
@@ -145,7 +153,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // ── No lecturer linked ─────────────────────────────────────────────
         if (_noLecturer)
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             color: Colors.amber.shade50,
             child: const Padding(
               padding: EdgeInsets.all(16),
@@ -164,7 +174,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
 
-                // ── Lecturer details ──
+        // ── Lecturer details ──
         if (_lecturer != null) ...[
           const SizedBox(height: 4),
           SectionCard(
@@ -178,8 +188,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _lecturer!['academicRank'],
                 _lecturer!['degree'],
                 _lecturer!['position'],
-              ].every((value) =>
-                  value == null || value.toString().trim().isEmpty))
+              ].every(
+                (value) => value == null || value.toString().trim().isEmpty,
+              ))
                 const Padding(
                   padding: EdgeInsets.only(bottom: 12),
                   child: Text(
@@ -219,8 +230,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _scientificProfile!['researchFields'],
                 _scientificProfile!['researchDirections'],
                 _scientificProfile!['activitySummary'],
-              ].every((value) =>
-                  value == null || value.toString().trim().isEmpty))
+              ].every(
+                (value) => value == null || value.toString().trim().isEmpty,
+              ))
                 const Padding(
                   padding: EdgeInsets.only(bottom: 12),
                   child: Text(
@@ -262,8 +274,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ? (_lecturer!['fullName'] as String? ?? '')
         : (_me?['fullName'] as String? ?? _me?['username'] as String? ?? '');
     final code = _lecturer != null ? (_lecturer!['code'] as String?) : null;
-    final dept = _lecturer != null ? (_lecturer!['departmentName'] as String?) : null;
-    final faculty = _lecturer != null ? (_lecturer!['facultyName'] as String?) : null;
+    final dept = _lecturer != null
+        ? (_lecturer!['departmentName'] as String?)
+        : null;
+    final faculty = _lecturer != null
+        ? (_lecturer!['facultyName'] as String?)
+        : null;
 
     return Card(
       color: const Color(0xFF173F32),
@@ -278,9 +294,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Text(
                 fullName.isNotEmpty ? fullName[0].toUpperCase() : '?',
                 style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold),
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             const SizedBox(width: 16),
@@ -291,27 +308,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Text(
                     fullName,
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold),
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   if (code != null) ...[
                     const SizedBox(height: 4),
-                    Text(code,
-                        style: const TextStyle(
-                            color: Color(0xFFD5E5DB), fontSize: 13)),
+                    Text(
+                      code,
+                      style: const TextStyle(
+                        color: Color(0xFFD5E5DB),
+                        fontSize: 13,
+                      ),
+                    ),
                   ],
                   if (dept != null) ...[
                     const SizedBox(height: 2),
-                    Text(dept,
-                        style: const TextStyle(
-                            color: Color(0xFFD5E5DB), fontSize: 13)),
+                    Text(
+                      dept,
+                      style: const TextStyle(
+                        color: Color(0xFFD5E5DB),
+                        fontSize: 13,
+                      ),
+                    ),
                   ],
                   if (faculty != null) ...[
                     const SizedBox(height: 2),
-                    Text(faculty,
-                        style: const TextStyle(
-                            color: Color(0xFFD5E5DB), fontSize: 12)),
+                    Text(
+                      faculty,
+                      style: const TextStyle(
+                        color: Color(0xFFD5E5DB),
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -336,11 +366,14 @@ class _ScientificField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey,
-                  fontWeight: FontWeight.w600)),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.grey,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 4),
           Text(text!, style: const TextStyle(fontSize: 13)),
           const Divider(height: 20),
