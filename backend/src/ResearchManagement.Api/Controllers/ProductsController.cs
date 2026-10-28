@@ -13,6 +13,60 @@ namespace ResearchManagement.Api.Controllers;
 [Authorize]
 public sealed class ProductsController(ProductService productService, ApplicationDbContext db, ICurrentUser currentUser) : ControllerBase
 {
+    [HttpGet("api/products/pending-review")]
+    [Authorize(Roles = "TRUONG_BO_MON,TRUONG_KHOA,PHONG_QLKH,QUAN_TRI")]
+    public async Task<IActionResult> PendingReview(CancellationToken cancellationToken)
+    {
+        var accountId = currentUser.Id
+            ?? throw new ForbiddenException("Không xác định được tài khoản.");
+
+        var query =
+            from product in db.Products.AsNoTracking()
+            join lecturer in db.Lecturers
+                on product.SubmittedByLecturerId equals lecturer.Id
+            join department in db.Departments
+                on lecturer.DepartmentId equals department.Id
+            where
+                (
+                    product.Status == "NOP" ||
+                    product.Status == "TRUONG_BO_MON_DUYET" ||
+                    product.Status == "TRUONG_KHOA_DUYET" ||
+                    product.Status == "PHONG_QLKH_DUYET"
+                )
+                && db.RoleAssignments.Any(role =>
+                    role.AccountId == accountId &&
+                    (
+                        (role.Role == "QUAN_TRI" &&
+                         role.Scope == "TOAN_TRUONG") ||
+
+                        (role.Role == "TRUONG_BO_MON" &&
+                         role.Scope == "BO_MON" &&
+                         role.FacultyId == department.FacultyId &&
+                         role.DepartmentId == department.Id &&
+                         product.Status == "NOP") ||
+
+                        (role.Role == "TRUONG_KHOA" &&
+                         role.Scope == "KHOA" &&
+                         role.FacultyId == department.FacultyId &&
+                         product.Status == "TRUONG_BO_MON_DUYET") ||
+
+                        (role.Role == "PHONG_QLKH" &&
+                         role.Scope == "TOAN_TRUONG" &&
+                         (product.Status == "TRUONG_KHOA_DUYET" ||
+                          product.Status == "PHONG_QLKH_DUYET"))
+                    ))
+            orderby product.UpdatedAt
+            select new
+            {
+                product.Id,
+                product.Title,
+                product.Status,
+                LecturerName = lecturer.FullName,
+                DepartmentName = department.Name
+            };
+
+        return Ok(await query.ToListAsync(cancellationToken));
+    }
     [HttpGet("api/products/mine")]
     public async Task<ActionResult<IReadOnlyList<ProductSummaryResponse>>> Mine(CancellationToken cancellationToken) =>
         Ok(await productService.GetMineAsync(cancellationToken));
@@ -30,8 +84,14 @@ public sealed class ProductsController(ProductService productService, Applicatio
                            join type in db.ProductTypes.AsNoTracking() on item.ProductTypeId equals type.Id
                            where plan.LecturerId == lecturerId
                            orderby year.StartDate descending, item.Name
-                           select new { item.Id, item.Name, ProductTypeName = type.Name,
-                               AcademicYearCode = year.Code, item.Status }).ToListAsync(cancellationToken);
+                           select new
+                           {
+                               item.Id,
+                               item.Name,
+                               ProductTypeName = type.Name,
+                               AcademicYearCode = year.Code,
+                               item.Status
+                           }).ToListAsync(cancellationToken);
         return Ok(items);
     }
 

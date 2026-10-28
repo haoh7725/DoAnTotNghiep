@@ -32,7 +32,12 @@ public sealed class NotificationConfiguration
             .HasColumnName("ke_hoach_id");
 
         builder.Property(x => x.ScientificProductId)
-            .HasColumnName("san_pham_id");
+            .HasColumnName("san_pham_ung_dung_id");
+
+        builder.HasOne<Product>()
+            .WithMany()
+            .HasForeignKey(x => x.ScientificProductId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(x => x.Type)
             .HasColumnName("loai")
