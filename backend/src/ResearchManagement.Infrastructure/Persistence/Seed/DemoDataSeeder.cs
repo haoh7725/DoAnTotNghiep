@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ResearchManagement.Application.Auth.Abstractions;
+using ResearchManagement.Application.Products.Abstractions;
 using ResearchManagement.Domain.Constants;
 using ResearchManagement.Domain.Entities;
 
@@ -35,6 +36,7 @@ public static class DemoDataSeeder
 
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var environment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
+        var fileStorage = scope.ServiceProvider.GetRequiredService<IFileStorage>();
         if (await db.Accounts.AnyAsync(x => x.Username == MarkerUsername, cancellationToken))
         {
             logger.LogInformation("Dữ liệu demo đã tồn tại, bỏ qua.");
@@ -195,9 +197,9 @@ public static class DemoDataSeeder
                 new ProductCoAuthor(products[0].Id, lecturers[1].Id, 2),
                 new ProductCoAuthor(products[3].Id, lecturers[0].Id, 2));
             db.ProductEvidences.AddRange(
-                CopyDemoEvidence(products[1].Id, lecturer1.Id,
+                await UploadDemoEvidenceAsync(products[1].Id, lecturer1.Id,
                     "mau-thuyet-minh-de-tai.pdf", "Mẫu thuyết minh đề tài KH&CN công khai"),
-                CopyDemoEvidence(products[3].Id, lecturer3.Id,
+                await UploadDemoEvidenceAsync(products[3].Id, lecturer3.Id,
                     "gritnet-student-performance.pdf", "Bài báo khoa học công khai từ arXiv"));
             db.ReviewHistories.AddRange(
                 new ReviewHistory(products[1].Id, lecturer1.Id, ProductStatuses.Draft, ProductStatuses.Submitted, "Nộp xét duyệt"),
@@ -237,21 +239,21 @@ public static class DemoDataSeeder
             return account;
         }
 
-        ProductEvidence CopyDemoEvidence(long productId, long accountId, string fileName, string description)
+        async Task<ProductEvidence> UploadDemoEvidenceAsync(
+            long productId, long accountId, string fileName, string description)
         {
             var sourcePath = Path.Combine(environment.ContentRootPath, "DemoEvidence", fileName);
             if (!File.Exists(sourcePath))
                 throw new FileNotFoundException("Không tìm thấy tệp minh chứng demo đóng gói cùng API.", sourcePath);
 
-            var relativePath = Path.Combine("uploads", "products", productId.ToString(), fileName)
-                .Replace('\\', '/');
-            var destinationPath = Path.Combine(environment.ContentRootPath, "wwwroot",
-                relativePath.Replace('/', Path.DirectorySeparatorChar));
-            Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
-            File.Copy(sourcePath, destinationPath, overwrite: true);
+            var objectKey = $"uploads/products/{productId}/{fileName}";
+            var info = new FileInfo(sourcePath);
+            await using var stream = File.OpenRead(sourcePath);
+            await fileStorage.PutAsync(
+                objectKey, stream, info.Length, "application/pdf", cancellationToken);
 
-            return new ProductEvidence(productId, accountId, fileName, relativePath,
-                new FileInfo(destinationPath).Length, description);
+            return new ProductEvidence(productId, accountId, fileName, objectKey,
+                info.Length, description);
         }
     }
 

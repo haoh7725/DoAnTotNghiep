@@ -23,6 +23,9 @@ Sao chép `.env.example` thành `.env` và đổi mật khẩu trước khi ch�
 Khi volume PostgreSQL được tạo lần đầu, Docker tự chạy `infra/database/01_schema_postgresql.sql` để tạo schema `nckh`, 28 bảng, khóa ngoại, ràng buộc, trigger, index và dữ liệu danh mục ban đầu.
 PostgreSQL của đồ án được công bố tại cổng `5433` trên máy phát triển để không xung đột với dự án TaskManagement đang dùng cổng `5432`.
 Khi chạy toàn bộ Docker Compose, REST API khả dụng tại `http://localhost:8081`.
+File minh chứng được lưu trong MinIO tại bucket `research-evidences`; dữ liệu MinIO
+được giữ bền vững bằng volume `minio_data`. Giao diện quản trị MinIO ở
+`http://localhost:9001` và dùng tài khoản trong `.env`.
 
 Database đã tồn tại cần áp dụng bảng phiên bản sản phẩm mới một lần (giữ nguyên dữ liệu):
 
@@ -81,8 +84,8 @@ Backend đã có xác thực JWT và phân quyền theo vai trò/phạm vi:
   dùng chung mật khẩu `Demo@123456`. Seeder chạy lặp lại an toàn và có thể tắt bằng cấu hình
   `Seed:DemoData=false`. Khoa, bộ môn và năm học demo dùng mã có tiền tố `DEMO_`/`DEMO-`
   để không xung đột với dữ liệu người dùng đã nhập.
-  Hai PDF minh chứng demo được đóng gói trong `ResearchManagement.Api/DemoEvidence` và tự sao chép
-  vào `wwwroot/uploads/products/{productId}` khi seed, nên endpoint tải xuống hoạt động cả local và Docker.
+  Hai PDF minh chứng demo được đóng gói trong `ResearchManagement.Api/DemoEvidence` và tự tải
+  lên bucket MinIO khi seed, nên endpoint tải xuống hoạt động cả local và Docker.
 - Lỗi trả về theo chuẩn ProblemDetails; danh sách có phân trang dùng `PagedQuery` / `PagedResult<T>`.
 
 ## Phạm vi
