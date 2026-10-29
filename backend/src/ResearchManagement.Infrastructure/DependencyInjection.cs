@@ -27,6 +27,8 @@ using ResearchManagement.Application.Products.Abstractions;
 using ResearchManagement.Infrastructure.Auth;
 using ResearchManagement.Infrastructure.Persistence;
 using ResearchManagement.Infrastructure.Persistence.Repositories;
+using ResearchManagement.Infrastructure.Storage;
+using Minio;
 
 namespace ResearchManagement.Infrastructure;
 
@@ -44,6 +46,15 @@ public static class DependencyInjection
         services.AddSingleton(JwtOptions.FromConfiguration(configuration));
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddSingleton<IPasswordService, PasswordService>();
+
+        var minio = MinioOptions.FromConfiguration(configuration);
+        services.AddSingleton(minio);
+        services.AddSingleton<IMinioClient>(_ => new MinioClient()
+            .WithEndpoint(minio.Endpoint)
+            .WithCredentials(minio.AccessKey, minio.SecretKey)
+            .WithSSL(minio.UseSsl)
+            .Build());
+        services.AddSingleton<IFileStorage, MinioFileStorage>();
 
         // Authentication
         services.AddScoped<IAccountRepository, AccountRepository>();

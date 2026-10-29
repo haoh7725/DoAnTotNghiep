@@ -5,7 +5,6 @@ using ResearchManagement.Application.Products.Models;
 using ResearchManagement.Application.Lecturers.Abstractions;
 using ResearchManagement.Domain.Constants;
 using ResearchManagement.Domain.Entities;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 
 namespace ResearchManagement.Application.Products;
@@ -15,7 +14,7 @@ public sealed class EvidenceService(
     IProductEvidenceRepository evidences,
     ILecturerRepository lecturers,
     ICurrentUser currentUser,
-    IWebHostEnvironment environment)
+    IFileStorage fileStorage)
 {
     private const long MaxFileSizeBytes = 20 * 1024 * 1024; // 20 MB
 
@@ -59,30 +58,35 @@ public sealed class EvidenceService(
         var actorId = currentUser.Id
             ?? throw new AuthenticationFailedException("Không xác định được người dùng hiện tại.");
 
-        // Lưu file vào uploads/products/{productId}/
-        var webRoot = environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot");
-        var folder = Path.Combine(webRoot, "uploads", "products", productId.ToString());
-        Directory.CreateDirectory(folder);
-
         var uniqueName = $"{Guid.NewGuid():N}{ext}";
-        var fullPath = Path.Combine(folder, uniqueName);
+        var objectKey = $"uploads/products/{productId}/{uniqueName}";
 
-        await using (var stream = new FileStream(fullPath, FileMode.Create))
-            await file.CopyToAsync(stream, cancellationToken);
-
-        var relativePath = Path.Combine("uploads", "products", productId.ToString(), uniqueName)
-            .Replace('\\', '/');
+        await using var stream = file.OpenReadStream();
+        await fileStorage.PutAsync(
+            objectKey,
+            stream,
+            file.Length,
+            string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
+            cancellationToken);
 
         var evidence = new ProductEvidence(
             productId,
             actorId,
             file.FileName,
-            relativePath,
+            objectKey,
             file.Length,
             description);
 
-        await evidences.AddAsync(evidence, cancellationToken);
-        await evidences.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await evidences.AddAsync(evidence, cancellationToken);
+            await evidences.SaveChangesAsync(cancellationToken);
+        }
+        catch
+        {
+            await fileStorage.DeleteAsync(objectKey, CancellationToken.None);
+            throw;
+        }
 
         return ToResponse(evidence);
     }
@@ -105,11 +109,7 @@ public sealed class EvidenceService(
         if (evidence.ProductId != productId)
             throw new NotFoundException("Minh chứng không thuộc sản phẩm này.");
 
-        // Xóa file vật lý
-        var webRoot = environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot");
-        var fullPath = Path.Combine(webRoot, evidence.StoredPath.Replace('/', Path.DirectorySeparatorChar));
-        if (File.Exists(fullPath))
-            File.Delete(fullPath);
+        await fileStorage.DeleteAsync(evidence.StoredPath, cancellationToken);
 
         evidences.Remove(evidence);
         await evidences.SaveChangesAsync(cancellationToken);
@@ -118,7 +118,7 @@ public sealed class EvidenceService(
     private static EvidenceResponse ToResponse(ProductEvidence e) =>
         new(e.Id, e.ProductId, e.OriginalFileName, e.FileSizeBytes, e.Description, e.UploadedAt);
 
-    public async Task<(string Path, string FileName)> GetDownloadAsync(
+    public async Task<(Stream Content, string FileName)> GetDownloadAsync(
         long productId, long evidenceId, CancellationToken cancellationToken)
     {
         _ = await products.GetByIdAsync(productId, cancellationToken)
@@ -127,12 +127,8 @@ public sealed class EvidenceService(
             ?? throw new NotFoundException("Không tìm thấy minh chứng.");
         if (evidence.ProductId != productId)
             throw new NotFoundException("Minh chứng không thuộc sản phẩm này.");
-        var webRoot = environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot");
-        var fullPath = Path.GetFullPath(Path.Combine(webRoot, evidence.StoredPath.Replace('/', Path.DirectorySeparatorChar)));
-        var allowedRoot = Path.GetFullPath(Path.Combine(webRoot, "uploads", "products")) + Path.DirectorySeparatorChar;
-        if (!fullPath.StartsWith(allowedRoot, StringComparison.OrdinalIgnoreCase) || !File.Exists(fullPath))
-            throw new NotFoundException("Không tìm thấy tệp minh chứng.");
-        return (fullPath, evidence.OriginalFileName);
+        var content = await fileStorage.OpenReadAsync(evidence.StoredPath, cancellationToken);
+        return (content, evidence.OriginalFileName);
     }
 
     private async Task EnsureOwnerOrAdminAsync(Product product, CancellationToken cancellationToken)

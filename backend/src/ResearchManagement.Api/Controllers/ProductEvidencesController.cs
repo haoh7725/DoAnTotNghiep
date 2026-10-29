@@ -27,7 +27,7 @@ public sealed class ProductEvidencesController(EvidenceService evidenceService) 
         var stored = await evidenceService.GetDownloadAsync(productId, id, ct);
         var provider = new FileExtensionContentTypeProvider();
         if (!provider.TryGetContentType(stored.FileName, out var contentType)) contentType = "application/octet-stream";
-        return PhysicalFile(stored.Path, contentType, stored.FileName, enableRangeProcessing: true);
+        return File(stored.Content, contentType, stored.FileName, enableRangeProcessing: true);
     }
 
     [HttpDelete("{id:long}")]

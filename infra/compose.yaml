@@ -1,4 +1,23 @@
 services:
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: research-management-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   postgres:
     image: postgres:16-alpine
     container_name: research-management-postgres
@@ -31,6 +50,11 @@ services:
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB:-research_management};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
       Cors__AllowedOrigins__0: http://localhost:5173
       Jwt__SecretKey: ${JWT_SECRET_KEY:?Đặt JWT_SECRET_KEY (từ 32 ký tự) trong file .env}
+      Minio__Endpoint: minio:9000
+      Minio__AccessKey: ${MINIO_ROOT_USER:-minioadmin}
+      Minio__SecretKey: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      Minio__BucketName: ${MINIO_BUCKET_NAME:-research-evidences}
+      Minio__UseSsl: "false"
       Seed__AdminUsername: ${SEED_ADMIN_USERNAME:-admin}
       Seed__AdminPassword: ${SEED_ADMIN_PASSWORD:-}
     ports:
@@ -38,7 +62,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
   postgres_data:
+  minio_data:
