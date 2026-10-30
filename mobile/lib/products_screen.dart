@@ -44,10 +44,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
         backgroundColor: const Color(0xFF173F32),
         foregroundColor: Colors.white,
       ),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: _buildBody(),
-      ),
+      body: RefreshIndicator(onRefresh: _load, child: _buildBody()),
     );
   }
 
@@ -66,6 +63,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     final products = _products ?? [];
     if (products.isEmpty) {
       return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         children: const [
           MessageWidget(
             icon: Icons.article_outlined,
@@ -76,21 +74,27 @@ class _ProductsScreenState extends State<ProductsScreen> {
       );
     }
     return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       itemCount: products.length,
       itemBuilder: (ctx, i) {
         final p = products[i] as Map<String, dynamic>;
         return _ProductCard(
           product: p,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ProductDetailScreen(
-                client: widget.client,
-                productId: p['id'] as int,
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ProductDetailScreen(
+                  client: widget.client,
+                  productId: p['id'] as int,
+                ),
               ),
-            ),
-          ),
+            );
+
+            if (!mounted) return;
+            await _load();
+          },
         );
       },
     );
@@ -121,7 +125,10 @@ class _ProductCard extends StatelessWidget {
             children: [
               Text(
                 product['title'] as String? ?? '(Không có tiêu đề)',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
               ),
               const SizedBox(height: 10),
               Wrap(

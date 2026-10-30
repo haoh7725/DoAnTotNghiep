@@ -8,11 +8,23 @@ const apiUrl = String.fromEnvironment(
 );
 
 class ApiClient {
-  ApiClient(this.token);
+  ApiClient(this.token, {this.onUnauthorized});
+
   final String token;
+  final Future<void> Function()? onUnauthorized;
+
+  bool _unauthorizedHandled = false;
+
+  Future<dynamic> getMyDepartmentTargetProgress(int academicYearId) => get(
+    '/research-progress/targets/my-department'
+    '?academicYearId=$academicYearId',
+  );
 
   Future<dynamic> getMyResearchProgress(int academicYearId) =>
-    get('/research-progress/me?academicYearId=$academicYearId');
+      get('/research-progress/me?academicYearId=$academicYearId');
+
+  Future<dynamic> getMyProductTargetProgress(int academicYearId) =>
+      get('/research-progress/targets/me?academicYearId=$academicYearId');
 
   Future<dynamic> get(String path) => _request('GET', path);
   Future<dynamic> post(String path, [Object? body]) =>
@@ -27,56 +39,129 @@ class ApiClient {
       return await action(client).timeout(const Duration(seconds: 30));
     } on TimeoutException {
       throw ApiException(408, 'Yêu cầu quá thời gian chờ. Vui lòng thử lại.');
+    } on SocketException {
+      throw ApiException(
+        503,
+        'Không kết nối được máy chủ. '
+        'Vui lòng kiểm tra kết nối và thử lại.',
+      );
+    } on HttpException {
+      throw ApiException(
+        503,
+        'Kết nối với máy chủ bị gián đoạn. Vui lòng thử lại.',
+      );
     } finally {
       client.close(force: true);
     }
   }
 
+  static Future<dynamic> _readResponse(HttpClientResponse response) async {
+    final text = await response.transform(utf8.decoder).join();
+    final success = response.statusCode >= 200 && response.statusCode < 300;
+
+    dynamic data;
+
+    if (text.trim().isNotEmpty) {
+      try {
+        data = jsonDecode(text);
+      } on FormatException {
+        if (success) {
+          throw ApiException(
+            502,
+            'Máy chủ trả về dữ liệu không hợp lệ. Vui lòng thử lại.',
+          );
+        }
+      }
+    }
+
+    if (!success) {
+      String message;
+
+      switch (response.statusCode) {
+        case 401:
+          message = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+          break;
+        case 403:
+          message = 'Bạn không có quyền thực hiện thao tác này.';
+          break;
+        case 404:
+          message = 'Không tìm thấy dữ liệu hoặc chức năng yêu cầu.';
+          break;
+        default:
+          message = 'Không thể xử lý yêu cầu (HTTP ${response.statusCode}).';
+      }
+
+      if (data is Map) {
+        final detail = data['detail'] ?? data['title'];
+        if (detail is String && detail.trim().isNotEmpty) {
+          message = detail;
+        }
+      }
+
+      throw ApiException(response.statusCode, message);
+    }
+
+    return data;
+  }
+
   Future<dynamic> _request(String method, String path, [Object? body]) =>
       _withClient((client) async {
         final request = await client.openUrl(method, Uri.parse('$apiUrl$path'));
+
         request.headers.set(HttpHeaders.acceptHeader, 'application/json');
         request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
         request.headers.set('X-Requested-With', 'ResearchHub');
+
         if (body != null) {
           request.headers.contentType = ContentType.json;
           request.write(jsonEncode(body));
         }
+
         final response = await request.close();
-        final text = await response.transform(utf8.decoder).join();
-        final data = text.isEmpty ? null : jsonDecode(text);
-        if (response.statusCode < 200 || response.statusCode >= 300) {
+
+        if (response.statusCode == 401) {
+          if (!_unauthorizedHandled) {
+            _unauthorizedHandled = true;
+            await onUnauthorized?.call();
+          }
+
           throw ApiException(
-            response.statusCode,
-            data is Map
-                ? (data['detail'] ??
-                      data['title'] ??
-                      'Không thể xử lý yêu cầu.')
-                : 'Không thể xử lý yêu cầu.',
+            401,
+            'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
           );
         }
-        return data;
+
+        return await _readResponse(response);
       });
 
-  static Future<String> login(String username, String password) =>
-      _withClient((client) async {
-        final request = await client.postUrl(Uri.parse('$apiUrl/auth/login'));
-        request.headers.contentType = ContentType.json;
-        request.headers.set('X-Requested-With', 'ResearchHub');
-        request.write(jsonEncode({'username': username, 'password': password}));
-        final response = await request.close();
-        final text = await response.transform(utf8.decoder).join();
-        final data = text.isEmpty ? null : jsonDecode(text);
-        if (response.statusCode != 200) {
-          throw ApiException(
-            response.statusCode,
-            data is Map
-                ? (data['detail'] ?? data['title'] ?? 'Đăng nhập thất bại.')
-                : 'Đăng nhập thất bại.',
-          );
-        }
-        return data['accessToken'] as String;
-      });
+  static Future<String> login(String username, String password) => _withClient((
+    client,
+  ) async {
+    final request = await client.postUrl(Uri.parse('$apiUrl/auth/login'));
+
+    request.headers.contentType = ContentType.json;
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    request.headers.set('X-Requested-With', 'ResearchHub');
+
+    request.write(jsonEncode({'username': username, 'password': password}));
+
+    final response = await request.close();
+
+    // 401 ở màn hình đăng nhập là thông tin đăng nhập
+    // không hợp lệ, chưa phải phiên đang dùng bị hết hạn.
+    if (response.statusCode == 401) {
+      throw ApiException(401, 'Tên đăng nhập hoặc mật khẩu không đúng.');
+    }
+
+    final data = await _readResponse(response);
+    final accessToken = data is Map ? data['accessToken'] : null;
+
+    if (accessToken is! String || accessToken.trim().isEmpty) {
+      throw ApiException(502, 'Máy chủ chưa trả về phiên đăng nhập hợp lệ.');
+    }
+
+    return accessToken;
+  });
 
   // Auth / Profile
   Future<dynamic> getMe() => get('/auth/me');
