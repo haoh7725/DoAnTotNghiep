@@ -16,7 +16,7 @@ namespace ResearchManagement.Infrastructure.Persistence.Seed;
 /// </summary>
 public static class DemoDataSeeder
 {
-    public const string DefaultPassword = "Demo@123456";
+    public const string DefaultPassword = "Demo@12345678";
     private const string MarkerUsername = "demo.qlkh";
 
     public static async Task SeedAsync(
@@ -218,7 +218,7 @@ public static class DemoDataSeeder
                 new Notification(lecturer1.Id, "NHAC_HAN", "Bài báo dự báo kết quả học tập sắp đến hạn.",
                     "demo:due:item1", items[0].Id, researchPlanId: plans[0].Id),
                 new Notification(lecturer4.Id, "PHAN_HOI", "Sản phẩm đã được trả lại: bổ sung quyết định giao đề tài.",
-                    "demo:return:product5", scientificProductId: products[4].Id));
+                    "demo:return:product5", researchPlanItemId: items[6].Id, researchPlanId: plans[3].Id));
 
             await db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
@@ -260,7 +260,7 @@ public static class DemoDataSeeder
     private static Product NewArticle(ResearchPlanItem item, Lecturer lecturer, string title,
         string publication, string? index, string? classification) =>
         new(item.Id, lecturer.Id, title, "Dữ liệu minh họa phục vụ kiểm thử nghiệp vụ.", publication,
-            new DateOnly(2026, 10, 15), "DA_XUAT_BAN", index, classification);
+            new DateOnly(2026, 10, 15), null, index, classification);
 
     private static Product NewProject(ResearchPlanItem item, Lecturer lecturer, string title, string level) =>
         new(item.Id, lecturer.Id, title, "Dữ liệu minh họa phục vụ kiểm thử nghiệp vụ.", null,
