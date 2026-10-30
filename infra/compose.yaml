@@ -1,6 +1,6 @@
 services:
   minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: ${MINIO_IMAGE:-coollabsio/minio:RELEASE.2025-10-15T17-29-55Z}
     container_name: research-management-minio
     command: server /data --console-address ":9001"
     environment:
@@ -11,11 +11,6 @@ services:
       - "9001:9001"
     volumes:
       - minio_data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
     restart: unless-stopped
 
   postgres:
@@ -57,13 +52,14 @@ services:
       Minio__UseSsl: "false"
       Seed__AdminUsername: ${SEED_ADMIN_USERNAME:-admin}
       Seed__AdminPassword: ${SEED_ADMIN_PASSWORD:-}
+      Seed__DemoData: ${SEED_DEMO_DATA:-true}
     ports:
       - "8081:8080"
     depends_on:
       postgres:
         condition: service_healthy
       minio:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
 
 volumes:

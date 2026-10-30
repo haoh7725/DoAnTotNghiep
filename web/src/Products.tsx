@@ -526,10 +526,10 @@ function ProductForm({ product, onSubmit, busy, error, planItems }: {
 function CoAuthors({ product, onChanged }: { product: Product; onChanged: () => void }) {
   const [error, setError] = useState('')
   async function add(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault(); const f = new FormData(e.currentTarget)
+    e.preventDefault(); const form = e.currentTarget; const f = new FormData(form)
     try {
       await api(`/products/${product.id}/co-authors`, 'POST', { lecturerId: Number(f.get('lecturerId')), displayOrder: Number(f.get('displayOrder')), authorRole: f.get('authorRole') })
-      e.currentTarget.reset(); onChanged()
+      form.reset(); onChanged()
     } catch (x) { setError((x as Error).message) }
   }
   async function remove(id: number) {
@@ -560,8 +560,8 @@ function CoAuthors({ product, onChanged }: { product: Product; onChanged: () => 
 function Evidences({ product, onChanged }: { product: Product; onChanged: () => void }) {
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
   async function upload(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault(); const data = new FormData(e.currentTarget); setBusy(true)
-    try { await apiForm(`/products/${product.id}/evidences`, data); e.currentTarget.reset(); onChanged() }
+    e.preventDefault(); const form = e.currentTarget; const data = new FormData(form); setBusy(true); setError('')
+    try { await apiForm(`/products/${product.id}/evidences`, data); form.reset(); onChanged() }
     catch (x) { setError((x as Error).message) } finally { setBusy(false) }
   }
   async function remove(id: number) {
