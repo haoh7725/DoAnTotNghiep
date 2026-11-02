@@ -228,7 +228,7 @@ function ProductDetail({ id, user, onBack }: { id: number; user: Profile | null;
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
   const [revision, setRevision] = useState(0)
-  const [tab, setTab] = useState<'info' | 'history' | 'snapshots'>('info')
+  const [tab, setTab] = useState<'info' | 'history' | 'snapshots' | 'feedback'>('info')
 
   useEffect(() => {
     let active = true; setError('')
@@ -270,6 +270,7 @@ function ProductDetail({ id, user, onBack }: { id: number; user: Profile | null;
         <button className={tab === 'info' ? 'active' : ''} onClick={() => setTab('info')}>Thông tin</button>
         <button className={tab === 'history' ? 'active' : ''} onClick={() => setTab('history')}>Lịch sử xét duyệt</button>
         <button className={tab === 'snapshots' ? 'active' : ''} onClick={() => setTab('snapshots')}>Phiên bản</button>
+        <button className={tab === 'feedback' ? 'active' : ''} onClick={() => setTab('feedback')}>Phản hồi QLKH</button>
       </div>
 
       {tab === 'info' && <>
@@ -315,8 +316,30 @@ function ProductDetail({ id, user, onBack }: { id: number; user: Profile | null;
 
       {tab === 'history' && <ReviewHistoryPanel productId={id} key={`hist-${revision}`} />}
       {tab === 'snapshots' && <SnapshotPanel productId={id} key={`snap-${revision}`} />}
+      {tab === 'feedback' && <FeedbackPanel productId={id} user={user} />}
     </>}
   </>
+}
+
+type ProductFeedback = { id: number; senderName: string; content: string; createdAt: string }
+function FeedbackPanel({ productId, user }: { productId: number; user: Profile | null }) {
+  const [items, setItems] = useState<ProductFeedback[]>([])
+  const [content, setContent] = useState('')
+  const [error, setError] = useState('')
+  const canSend = user?.roles.some(x => x.role === 'PHONG_QLKH' || x.role === 'QUAN_TRI') ?? false
+  const load = () => api<ProductFeedback[]>(`/products/${productId}/feedback`).then(setItems).catch(e => setError((e as Error).message))
+  useEffect(() => { void load() }, [productId])
+  async function send(e: FormEvent) {
+    e.preventDefault(); setError('')
+    try { await api(`/products/${productId}/feedback`, 'POST', { content }); setContent(''); await load() }
+    catch (x) { setError((x as Error).message) }
+  }
+  return <section className="panel">
+    <h2>Phản hồi từ Phòng Quản lý khoa học</h2>
+    {error && <p className="alert">{error}</p>}
+    {items.length === 0 ? <p className="empty">Chưa có phản hồi.</p> : <ul>{items.map(x => <li key={x.id}><strong>{x.senderName}</strong> · {new Date(x.createdAt).toLocaleString('vi-VN')}<br />{x.content}</li>)}</ul>}
+    {canSend && <form onSubmit={send}><label>Nội dung phản hồi<textarea value={content} maxLength={2000} required onChange={e => setContent(e.target.value)} /></label><button className="primary" type="submit">Gửi phản hồi</button></form>}
+  </section>
 }
 
 // ── ReviewPanel (for managers) ─────────────────────────────────────────────────

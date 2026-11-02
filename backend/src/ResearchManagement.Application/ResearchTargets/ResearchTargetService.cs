@@ -37,6 +37,7 @@ public sealed class ResearchTargetService(
             await researchTargets.GetByFacultyAndAcademicYearAsync(
                 request.FacultyId,
                 request.AcademicYearId,
+                request.JournalConferenceId,
                 cancellationToken);
 
         if (existing is not null)
@@ -47,7 +48,8 @@ public sealed class ResearchTargetService(
             request.FacultyId,
             request.AcademicYearId,
             request.AssignedArticleCount,
-            request.Deadline);
+            request.Deadline,
+            request.JournalConferenceId);
 
         await researchTargets.AddAsync(researchTarget, cancellationToken);
         await researchTargets.SaveChangesAsync(cancellationToken);
@@ -69,7 +71,8 @@ public sealed class ResearchTargetService(
 
         researchTarget.Update(
             request.AssignedArticleCount,
-            request.Deadline);
+            request.Deadline,
+            request.JournalConferenceId);
 
         await researchTargets.SaveChangesAsync(cancellationToken);
 
@@ -84,6 +87,7 @@ public sealed class ResearchTargetService(
             researchTarget.FacultyId,
             researchTarget.AcademicYearId,
             researchTarget.AssignedArticleCount,
-            researchTarget.Deadline);
+            researchTarget.Deadline,
+            researchTarget.JournalConferenceId);
     }
 }

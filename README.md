@@ -32,6 +32,9 @@ Database đã tồn tại cần áp dụng bảng phiên bản sản phẩm mớ
 ```powershell
 Get-Content -Raw infra/database/02_products_evaluations.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 Get-Content -Raw infra/database/03_product_snapshots.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw infra/database/04_journal_conference_catalog.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw infra/database/05_notification_products.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw infra/database/06_feedback_and_target_catalog.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 ```
 
 Nếu đã thay đổi `POSTGRES_USER` hoặc `POSTGRES_DB` trong `.env`, thay hai giá trị

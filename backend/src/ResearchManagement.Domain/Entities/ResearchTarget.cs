@@ -11,7 +11,8 @@ public sealed class ResearchTarget : BaseEntity
         long facultyId,
         long academicYearId,
         int assignedArticleCount,
-        DateOnly? deadline)
+        DateOnly? deadline,
+        long? journalConferenceId = null)
     {
         if (assignedArticleCount < 0)
         {
@@ -24,6 +25,7 @@ public sealed class ResearchTarget : BaseEntity
         AcademicYearId = academicYearId;
         AssignedArticleCount = assignedArticleCount;
         Deadline = deadline;
+        JournalConferenceId = journalConferenceId;
     }
 
     public long FacultyId { get; private set; }
@@ -33,10 +35,12 @@ public sealed class ResearchTarget : BaseEntity
     public int AssignedArticleCount { get; private set; }
 
     public DateOnly? Deadline { get; private set; }
+    public long? JournalConferenceId { get; private set; }
 
     public void Update(
         int assignedArticleCount,
-        DateOnly? deadline)
+        DateOnly? deadline,
+        long? journalConferenceId = null)
     {
         if (assignedArticleCount < 0)
         {
@@ -47,5 +51,6 @@ public sealed class ResearchTarget : BaseEntity
 
         AssignedArticleCount = assignedArticleCount;
         Deadline = deadline;
+        JournalConferenceId = journalConferenceId;
     }
 }

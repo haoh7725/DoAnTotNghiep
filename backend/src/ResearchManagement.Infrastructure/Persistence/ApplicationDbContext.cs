@@ -43,6 +43,7 @@ public sealed class ApplicationDbContext(
     public DbSet<ProductEvidence> ProductEvidences => Set<ProductEvidence>();
     public DbSet<ReviewHistory> ReviewHistories => Set<ReviewHistory>();
     public DbSet<ProductSnapshot> ProductSnapshots => Set<ProductSnapshot>();
+    public DbSet<ProductFeedback> ProductFeedbacks => Set<ProductFeedback>();
 
     // Conversion rules
     public DbSet<ConversionRule> ConversionRules => Set<ConversionRule>();

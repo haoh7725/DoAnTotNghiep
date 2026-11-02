@@ -30,11 +30,14 @@ public sealed class ResearchTargetConfiguration
 
         builder.Property(x => x.Deadline)
             .HasColumnName("han_hoan_thanh");
+        builder.Property(x => x.JournalConferenceId).HasColumnName("tap_chi_hoi_nghi_id");
+        builder.HasOne<JournalConference>().WithMany().HasForeignKey(x => x.JournalConferenceId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(x => new
         {
             x.FacultyId,
-            x.AcademicYearId
+            x.AcademicYearId,
+            x.JournalConferenceId
         })
         .IsUnique();
     }

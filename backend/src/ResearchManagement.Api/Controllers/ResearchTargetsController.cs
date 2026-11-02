@@ -51,7 +51,7 @@ public sealed class ResearchTargetsController(
     }
 
     [HttpPost]
-    [Authorize(Policy = Policies.ResearchOffice)]
+    [Authorize(Roles = "TRUONG_KHOA,PHONG_QLKH,QUAN_TRI")]
     public async Task<ActionResult<ResearchTargetResponse>> Create(
         CreateResearchTargetRequest request,
         CancellationToken cancellationToken)
@@ -60,6 +60,8 @@ public sealed class ResearchTargetsController(
             throw new ForbiddenException("Không có quyền tạo chỉ tiêu cho khoa này.");
         if (!await db.Faculties.AnyAsync(x => x.Id == request.FacultyId, cancellationToken))
             throw new NotFoundException("Không tìm thấy khoa.");
+        if (request.JournalConferenceId.HasValue && !await db.JournalConferences.AnyAsync(x => x.Id == request.JournalConferenceId, cancellationToken))
+            throw new NotFoundException("Không tìm thấy tạp chí/hội nghị.");
 
         var result = await researchTargetService.CreateAsync(
             request,
@@ -72,7 +74,7 @@ public sealed class ResearchTargetsController(
     }
 
     [HttpPut("{id:long}")]
-    [Authorize(Policy = Policies.ResearchOffice)]
+    [Authorize(Roles = "TRUONG_KHOA,PHONG_QLKH,QUAN_TRI")]
     public async Task<ActionResult<ResearchTargetResponse>> Update(
         long id,
         UpdateResearchTargetRequest request,
@@ -83,6 +85,8 @@ public sealed class ResearchTargetsController(
             ?? throw new NotFoundException("Không tìm thấy chỉ tiêu NCKH.");
         if (!currentUser.CanAccess(target.FacultyId, null))
             throw new ForbiddenException("Không có quyền cập nhật chỉ tiêu của khoa này.");
+        if (request.JournalConferenceId.HasValue && !await db.JournalConferences.AnyAsync(x => x.Id == request.JournalConferenceId, cancellationToken))
+            throw new NotFoundException("Không tìm thấy tạp chí/hội nghị.");
 
         var result = await researchTargetService.UpdateAsync(
             id,
