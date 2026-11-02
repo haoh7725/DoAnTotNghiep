@@ -10,7 +10,9 @@ type Target = {
   academicYearId: number
   assignedArticleCount: number
   deadline: string | null
+  journalConferenceId: number | null
 }
+type JournalConference = { id: number; name: string; type: string }
 
 type Allocation = {
   id: number
@@ -29,6 +31,7 @@ type Props = {
 export function ResearchTargets({ lookups, canEdit }: Props) {
   const [targets, setTargets] = useState<Target[]>([])
   const [allocations, setAllocations] = useState<Allocation[]>([])
+  const [catalog, setCatalog] = useState<JournalConference[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -73,6 +76,7 @@ export function ResearchTargets({ lookups, canEdit }: Props) {
 
   useEffect(() => {
     void loadTargets()
+    api<JournalConference[]>('/journal-conferences').then(setCatalog).catch(() => setCatalog([]))
   }, [])
 
   useEffect(() => {
@@ -115,12 +119,13 @@ export function ResearchTargets({ lookups, canEdit }: Props) {
     const deadline = String(form.get('deadline') || '') || null
 
     const body = editingTarget
-      ? { assignedArticleCount: count, deadline }
+      ? { assignedArticleCount: count, deadline, journalConferenceId: Number(form.get('journalConferenceId')) || null }
       : {
           facultyId: Number(form.get('facultyId')),
           academicYearId: Number(form.get('academicYearId')),
           assignedArticleCount: count,
           deadline,
+          journalConferenceId: Number(form.get('journalConferenceId')) || null,
         }
 
     setBusy(true)
@@ -291,7 +296,7 @@ export function ResearchTargets({ lookups, canEdit }: Props) {
                   <tr key={target.id}>
                     <td>{facultyName(target.facultyId)}</td>
                     <td>{yearName(target.academicYearId)}</td>
-                    <td>{target.assignedArticleCount}</td>
+                    <td>{target.assignedArticleCount}{target.journalConferenceId ? ` · ${catalog.find(x => x.id === target.journalConferenceId)?.name ?? 'Danh mục đã xóa'}` : ''}</td>
                     <td>{target.deadline || 'Chưa quy định'}</td>
                     <td>
                       <button
@@ -355,6 +360,14 @@ export function ResearchTargets({ lookups, canEdit }: Props) {
                 {yearName(editingTarget.academicYearId)}
               </p>
             )}
+
+            <label>
+              Tạp chí/hội nghị liên kết (không bắt buộc)
+              <select name="journalConferenceId" defaultValue={editingTarget?.journalConferenceId ?? ''}>
+                <option value="">-- Chỉ tiêu chung --</option>
+                {catalog.map(x => <option key={x.id} value={x.id}>{x.type === 'TAP_CHI' ? 'Tạp chí' : 'Hội nghị'} — {x.name}</option>)}
+              </select>
+            </label>
 
             <label>
               Số bài báo được giao

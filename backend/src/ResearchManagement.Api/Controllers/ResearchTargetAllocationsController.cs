@@ -48,7 +48,7 @@ public sealed class ResearchTargetAllocationsController(
     }
 
     [HttpPost]
-    [Authorize(Policy = Policies.ResearchOffice)]
+    [Authorize(Roles = "TRUONG_KHOA,PHONG_QLKH,QUAN_TRI")]
     public async Task<ActionResult<ResearchTargetAllocationResponse>> Create(
         CreateResearchTargetAllocationRequest request,
         CancellationToken cancellationToken)
@@ -64,7 +64,7 @@ public sealed class ResearchTargetAllocationsController(
     }
 
     [HttpPut("{id:long}")]
-    [Authorize(Policy = Policies.ResearchOffice)]
+    [Authorize(Roles = "TRUONG_KHOA,PHONG_QLKH,QUAN_TRI")]
     public async Task<ActionResult<ResearchTargetAllocationResponse>> Update(
         long id,
         UpdateResearchTargetAllocationRequest request,

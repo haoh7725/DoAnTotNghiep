@@ -11,6 +11,7 @@ public interface IResearchTargetRepository
     Task<ResearchTarget?> GetByFacultyAndAcademicYearAsync(
         long facultyId,
         long academicYearId,
+        long? journalConferenceId,
         CancellationToken cancellationToken);
 
     Task<List<ResearchTarget>> GetAllAsync(

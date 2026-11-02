@@ -67,7 +67,7 @@ public sealed class JournalConferencesController(
     }
 
     [HttpPost]
-    [Authorize(Policy = Policies.ResearchOffice)]
+    [Authorize(Roles = "TRUONG_KHOA,PHONG_QLKH,QUAN_TRI")]
     public async Task<IActionResult> Create(
         [FromBody] JournalConferenceRequest request,
         CancellationToken ct)
@@ -105,7 +105,7 @@ public sealed class JournalConferencesController(
     }
 
     [HttpPut("{id:long}")]
-    [Authorize(Policy = Policies.ResearchOffice)]
+    [Authorize(Roles = "TRUONG_KHOA,PHONG_QLKH,QUAN_TRI")]
     public async Task<IActionResult> Update(
         long id,
         [FromBody] JournalConferenceRequest request,
