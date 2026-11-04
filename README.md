@@ -27,6 +27,12 @@ File minh chứng được lưu trong MinIO tại bucket `research-evidences`; d
 được giữ bền vững bằng volume `minio_data`. Giao diện quản trị MinIO ở
 `http://localhost:9001` và dùng tài khoản trong `.env`.
 
+Kiểm tra tương đồng dùng Copyleaks theo luồng bất đồng bộ. Điền các biến
+`COPYLEAKS_*` trong `.env`; để `COPYLEAKS_SANDBOX=true` trong lúc phát triển.
+`COPYLEAKS_PUBLIC_BASE_URL` phải là HTTPS công khai để Copyleaks gọi webhook
+(khi chạy local cần một tunnel HTTPS).
+Xem hướng dẫn đầy đủ tại [docs/COPYLEAKS_KIEM_TRA_TUONG_DONG.md](docs/COPYLEAKS_KIEM_TRA_TUONG_DONG.md).
+
 Database đã tồn tại cần áp dụng bảng phiên bản sản phẩm mới một lần (giữ nguyên dữ liệu):
 
 ```powershell
@@ -35,6 +41,7 @@ Get-Content -Raw infra/database/03_product_snapshots.sql | docker exec -i resear
 Get-Content -Raw infra/database/04_journal_conference_catalog.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 Get-Content -Raw infra/database/05_notification_products.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 Get-Content -Raw infra/database/06_feedback_and_target_catalog.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw infra/database/07_plagiarism_checks.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 ```
 
 Nếu đã thay đổi `POSTGRES_USER` hoặc `POSTGRES_DB` trong `.env`, thay hai giá trị

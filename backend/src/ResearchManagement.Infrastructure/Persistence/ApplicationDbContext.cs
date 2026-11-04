@@ -44,6 +44,7 @@ public sealed class ApplicationDbContext(
     public DbSet<ReviewHistory> ReviewHistories => Set<ReviewHistory>();
     public DbSet<ProductSnapshot> ProductSnapshots => Set<ProductSnapshot>();
     public DbSet<ProductFeedback> ProductFeedbacks => Set<ProductFeedback>();
+    public DbSet<PlagiarismCheck> PlagiarismChecks => Set<PlagiarismCheck>();
 
     // Conversion rules
     public DbSet<ConversionRule> ConversionRules => Set<ConversionRule>();

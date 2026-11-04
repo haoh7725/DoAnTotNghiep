@@ -92,6 +92,7 @@ app.UseCors("WebClient");
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/api") &&
+        !context.Request.Path.StartsWithSegments("/api/integrations/copyleaks/webhooks") &&
         !HttpMethods.IsGet(context.Request.Method) &&
         !HttpMethods.IsHead(context.Request.Method) &&
         !HttpMethods.IsOptions(context.Request.Method) &&
