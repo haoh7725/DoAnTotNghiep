@@ -27,6 +27,10 @@ services:
       - ./database/01_schema_postgresql.sql:/docker-entrypoint-initdb.d/01_schema_postgresql.sql:ro
       - ./database/02_products_evaluations.sql:/docker-entrypoint-initdb.d/02_products_evaluations.sql:ro
       - ./database/03_product_snapshots.sql:/docker-entrypoint-initdb.d/03_product_snapshots.sql:ro
+      - ./database/04_journal_conference_catalog.sql:/docker-entrypoint-initdb.d/04_journal_conference_catalog.sql:ro
+      - ./database/05_notification_products.sql:/docker-entrypoint-initdb.d/05_notification_products.sql:ro
+      - ./database/06_feedback_and_target_catalog.sql:/docker-entrypoint-initdb.d/06_feedback_and_target_catalog.sql:ro
+      - ./database/07_plagiarism_checks.sql:/docker-entrypoint-initdb.d/07_plagiarism_checks.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -53,6 +57,11 @@ services:
       Seed__AdminUsername: ${SEED_ADMIN_USERNAME:-admin}
       Seed__AdminPassword: ${SEED_ADMIN_PASSWORD:-}
       Seed__DemoData: ${SEED_DEMO_DATA:-true}
+      Copyleaks__Email: ${COPYLEAKS_EMAIL:-}
+      Copyleaks__ApiKey: ${COPYLEAKS_API_KEY:-}
+      Copyleaks__PublicBaseUrl: ${COPYLEAKS_PUBLIC_BASE_URL:-}
+      Copyleaks__WebhookSecret: ${COPYLEAKS_WEBHOOK_SECRET:-}
+      Copyleaks__Sandbox: ${COPYLEAKS_SANDBOX:-true}
     ports:
       - "8081:8080"
     depends_on:

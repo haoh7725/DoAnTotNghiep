@@ -28,6 +28,9 @@ using ResearchManagement.Infrastructure.Auth;
 using ResearchManagement.Infrastructure.Persistence;
 using ResearchManagement.Infrastructure.Persistence.Repositories;
 using ResearchManagement.Infrastructure.Storage;
+using ResearchManagement.Infrastructure.Plagiarism;
+using ResearchManagement.Application.Plagiarism;
+using ResearchManagement.Application.Plagiarism.Abstractions;
 using Minio;
 
 namespace ResearchManagement.Infrastructure;
@@ -55,6 +58,10 @@ public static class DependencyInjection
             .WithSSL(minio.UseSsl)
             .Build());
         services.AddSingleton<IFileStorage, MinioFileStorage>();
+        services.AddMemoryCache();
+        var copyleaks = CopyleaksOptions.FromConfiguration(configuration);
+        services.AddSingleton(copyleaks);
+        services.AddHttpClient<IPlagiarismProvider, CopyleaksPlagiarismProvider>();
 
         // Authentication
         services.AddScoped<IAccountRepository, AccountRepository>();
@@ -102,6 +109,8 @@ public static class DependencyInjection
         services.AddScoped<ProductService>();
         services.AddScoped<CoAuthorService>();
         services.AddScoped<EvidenceService>();
+        services.AddScoped<IPlagiarismCheckRepository, PlagiarismCheckRepository>();
+        services.AddScoped<PlagiarismCheckService>();
 
         return services;
     }

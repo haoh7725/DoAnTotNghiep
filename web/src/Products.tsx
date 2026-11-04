@@ -12,6 +12,7 @@ type Product = Summary & { submittedByLecturerId: number; submittedByLecturerFul
 type PlanItem = { id: number; name: string; productTypeName: string; academicYearCode: string; status: string }
 type ReviewHistory = { id: number; productId: number; actorAccountId: number; actorUsername: string; fromStatus: string; toStatus: string; comment: string | null; occurredAt: string }
 type ProductSnapshot = { productId: number; version: number; snapshotByAccountId: number; snapshotAt: string; title: string; description: string | null; publicationInfo: string | null; publishedDate: string | null; articleStatus: string | null; journalIndex: string | null; journalClassification: string | null; projectLevel: string | null; status: string }
+type PlagiarismCheck = { id: number; productId: number; evidenceId: number | null; provider: string; status: string; similarityScore: number | null; matchedSourceCount: number | null; totalWords: number | null; creditsUsed: number | null; reportUrl: string | null; errorMessage: string | null; requestedByAccountId: number; createdAt: string; startedAt: string | null; completedAt: string | null }
 
 // ── Lookup maps ────────────────────────────────────────────────────────────────
 const workflow: Record<string, string> = {
@@ -228,7 +229,7 @@ function ProductDetail({ id, user, onBack }: { id: number; user: Profile | null;
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
   const [revision, setRevision] = useState(0)
-  const [tab, setTab] = useState<'info' | 'history' | 'snapshots' | 'feedback'>('info')
+  const [tab, setTab] = useState<'info' | 'plagiarism' | 'history' | 'snapshots' | 'feedback'>('info')
 
   useEffect(() => {
     let active = true; setError('')
@@ -268,6 +269,7 @@ function ProductDetail({ id, user, onBack }: { id: number; user: Profile | null;
       {/* Tab bar */}
       <div className="tabs">
         <button className={tab === 'info' ? 'active' : ''} onClick={() => setTab('info')}>Thông tin</button>
+        <button className={tab === 'plagiarism' ? 'active' : ''} onClick={() => setTab('plagiarism')}>Kiểm tra tương đồng</button>
         <button className={tab === 'history' ? 'active' : ''} onClick={() => setTab('history')}>Lịch sử xét duyệt</button>
         <button className={tab === 'snapshots' ? 'active' : ''} onClick={() => setTab('snapshots')}>Phiên bản</button>
         <button className={tab === 'feedback' ? 'active' : ''} onClick={() => setTab('feedback')}>Phản hồi QLKH</button>
@@ -315,9 +317,83 @@ function ProductDetail({ id, user, onBack }: { id: number; user: Profile | null;
       </>}
 
       {tab === 'history' && <ReviewHistoryPanel productId={id} key={`hist-${revision}`} />}
+      {tab === 'plagiarism' && <PlagiarismPanel product={p} />}
       {tab === 'snapshots' && <SnapshotPanel productId={id} key={`snap-${revision}`} />}
       {tab === 'feedback' && <FeedbackPanel productId={id} user={user} />}
     </>}
+  </>
+}
+
+const plagiarismStatus: Record<string, string> = {
+  CHO_XU_LY: 'Chờ xử lý', DANG_GUI: 'Đang gửi', DANG_KIEM_TRA: 'Đang kiểm tra',
+  HOAN_THANH: 'Hoàn thành', THAT_BAI: 'Thất bại', DA_HUY: 'Đã hủy',
+}
+
+function PlagiarismPanel({ product }: { product: Product }) {
+  const [items, setItems] = useState<PlagiarismCheck[]>([])
+  const [evidenceId, setEvidenceId] = useState('')
+  const [consent, setConsent] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const supported = product.evidences.filter(x => /\.(pdf|docx?|txt)$/i.test(x.originalFileName))
+  const load = () => api<PlagiarismCheck[]>(`/products/${product.id}/plagiarism-checks`)
+    .then(setItems).catch(e => setError((e as Error).message))
+
+  useEffect(() => { void load() }, [product.id])
+  useEffect(() => {
+    if (!items.some(x => ['CHO_XU_LY', 'DANG_GUI', 'DANG_KIEM_TRA'].includes(x.status))) return
+    const timer = window.setInterval(() => void load(), 5000)
+    return () => window.clearInterval(timer)
+  }, [items, product.id])
+
+  async function submit(e: FormEvent) {
+    e.preventDefault(); setBusy(true); setError('')
+    try {
+      await api(`/products/${product.id}/plagiarism-checks`, 'POST', { evidenceId: Number(evidenceId), consent })
+      setConsent(false); await load()
+    } catch (x) { setError((x as Error).message) }
+    finally { setBusy(false) }
+  }
+
+  return <>
+    <section className="panel plagiarism-intro">
+      <h2>Kiểm tra tương đồng với Copyleaks</h2>
+      <p className="muted">Kết quả là tỷ lệ nội dung tương đồng, không phải kết luận tự động về đạo văn. Người xét duyệt cần xem các nguồn và ngữ cảnh trích dẫn.</p>
+      {error && <p className="alert" role="alert">{error}</p>}
+      {editable(product) ? <form className="plagiarism-form" onSubmit={submit}>
+        <label>Tài liệu
+          <select required value={evidenceId} onChange={e => setEvidenceId(e.target.value)}>
+            <option value="">Chọn PDF, DOC, DOCX hoặc TXT</option>
+            {supported.map(x => <option key={x.id} value={x.id}>{x.originalFileName}</option>)}
+          </select>
+        </label>
+        <label className="consent-check">
+          <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} required />
+          Tôi đồng ý gửi tài liệu này đến Copyleaks để phân tích tương đồng.
+        </label>
+        <button className="primary" disabled={busy || !evidenceId || !consent}>{busy ? 'Đang gửi…' : 'Kiểm tra tương đồng'}</button>
+        {!supported.length && <p className="muted">Hãy tải lên một tệp PDF, DOC, DOCX hoặc TXT trong phần Minh chứng trước.</p>}
+      </form> : <p className="muted">Sản phẩm đã gửi duyệt; bạn có thể xem các kết quả đã có.</p>}
+    </section>
+    <section className="panel">
+      <div className="section-top"><h2>Lịch sử kiểm tra</h2><button onClick={() => void load()}>Làm mới</button></div>
+      {!items.length ? <p className="empty">Chưa có lần kiểm tra nào.</p> : <div className="plagiarism-list">
+        {items.map(x => {
+          const file = product.evidences.find(e => e.id === x.evidenceId)
+          const scoreClass = x.similarityScore === null ? '' : x.similarityScore < 20 ? 'low' : x.similarityScore < 40 ? 'medium' : 'high'
+          return <article className="plagiarism-item" key={x.id}>
+            <div className={`similarity-score ${scoreClass}`}>{x.similarityScore === null ? '—' : `${x.similarityScore}%`}</div>
+            <div className="plagiarism-body">
+              <strong>{file?.originalFileName ?? `Minh chứng #${x.evidenceId ?? 'đã xóa'}`}</strong>
+              <p><span className={`scan-status scan-status--${x.status.toLowerCase()}`}>{plagiarismStatus[x.status] ?? x.status}</span> · Copyleaks · {new Date(x.createdAt).toLocaleString('vi-VN')}</p>
+              {x.status === 'HOAN_THANH' && <p>{x.matchedSourceCount ?? 0} nguồn · {x.totalWords ?? 0} từ · {x.creditsUsed ?? 0} credit</p>}
+              {x.errorMessage && <p className="scan-error">{x.errorMessage}</p>}
+              {x.reportUrl?.startsWith('http') && <a href={x.reportUrl} target="_blank" rel="noreferrer">Xem báo cáo Copyleaks ↗</a>}
+            </div>
+          </article>
+        })}
+      </div>}
+    </section>
   </>
 }
 
