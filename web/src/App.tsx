@@ -37,6 +37,10 @@ export default function App() {
   const canEditResearchTargets = user?.roles.some(p =>
     ['PHONG_QLKH', 'QUAN_TRI'].includes(p.role)
   ) ?? false
+
+  const canEditResearchAllocations = user?.roles.some(p =>
+    ['TRUONG_KHOA', 'PHONG_QLKH', 'QUAN_TRI'].includes(p.role)
+  ) ?? false
   const canViewJournalConferences = user?.roles.some(p =>
     ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'BAN_GIAM_HIEU', 'QUAN_TRI'].includes(p.role)
   ) ?? false
@@ -281,7 +285,11 @@ export default function App() {
       {tab === 'research-norms' && (canViewResearchNorms ? <ResearchNorms academicYears={lookups?.academicYears ?? []} canEdit={canEditResearchNorms} /> : <p role="alert">Bạn không có quyền xem định mức NCKH.</p>)}
       {tab === 'research-targets' && (
         canViewResearchTargets
-          ? <ResearchTargets lookups={lookups} canEdit={canEditResearchTargets} />
+          ? <ResearchTargets
+            lookups={lookups}
+            canEdit={canEditResearchTargets}
+            canEditAllocations={canEditResearchAllocations}
+          />
           : <p role="alert">Bạn không có quyền xem chỉ tiêu NCKH.</p>
       )}
       {tab === 'journal-conferences' && (

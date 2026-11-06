@@ -26,9 +26,15 @@ type Allocation = {
 type Props = {
   lookups: Lookups | null
   canEdit: boolean
+  canEditAllocations: boolean
+
 }
 
-export function ResearchTargets({ lookups, canEdit }: Props) {
+export function ResearchTargets({
+  lookups,
+  canEdit,
+  canEditAllocations,
+}: Props) {
   const [targets, setTargets] = useState<Target[]>([])
   const [allocations, setAllocations] = useState<Allocation[]>([])
   const [catalog, setCatalog] = useState<JournalConference[]>([])
@@ -121,12 +127,12 @@ export function ResearchTargets({ lookups, canEdit }: Props) {
     const body = editingTarget
       ? { assignedArticleCount: count, deadline, journalConferenceId: Number(form.get('journalConferenceId')) || null }
       : {
-          facultyId: Number(form.get('facultyId')),
-          academicYearId: Number(form.get('academicYearId')),
-          assignedArticleCount: count,
-          deadline,
-          journalConferenceId: Number(form.get('journalConferenceId')) || null,
-        }
+        facultyId: Number(form.get('facultyId')),
+        academicYearId: Number(form.get('academicYearId')),
+        assignedArticleCount: count,
+        deadline,
+        journalConferenceId: Number(form.get('journalConferenceId')) || null,
+      }
 
     setBusy(true)
     setError('')
@@ -152,7 +158,7 @@ export function ResearchTargets({ lookups, canEdit }: Props) {
 
   async function saveAllocation(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (!canEdit || busy || !selectedTarget) return
+    if (!canEditAllocations || busy || !selectedTarget) return
 
     const form = new FormData(e.currentTarget)
     const count = Number(form.get('allocatedArticleCount'))
@@ -171,12 +177,12 @@ export function ResearchTargets({ lookups, canEdit }: Props) {
     const body = editingAllocation
       ? { allocatedArticleCount: count, allocationDate }
       : {
-          researchTargetId: selectedTarget.id,
-          facultyId: selectedTarget.facultyId,
-          departmentId: Number(form.get('departmentId')),
-          allocatedArticleCount: count,
-          allocationDate,
-        }
+        researchTargetId: selectedTarget.id,
+        facultyId: selectedTarget.facultyId,
+        departmentId: Number(form.get('departmentId')),
+        allocatedArticleCount: count,
+        allocationDate,
+      }
 
     setBusy(true)
     setError('')
@@ -409,7 +415,7 @@ export function ResearchTargets({ lookups, canEdit }: Props) {
       <section className="panel">
         <div className="section-heading">
           <h2>Phân bổ chỉ tiêu theo bộ môn</h2>
-          {canEdit && selectedTarget && (
+          {canEditAllocations && selectedTarget && (
             <button
               type="button"
               className="primary"
@@ -459,7 +465,7 @@ export function ResearchTargets({ lookups, canEdit }: Props) {
                         <td>{item.allocatedArticleCount}</td>
                         <td>{item.allocationDate}</td>
                         <td>
-                          {canEdit ? (
+                          {canEditAllocations ? (
                             <button
                               type="button"
                               onClick={() => openEditAllocation(item)}
@@ -478,7 +484,7 @@ export function ResearchTargets({ lookups, canEdit }: Props) {
         )}
       </section>
 
-      {canEdit && allocationFormOpen && selectedTarget && (
+      {canEditAllocations && allocationFormOpen && selectedTarget && (
         <section className="panel">
           <h2>
             {editingAllocation ? 'Sửa phân bổ' : 'Thêm phân bổ'}
