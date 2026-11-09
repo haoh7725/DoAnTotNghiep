@@ -40,18 +40,19 @@ public static class DemoDataSeeder
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var environment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
         var fileStorage = scope.ServiceProvider.GetRequiredService<IFileStorage>();
+        var passwordService = scope.ServiceProvider.GetRequiredService<IPasswordService>();
         var existingMarker = await db.Accounts.SingleOrDefaultAsync(
             x => x.Username == MarkerUsername, cancellationToken);
         if (existingMarker is not null)
         {
             await using var supplementTransaction = await db.Database.BeginTransactionAsync(cancellationToken);
             await EnsureExtendedDemoDataAsync(db, existingMarker.Id, cancellationToken);
+            await EnsureLargeSampleDataAsync(db, passwordService, cancellationToken);
             await supplementTransaction.CommitAsync(cancellationToken);
             logger.LogInformation("Đã kiểm tra và bổ sung dữ liệu mẫu còn thiếu.");
             return;
         }
 
-        var passwordService = scope.ServiceProvider.GetRequiredService<IPasswordService>();
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
         try
@@ -296,6 +297,7 @@ public static class DemoDataSeeder
 
             await db.SaveChangesAsync(cancellationToken);
             await EnsureExtendedDemoDataAsync(db, researchOffice.Id, cancellationToken);
+            await EnsureLargeSampleDataAsync(db, passwordService, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             logger.LogInformation("Đã tạo dữ liệu mẫu nghiệp vụ thành công.");
         }
@@ -502,6 +504,149 @@ public static class DemoDataSeeder
                     evaluation.Finalize("HOAN_THANH_TOT", "Có sản phẩm khoa học đã duyệt và đạt định mức minh họa.");
             }
         }
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Tạo tập dữ liệu đủ lớn để biểu diễn một hệ thống đang vận hành: 2 khoa,
+    /// 6 bộ môn, 32 giảng viên, 3 năm học, 72 kế hoạch và 144 sản phẩm.
+    /// Các bản ghi được đánh dấu bằng tên đăng nhập seed.gv* để có thể chạy lặp lại.
+    /// </summary>
+    private static async Task EnsureLargeSampleDataAsync(
+        ApplicationDbContext db,
+        IPasswordService passwordService,
+        CancellationToken cancellationToken)
+    {
+        if (await db.Accounts.AnyAsync(x => x.Username == "seed.gv09", cancellationToken))
+            return;
+
+        var dataFaculty = await db.Faculties.SingleOrDefaultAsync(x => x.Code == "KDL", cancellationToken);
+        if (dataFaculty is null)
+        {
+            dataFaculty = new Faculty("KDL", "Khoa Khoa học Dữ liệu");
+            db.Faculties.Add(dataFaculty);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        var currentFaculty = await db.Faculties.SingleAsync(x => x.Code == "CNTT", cancellationToken);
+        var departmentSpecs = new[]
+        {
+            (currentFaculty.Id, "MMT", "Bộ môn Mạng máy tính"),
+            (currentFaculty.Id, "ATTT", "Bộ môn An toàn thông tin"),
+            (dataFaculty.Id, "KPDL", "Bộ môn Khai phá dữ liệu"),
+            (dataFaculty.Id, "TTNT", "Bộ môn Trí tuệ nhân tạo"),
+            (dataFaculty.Id, "PTDL", "Bộ môn Phân tích dữ liệu")
+        };
+        foreach (var (facultyId, code, name) in departmentSpecs)
+        {
+            if (!await db.Departments.AnyAsync(x => x.Code == code, cancellationToken))
+                db.Departments.Add(new Department { FacultyId = facultyId, Code = code, Name = name });
+        }
+        await db.SaveChangesAsync(cancellationToken);
+
+        var years = new[]
+        {
+            ("2024-2025", new DateOnly(2024, 8, 1), new DateOnly(2025, 7, 31)),
+            ("2025-2026", new DateOnly(2025, 8, 1), new DateOnly(2026, 7, 31)),
+            ("2026-2027", new DateOnly(2026, 8, 1), new DateOnly(2027, 7, 31))
+        };
+        foreach (var (code, start, end) in years)
+        {
+            if (!await db.AcademicYears.AnyAsync(x => x.Code == code, cancellationToken))
+                db.AcademicYears.Add(new AcademicYear { Code = code, StartDate = start, EndDate = end });
+        }
+        await db.SaveChangesAsync(cancellationToken);
+
+        var departments = await db.Departments.OrderBy(x => x.Id).ToListAsync(cancellationToken);
+        var names = new[]
+        {
+            "Ngô Hoàng Phúc", "Lương Mỹ Duyên", "Đỗ Quốc Huy", "Phan Bảo Trâm",
+            "Hoàng Gia Hân", "Vũ Minh Khoa", "Trịnh Thanh Thảo", "Đinh Quốc Khánh",
+            "Mai Thu Phương", "Hồ Nhật Quang", "Nguyễn Bích Ngọc", "Trần Đức Long",
+            "Lê Hoài An", "Phạm Văn Hòa", "Đoàn Minh Tâm", "Bùi Thu Hà",
+            "Nguyễn Quốc Đạt", "Tạ Ngọc Diệp", "Võ Thanh Bình", "Huỳnh Gia Linh",
+            "Lý Minh Châu", "Trương Đức Thịnh", "Cao Phương Nam", "Dương Khả Vy"
+        };
+        var newAccounts = new List<Account>();
+        for (var i = 0; i < names.Length; i++)
+        {
+            var ordinal = i + 9;
+            var account = new Account($"seed.gv{ordinal:D2}", string.Empty, names[i], $"gv{ordinal:D2}@huit.edu.vn");
+            account.SetPasswordHash(passwordService.Hash(account, DefaultPassword));
+            account.AddRole(new RoleAssignment(Roles.Lecturer, Scopes.Personal));
+            newAccounts.Add(account);
+        }
+        db.Accounts.AddRange(newAccounts);
+        await db.SaveChangesAsync(cancellationToken);
+
+        var newLecturers = new List<Lecturer>();
+        for (var i = 0; i < newAccounts.Count; i++)
+        {
+            var ordinal = i + 9;
+            var department = departments[i % departments.Count];
+            var degree = i % 3 == 0 ? "TIẾN SĨ" : "THẠC SĨ";
+            var rank = i % 7 == 0 ? "PGS" : null;
+            newLecturers.Add(new Lecturer(
+                department.Id, newAccounts[i].Id, $"GV{ordinal:D3}", names[i],
+                new DateOnly(1982 + (i % 13), 1 + (i % 12), 1 + (i % 25)),
+                i % 2 == 0 ? "NAM" : "NỮ", $"gv{ordinal:D2}@huit.edu.vn", $"0902{ordinal:D6}",
+                rank, degree, i % 3 == 0 ? "Giảng viên chính" : "Giảng viên"));
+        }
+        db.Lecturers.AddRange(newLecturers);
+        await db.SaveChangesAsync(cancellationToken);
+
+        var types = await EnsureProductTypesAsync(db, cancellationToken);
+        var academicYears = await db.AcademicYears.OrderBy(x => x.StartDate).ToListAsync(cancellationToken);
+        var plans = new List<ResearchPlan>();
+        foreach (var lecturer in newLecturers)
+        foreach (var year in academicYears)
+        {
+            var plan = new ResearchPlan(lecturer.Id, year.Id, 2, year.StartDate.AddDays(25), year.EndDate.AddDays(-30));
+            plan.Submit();
+            plans.Add(plan);
+        }
+        db.ResearchPlans.AddRange(plans);
+        await db.SaveChangesAsync(cancellationToken);
+
+        var planItems = new List<ResearchPlanItem>();
+        foreach (var plan in plans)
+        {
+            var lecturer = newLecturers.Single(x => x.Id == plan.LecturerId);
+            var year = academicYears.Single(x => x.Id == plan.AcademicYearId);
+            planItems.Add(new ResearchPlanItem(plan.Id, types["BAI_BAO"].Id,
+                $"Bài báo chuyên ngành của {lecturer.FullName} ({year.Code})", 1, year.EndDate.AddDays(-90)));
+            planItems.Add(new ResearchPlanItem(plan.Id, types["DE_TAI"].Id,
+                $"Đề tài ứng dụng số của {lecturer.FullName} ({year.Code})", 1, year.EndDate.AddDays(-30)));
+        }
+        db.ResearchPlanItems.AddRange(planItems);
+        await db.SaveChangesAsync(cancellationToken);
+
+        var products = new List<Product>();
+        for (var i = 0; i < planItems.Count; i++)
+        {
+            var item = planItems[i];
+            var plan = plans.Single(x => x.Id == item.ResearchPlanId);
+            var lecturer = newLecturers.Single(x => x.Id == plan.LecturerId);
+            var isArticle = item.ProductTypeId == types["BAI_BAO"].Id;
+            var product = isArticle
+                ? NewArticle(item, lecturer, $"Nghiên cứu {i + 1}: Giải pháp chuyển đổi số trong giáo dục", "Tạp chí/Kỷ yếu khoa học", i % 2 == 0 ? "SCOPUS" : "TRONG_NUOC", i % 2 == 0 ? "Q3" : "UY_TIN")
+                : NewProject(item, lecturer, $"Đề tài {i + 1}: Nền tảng dữ liệu hỗ trợ quản trị", i % 2 == 0 ? "CẤP_TRƯỜNG" : "CẤP_KHOA");
+            switch (i % 7)
+            {
+                case 1: product.Submit(); break;
+                case 2: product.Submit(); product.Approve(ProductStatuses.DepartmentHeadApproved); break;
+                case 3: product.Submit(); product.Approve(ProductStatuses.DepartmentHeadApproved); product.Approve(ProductStatuses.FacultyDeanApproved); break;
+                case 4: product.Submit(); product.Return(); break;
+                case 5: product.Submit(); product.Approve(ProductStatuses.DepartmentHeadApproved); product.Approve(ProductStatuses.FacultyDeanApproved); product.Approve(ProductStatuses.ResearchOfficeApproved); break;
+                case 6: product.Submit(); product.Approve(ProductStatuses.DepartmentHeadApproved); product.Approve(ProductStatuses.FacultyDeanApproved); product.Approve(ProductStatuses.ResearchOfficeApproved); product.Approve(ProductStatuses.Approved, 120m); break;
+            }
+            products.Add(product);
+        }
+        db.Products.AddRange(products);
+        await db.SaveChangesAsync(cancellationToken);
+
+        db.ScientificProfiles.AddRange(newLecturers.Select(lecturer =>
+            new ScientificProfile(lecturer.Id, "Công nghệ thông tin", "Chuyển đổi số và dữ liệu", "Nghiên cứu ứng dụng", "Hồ sơ NCKH được khởi tạo phục vụ dữ liệu vận hành.", DateTimeOffset.UtcNow)));
         await db.SaveChangesAsync(cancellationToken);
     }
 }

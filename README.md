@@ -154,8 +154,8 @@ Backend đã có xác thực JWT và phân quyền theo vai trò/phạm vi:
 - `GET /api/auth/me`: thông tin tài khoản và các phân quyền hiện tại (Web dùng cookie HttpOnly, Mobile dùng header `Authorization: Bearer <token>`).
 - Policy: `Admin`, `ResearchOffice`, `Management` (xem `Api/Authorization/Policies.cs`). Kiểm tra phạm vi khoa/bộ môn qua `ICurrentUser.CanAccess(facultyId, departmentId)`.
 - Lần chạy đầu, nếu đặt `SEED_ADMIN_PASSWORD` trong `.env`, hệ thống tạo tài khoản QUAN_TRI (mặc định tên `admin`).
-- Trong môi trường Development, hệ thống tự tạo bộ dữ liệu mẫu quy mô một khoa: 3 bộ môn, 8 giảng viên,
-  kế hoạch, chỉ tiêu phân bổ cá nhân, sản phẩm theo mọi trạng thái xét duyệt, thông báo, quy đổi và đánh giá.
+- Trong môi trường Development, hệ thống tự tạo bộ dữ liệu mẫu quy mô vận hành: 2 khoa, 8 bộ môn, 32 giảng viên,
+  3 năm học, 80 kế hoạch, hơn 150 nội dung/sản phẩm, chỉ tiêu phân bổ cá nhân, thông báo, quy đổi và đánh giá.
   Các tài khoản `qlkh`, `bgh`, `truongkhoa`, `tbm.cnpm`, `tbm.httt` và các tài khoản `gv.*`
   dùng chung mật khẩu `Huit@2026!`. Seeder chạy lặp lại an toàn và có thể tắt bằng cấu hình
   `Seed:SampleData=false`. Đây là dữ liệu phát triển cục bộ; không dùng tài khoản hoặc mật khẩu này khi triển khai thật.
