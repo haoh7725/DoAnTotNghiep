@@ -31,6 +31,11 @@ services:
       - ./database/05_notification_products.sql:/docker-entrypoint-initdb.d/05_notification_products.sql:ro
       - ./database/06_feedback_and_target_catalog.sql:/docker-entrypoint-initdb.d/06_feedback_and_target_catalog.sql:ro
       - ./database/07_plagiarism_checks.sql:/docker-entrypoint-initdb.d/07_plagiarism_checks.sql:ro
+      - ./database/08_scientific_profile_details.sql:/docker-entrypoint-initdb.d/08_scientific_profile_details.sql:ro
+      - ./database/08_target_workflow.sql:/docker-entrypoint-initdb.d/08_target_workflow.sql:ro
+      - ./database/09_lecturer_target_allocations.sql:/docker-entrypoint-initdb.d/09_lecturer_target_allocations.sql:ro
+      - ./database/10_conversion_priority.sql:/docker-entrypoint-initdb.d/10_conversion_priority.sql:ro
+      - ./database/11_emulation_classification_and_target_reminders.sql:/docker-entrypoint-initdb.d/11_emulation_classification_and_target_reminders.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s

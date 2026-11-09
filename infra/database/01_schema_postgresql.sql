@@ -344,6 +344,7 @@ CREATE TABLE quy_dinh_quy_doi (
     mo_ta_dieu_kien TEXT NOT NULL,
     muc_quy_doi NUMERIC(14,4) NOT NULL,
     don_vi VARCHAR(10) NOT NULL,
+    do_uu_tien INTEGER NOT NULL DEFAULT 100,
     mo_ta_quy_tac_tac_gia TEXT NOT NULL,
     hieu_luc_tu DATE NOT NULL,
     hieu_luc_den DATE,
@@ -353,6 +354,7 @@ CREATE TABLE quy_dinh_quy_doi (
     UNIQUE (id, loai_san_pham_id, don_vi),
     CONSTRAINT ck_quy_dinh_phien_ban CHECK (phien_ban > 0),
     CONSTRAINT ck_quy_dinh_muc CHECK (muc_quy_doi >= 0),
+    CONSTRAINT ck_quy_dinh_uu_tien CHECK (do_uu_tien >= 0),
     CONSTRAINT ck_quy_dinh_hieu_luc CHECK (hieu_luc_den IS NULL OR hieu_luc_den >= hieu_luc_tu),
     CONSTRAINT ck_quy_dinh_don_vi CHECK (don_vi IN ('GIO', 'DIEM'))
 );

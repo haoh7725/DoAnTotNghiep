@@ -37,9 +37,14 @@ public static class DemoDataSeeder
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var environment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
         var fileStorage = scope.ServiceProvider.GetRequiredService<IFileStorage>();
-        if (await db.Accounts.AnyAsync(x => x.Username == MarkerUsername, cancellationToken))
+        var existingMarker = await db.Accounts.SingleOrDefaultAsync(
+            x => x.Username == MarkerUsername, cancellationToken);
+        if (existingMarker is not null)
         {
-            logger.LogInformation("Dữ liệu demo đã tồn tại, bỏ qua.");
+            await using var supplementTransaction = await db.Database.BeginTransactionAsync(cancellationToken);
+            await EnsureExtendedDemoDataAsync(db, existingMarker.Id, cancellationToken);
+            await supplementTransaction.CommitAsync(cancellationToken);
+            logger.LogInformation("Đã kiểm tra và bổ sung dữ liệu demo còn thiếu.");
             return;
         }
 
@@ -123,6 +128,9 @@ public static class DemoDataSeeder
                     "Định mức NCKH năm học 2026-2027")));
 
             var target = new ResearchTarget(faculty.Id, academicYear.Id, 12, new DateOnly(2027, 6, 30));
+            target.MarkAssigned(researchOffice.Id);
+            target.Accept(dean.Id, DateTimeOffset.UtcNow);
+            target.Publish(DateTimeOffset.UtcNow);
             db.ResearchTargets.Add(target);
             await db.SaveChangesAsync(cancellationToken);
             db.ResearchTargetAllocations.AddRange(
@@ -221,6 +229,7 @@ public static class DemoDataSeeder
                     "demo:return:product5", researchPlanItemId: items[6].Id, researchPlanId: plans[3].Id));
 
             await db.SaveChangesAsync(cancellationToken);
+            await EnsureExtendedDemoDataAsync(db, researchOffice.Id, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             logger.LogInformation("Đã tạo dữ liệu demo thành công.");
         }
@@ -291,5 +300,142 @@ public static class DemoDataSeeder
         }
         await db.SaveChangesAsync(cancellationToken);
         return types;
+    }
+
+    private static async Task EnsureExtendedDemoDataAsync(
+        ApplicationDbContext db, long researchOfficeAccountId, CancellationToken cancellationToken)
+    {
+        var catalogs = new[]
+        {
+            new JournalConference { Name = "Journal of Educational Data", Type = "TAP_CHI", Issn = "2754-1120", Index = "SCOPUS", Classification = "Q2", Notes = "Dữ liệu demo" },
+            new JournalConference { Name = "Tạp chí Khoa học Giáo dục Việt Nam", Type = "TAP_CHI", Issn = "2615-8957", Index = "TRONG_NUOC", Classification = "UY_TIN", Notes = "Dữ liệu demo" },
+            new JournalConference { Name = "Hội nghị FAIR", Type = "HOI_NGHI", Index = "TRONG_NUOC", Classification = "QUOC_GIA", Notes = "Dữ liệu demo" },
+            new JournalConference { Name = "International Conference on ICT", Type = "HOI_NGHI", Index = "SCOPUS", Classification = "QUOC_TE", Notes = "Dữ liệu demo" }
+        };
+        var existingCatalogs = await db.JournalConferences
+            .Select(x => new { x.Name, x.Type }).ToListAsync(cancellationToken);
+        db.JournalConferences.AddRange(catalogs.Where(x => !existingCatalogs.Any(
+            e => e.Type == x.Type && e.Name.ToLower() == x.Name.ToLower())));
+
+        var productTypes = await EnsureProductTypesAsync(db, cancellationToken);
+        var ruleSpecs = new[]
+        {
+            (Type: "BAI_BAO", Code: "DEMO_BAI_BAO", Name: "Quy đổi bài báo khoa học", Value: 120m, Unit: "GIO"),
+            (Type: "DE_TAI", Code: "DEMO_DE_TAI", Name: "Quy đổi đề tài nghiên cứu", Value: 200m, Unit: "GIO"),
+            (Type: "SACH", Code: "DEMO_SACH", Name: "Quy đổi sách và giáo trình", Value: 100m, Unit: "GIO"),
+            (Type: "CHUNG_NHAN", Code: "DEMO_CHUNG_NHAN", Name: "Quy đổi chứng nhận khoa học", Value: 50m, Unit: "GIO")
+        };
+        foreach (var spec in ruleSpecs)
+        {
+            var rule = await db.ConversionRules.SingleOrDefaultAsync(
+                x => x.Code == spec.Code && x.Version == 1, cancellationToken);
+            if (rule is null)
+            {
+                rule = new ConversionRule(productTypes[spec.Type].Id, spec.Code, 1, spec.Name,
+                    "Áp dụng cho sản phẩm đã được phê duyệt trong năm học demo.", spec.Value, spec.Unit, 100,
+                    "Tác giả chính hưởng 100%, đồng tác giả hưởng 50%.", new DateOnly(2026, 1, 1),
+                    new DateOnly(2027, 12, 31), "Quy định minh họa phục vụ đồ án");
+                db.ConversionRules.Add(rule);
+                await db.SaveChangesAsync(cancellationToken);
+            }
+
+            if (!await db.AuthorConversionCoefficients.AnyAsync(
+                    x => x.ConversionRuleId == rule.Id, cancellationToken))
+            {
+                db.AuthorConversionCoefficients.AddRange(
+                    new AuthorConversionCoefficient(rule.Id, "TAC_GIA_CHINH", 1m),
+                    new AuthorConversionCoefficient(rule.Id, "DONG_TAC_GIA", 0.5m));
+            }
+
+            if (!await db.ConversionCriteria.AnyAsync(
+                    x => x.ConversionRuleId == rule.Id, cancellationToken))
+            {
+                db.ConversionCriteria.Add(new ConversionCriterion(
+                    rule.Id, "NAM_CONG_BO", "TU", null, 2026m));
+            }
+        }
+        await db.SaveChangesAsync(cancellationToken);
+
+        var products = await db.Products.OrderBy(x => x.Id).ToListAsync(cancellationToken);
+        var lecturerAccounts = await db.Lecturers.ToDictionaryAsync(
+            x => x.Id, x => x.AccountId, cancellationToken);
+        foreach (var product in products.Where(x => x.Status != ProductStatuses.Draft))
+        {
+            if (!await db.ProductSnapshots.AnyAsync(x => x.ProductId == product.Id, cancellationToken))
+            {
+                db.ProductSnapshots.Add(new ProductSnapshot(
+                    product, lecturerAccounts[product.SubmittedByLecturerId], 1));
+            }
+        }
+
+        var returnedProduct = products.FirstOrDefault(x => x.Status == ProductStatuses.Returned);
+        if (returnedProduct is not null && !await db.ProductFeedbacks.AnyAsync(
+                x => x.ProductId == returnedProduct.Id, cancellationToken))
+        {
+            db.ProductFeedbacks.Add(new ProductFeedback(returnedProduct.Id, researchOfficeAccountId,
+                "Vui lòng bổ sung quyết định giao đề tài và cập nhật đầy đủ thông tin minh chứng trước khi nộp lại."));
+        }
+        await db.SaveChangesAsync(cancellationToken);
+
+        var academicYear = await db.AcademicYears.SingleAsync(
+            x => x.Code == "DEMO-2026-2027", cancellationToken);
+        var classificationRules = new[]
+        {
+            ("Xuất sắc", 120m, 1), ("Tốt", 100m, 2), ("Khá", 80m, 3), ("Đạt", 50m, 4)
+        };
+        var existingClassificationNames = await db.EmulationClassificationRules
+            .Where(x => x.AcademicYearId == academicYear.Id).Select(x => x.Name).ToListAsync(cancellationToken);
+        db.EmulationClassificationRules.AddRange(classificationRules
+            .Where(x => !existingClassificationNames.Contains(x.Item1))
+            .Select(x => new EmulationClassificationRule(academicYear.Id, x.Item1, x.Item2, x.Item3)));
+        await db.SaveChangesAsync(cancellationToken);
+        var approvedProducts = await (from p in db.Products
+                                      join item in db.ResearchPlanItems on p.ResearchPlanItemId equals item.Id
+                                      where p.Status == ProductStatuses.Approved
+                                      select new { Product = p, item.ProductTypeId }).ToListAsync(cancellationToken);
+        foreach (var approved in approvedProducts)
+        {
+            var authors = new List<(long LecturerId, string Role)>
+            {
+                (approved.Product.SubmittedByLecturerId, "TAC_GIA_CHINH")
+            };
+            authors.AddRange(await db.ProductCoAuthors.Where(x => x.ProductId == approved.Product.Id)
+                .Select(x => new ValueTuple<long, string>(x.LecturerId, x.AuthorRole))
+                .ToListAsync(cancellationToken));
+
+            foreach (var author in authors)
+            {
+                var lecturer = await db.Lecturers.SingleAsync(x => x.Id == author.LecturerId, cancellationToken);
+                var evaluation = await db.Evaluations.SingleOrDefaultAsync(
+                    x => x.LecturerId == lecturer.Id && x.AcademicYearId == academicYear.Id && x.Attempt == 1,
+                    cancellationToken);
+                if (evaluation is null)
+                {
+                    evaluation = new Evaluation(lecturer.Id, academicYear.Id, 1, researchOfficeAccountId,
+                        lecturer.Code, lecturer.FullName, lecturer.DepartmentId, lecturer.AcademicRank, lecturer.Degree);
+                    db.Evaluations.Add(evaluation);
+                    await db.SaveChangesAsync(cancellationToken);
+                }
+
+                if (!await db.EvaluationConversionDetails.AnyAsync(
+                        x => x.EvaluationId == evaluation.Id && x.ProductId == approved.Product.Id,
+                        cancellationToken))
+                {
+                    var rule = await db.ConversionRules.SingleAsync(
+                        x => x.ProductTypeId == approved.ProductTypeId && x.Code.StartsWith("DEMO_"), cancellationToken);
+                    var coefficient = await db.AuthorConversionCoefficients
+                        .Where(x => x.ConversionRuleId == rule.Id && x.AuthorRole == author.Role)
+                        .Select(x => x.Coefficient).SingleAsync(cancellationToken);
+                    db.EvaluationConversionDetails.Add(new EvaluationConversionDetail(
+                        evaluation.Id, lecturer.Id, academicYear.Id, approved.Product.Id,
+                        approved.ProductTypeId, rule.Id, rule.ConversionValue, coefficient, rule.Unit,
+                        $"Quy định {rule.Code} phiên bản {rule.Version}; {author.Role} hệ số {coefficient:0.##}"));
+                }
+
+                if (evaluation.Status != "CHOT")
+                    evaluation.Finalize("HOAN_THANH_TOT", "Có sản phẩm khoa học đã duyệt và đạt định mức minh họa.");
+            }
+        }
+        await db.SaveChangesAsync(cancellationToken);
     }
 }

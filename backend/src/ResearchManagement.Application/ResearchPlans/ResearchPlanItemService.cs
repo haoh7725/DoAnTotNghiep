@@ -3,6 +3,7 @@ using ResearchManagement.Application.Common;
 using ResearchManagement.Application.ResearchPlans.Abstractions;
 using ResearchManagement.Application.ResearchPlans.Models;
 using ResearchManagement.Domain.Entities;
+using ResearchManagement.Application.ProductTypes.Abstractions;
 
 namespace ResearchManagement.Application.ResearchPlans;
 
@@ -10,6 +11,7 @@ public sealed class ResearchPlanItemService(
     IResearchPlanItemRepository items,
     IResearchPlanRepository plans,
     IProgressHistoryRepository progressHistories,
+    IProductTypeRepository productTypes,
     ILecturerAccessRepository lecturerAccess,
     ICurrentUser currentUser)
 {
@@ -65,13 +67,17 @@ public sealed class ResearchPlanItemService(
             cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy kế hoạch NCKH.");
 
-        await EnsureCanAccessPlanAsync(plan, cancellationToken);
+        await EnsureOwnerPlanAsync(plan, cancellationToken);
 
         if (plan.Status == "DA_DANG_KY")
         {
             throw new BusinessRuleException(
                 "Kế hoạch đã đăng ký nên không thể thêm nội dung.");
         }
+        if (await productTypes.GetByIdAsync(request.ProductTypeId, cancellationToken) is null)
+            throw new NotFoundException("Không tìm thấy loại sản phẩm khoa học.");
+        if (request.Deadline.HasValue && plan.Deadline.HasValue && request.Deadline.Value > plan.Deadline.Value)
+            throw new BusinessRuleException("Hạn nội dung không được sau hạn chung của kế hoạch.");
 
         var item = new ResearchPlanItem(
             researchPlanId,
@@ -99,13 +105,15 @@ public sealed class ResearchPlanItemService(
             cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy kế hoạch NCKH.");
 
-        await EnsureCanAccessPlanAsync(plan, cancellationToken);
+        await EnsureOwnerPlanAsync(plan, cancellationToken);
 
         if (plan.Status == "DA_DANG_KY")
         {
             throw new BusinessRuleException(
                 "Kế hoạch đã đăng ký nên không thể chỉnh sửa nội dung.");
         }
+        if (request.Deadline.HasValue && plan.Deadline.HasValue && request.Deadline.Value > plan.Deadline.Value)
+            throw new BusinessRuleException("Hạn nội dung không được sau hạn chung của kế hoạch.");
 
         item.Update(
             request.Name,
@@ -160,7 +168,7 @@ public sealed class ResearchPlanItemService(
             cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy kế hoạch NCKH.");
 
-        await EnsureCanAccessPlanAsync(plan, cancellationToken);
+        await EnsureOwnerPlanAsync(plan, cancellationToken);
 
         var status = request.Status.Trim().ToUpperInvariant();
 
@@ -220,6 +228,16 @@ public sealed class ResearchPlanItemService(
             throw new ForbiddenException(
                 "Bạn không có quyền truy cập dữ liệu của giảng viên này.");
         }
+    }
+
+    private async Task EnsureOwnerPlanAsync(ResearchPlan plan, CancellationToken cancellationToken)
+    {
+        var lecturer = await lecturerAccess.GetAccessInfoAsync(plan.LecturerId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy giảng viên.");
+        var accountId = currentUser.Id
+            ?? throw new AuthenticationFailedException("Không xác định được người dùng hiện tại.");
+        if (lecturer.AccountId != accountId)
+            throw new ForbiddenException("Chỉ giảng viên chính chủ được thay đổi kế hoạch và tiến độ.");
     }
 
     private static ResearchPlanItemResponse ToResponse(

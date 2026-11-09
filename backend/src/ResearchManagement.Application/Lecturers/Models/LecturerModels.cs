@@ -90,6 +90,8 @@ public sealed class ScientificProfileRequest
     [StringLength(4000)] public string? ResearchFields { get; set; }
     [StringLength(4000)] public string? ResearchDirections { get; set; }
     [StringLength(4000)] public string? ActivitySummary { get; set; }
+    /// <summary>Bỏ qua/null giữ nguyên chi tiết để tương thích client cũ; {} xóa các chi tiết.</summary>
+    public ScientificProfileDetails? Details { get; set; }
 }
 
 /// <summary>UpdatedAt = null nghĩa là giảng viên chưa lập lý lịch; các trường văn bản đều null.</summary>
@@ -99,4 +101,5 @@ public sealed record ScientificProfileResponse(
     string? ResearchFields,
     string? ResearchDirections,
     string? ActivitySummary,
-    DateTimeOffset? UpdatedAt);
+    DateTimeOffset? UpdatedAt,
+    ScientificProfileDetails Details);

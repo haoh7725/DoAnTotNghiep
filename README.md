@@ -7,7 +7,6 @@
 - `backend/`: ASP.NET Core Web API, Entity Framework Core và Npgsql.
 - `web/`: React và TypeScript.
 - `mobile/`: Flutter và Dart.
-- `docs/`: yêu cầu, thiết kế, tài liệu API và hướng dẫn.
 - `infra/`: Docker Compose và cấu hình triển khai.
 
 ## Khởi động nhanh
@@ -31,7 +30,6 @@ Kiểm tra tương đồng dùng Copyleaks theo luồng bất đồng bộ. Đi�
 `COPYLEAKS_*` trong `.env`; để `COPYLEAKS_SANDBOX=true` trong lúc phát triển.
 `COPYLEAKS_PUBLIC_BASE_URL` phải là HTTPS công khai để Copyleaks gọi webhook
 (khi chạy local cần một tunnel HTTPS).
-Xem hướng dẫn đầy đủ tại [docs/COPYLEAKS_KIEM_TRA_TUONG_DONG.md](docs/COPYLEAKS_KIEM_TRA_TUONG_DONG.md).
 
 Database đã tồn tại cần áp dụng bảng phiên bản sản phẩm mới một lần (giữ nguyên dữ liệu):
 
@@ -42,6 +40,7 @@ Get-Content -Raw infra/database/04_journal_conference_catalog.sql | docker exec 
 Get-Content -Raw infra/database/05_notification_products.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 Get-Content -Raw infra/database/06_feedback_and_target_catalog.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 Get-Content -Raw infra/database/07_plagiarism_checks.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 infra/database/08_scientific_profile_details.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 ```
 
 Nếu đã thay đổi `POSTGRES_USER` hoặc `POSTGRES_DB` trong `.env`, thay hai giá trị
@@ -78,10 +77,6 @@ flutter run --dart-define=API_URL=http://10.0.2.2:8081/api
 ## Trạng thái
 
 Đã có nền tảng đăng nhập, phân quyền theo phạm vi, API CRUD khoa/bộ môn/năm học/tài khoản và giao diện Web quản trị cơ bản. Mobile hiện là khung ban đầu.
-
-Xem [bàn giao tuần 1 của Hào](docs/HAO_TUAN_1.md) để chạy seed tài khoản, cấu hình Web/API và tích hợp các endpoint cho nhóm.
-
-Xem [hợp đồng API giảng viên, lý lịch khoa học và loại sản phẩm của Lâm](docs/LAM_TUAN_1.md) để tích hợp `/api/lecturers` và `/api/product-types`.
 
 Backend đã có xác thực JWT và phân quyền theo vai trò/phạm vi:
 

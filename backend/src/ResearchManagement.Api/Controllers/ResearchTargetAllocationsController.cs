@@ -53,9 +53,12 @@ public sealed class ResearchTargetAllocationsController(
         CreateResearchTargetAllocationRequest request,
         CancellationToken cancellationToken)
     {
-        await EnsureValidAllocationAsync(request.ResearchTargetId, request.FacultyId, request.DepartmentId, cancellationToken);
+        var allocationDate = CurrentVietnamDate();
+        request = request with { AllocationDate = allocationDate };
+        await EnsureValidAllocationAsync(request.ResearchTargetId, request.FacultyId, request.DepartmentId, allocationDate, cancellationToken);
 
         var result = await service.CreateAsync(request, cancellationToken);
+        await NotifyDepartmentManagersAsync(result, "được phân bổ", cancellationToken);
 
         return CreatedAtAction(
             nameof(GetById),
@@ -72,13 +75,41 @@ public sealed class ResearchTargetAllocationsController(
     {
         var existing = await service.GetByIdAsync(id, cancellationToken);
         EnsureCanRead(existing.FacultyId, existing.DepartmentId);
+        var personallyAllocated = await db.LecturerTargetAllocations
+            .Where(x => x.DepartmentAllocationId == id)
+            .SumAsync(x => (int?)x.AllocatedArticleCount, cancellationToken) ?? 0;
+        if (request.AllocatedArticleCount < personallyAllocated)
+            throw new BusinessRuleException("Không thể giảm chỉ tiêu bộ môn thấp hơn tổng đã phân công cho giảng viên.");
+        var allocationDate = CurrentVietnamDate();
+        request = request with { AllocationDate = allocationDate };
+        await EnsureValidAllocationAsync(existing.ResearchTargetId, existing.FacultyId, existing.DepartmentId, allocationDate, cancellationToken);
 
         var result = await service.UpdateAsync(
             id,
             request,
             cancellationToken);
+        await NotifyDepartmentManagersAsync(result, "được điều chỉnh", cancellationToken);
 
         return Ok(result);
+    }
+
+    private async Task NotifyDepartmentManagersAsync(ResearchTargetAllocationResponse allocation, string action, CancellationToken ct)
+    {
+        var departmentName = await db.Departments.Where(x => x.Id == allocation.DepartmentId)
+            .Select(x => x.Name).SingleAsync(ct);
+        var recipients = await db.RoleAssignments.AsNoTracking()
+            .Where(x => x.Role == "TRUONG_BO_MON" && x.DepartmentId == allocation.DepartmentId)
+            .Select(x => x.AccountId).Distinct().ToListAsync(ct);
+        foreach (var accountId in recipients)
+        {
+            var notification = new ResearchManagement.Domain.Entities.Notification(
+                accountId, "HE_THONG",
+                $"Chỉ tiêu NCKH của {departmentName} {action}: {allocation.AllocatedArticleCount} bài, ngày {allocation.AllocationDate:dd/MM/yyyy}.",
+                $"PHAN_BO_CHI_TIEU:{allocation.Id}:{allocation.AllocatedArticleCount}:{allocation.AllocationDate:yyyyMMdd}");
+            notification.MarkAsSent();
+            db.Notifications.Add(notification);
+        }
+        if (recipients.Count > 0) await db.SaveChangesAsync(ct);
     }
 
     private void EnsureCanRead(long facultyId, long departmentId)
@@ -91,6 +122,7 @@ public sealed class ResearchTargetAllocationsController(
         long researchTargetId,
         long facultyId,
         long departmentId,
+        DateOnly allocationDate,
         CancellationToken cancellationToken)
     {
         var target = await db.ResearchTargets.AsNoTracking()
@@ -104,5 +136,20 @@ public sealed class ResearchTargetAllocationsController(
             throw new BusinessRuleException("Khoa của chỉ tiêu và bộ môn phân bổ phải trùng khớp.");
         if (!currentUser.CanAccess(facultyId, departmentId))
             throw new ForbiddenException("Không có quyền phân bổ chỉ tiêu cho bộ môn này.");
+        var year = await db.AcademicYears.AsNoTracking()
+            .SingleAsync(x => x.Id == target.AcademicYearId, cancellationToken);
+        if (allocationDate < year.StartDate || allocationDate > year.EndDate)
+            throw new BusinessRuleException("Ngày phân bổ phải nằm trong năm học của chỉ tiêu.");
+        var today = CurrentVietnamDate();
+        if (allocationDate < today)
+            throw new BusinessRuleException("Ngày phân bổ không được nằm trong quá khứ.");
+        if (target.Deadline.HasValue && allocationDate > target.Deadline.Value)
+            throw new BusinessRuleException("Chỉ tiêu đã quá hạn hoàn thành; hãy điều chỉnh hạn trước khi phân bổ.");
     }
+
+    private static DateOnly CurrentVietnamDate() =>
+        DateOnly.FromDateTime(
+            TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
+                DateTimeOffset.UtcNow,
+                OperatingSystem.IsWindows() ? "SE Asia Standard Time" : "Asia/Ho_Chi_Minh").DateTime);
 }

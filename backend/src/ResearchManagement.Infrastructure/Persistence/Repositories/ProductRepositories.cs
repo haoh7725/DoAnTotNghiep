@@ -6,6 +6,9 @@ namespace ResearchManagement.Infrastructure.Persistence.Repositories;
 
 public sealed class ProductRepository(ApplicationDbContext db) : IProductRepository
 {
+    public Task<int> CountByTargetAndLecturerAsync(long targetId, long lecturerId, CancellationToken cancellationToken) =>
+        db.Products.CountAsync(p => p.ResearchTargetId == targetId && p.SubmittedByLecturerId == lecturerId, cancellationToken);
+
     public Task<Product?> GetByIdAsync(long id, CancellationToken cancellationToken) =>
         db.Products.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
 

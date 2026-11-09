@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using ResearchManagement.Application.Auth.Abstractions;
 using ResearchManagement.Application.Common;
 using ResearchManagement.Application.Lecturers.Abstractions;
@@ -12,6 +14,7 @@ public sealed class ScientificProfileService(
     ICurrentUser currentUser,
     TimeProvider clock)
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     public async Task<ScientificProfileResponse> GetAsync(long lecturerId, CancellationToken cancellationToken)
     {
         var lecturer = await FindLecturerAsync(lecturerId, cancellationToken);
@@ -22,7 +25,7 @@ public sealed class ScientificProfileService(
         return profile is null ? Empty(lecturerId) : ToResponse(profile);
     }
 
-    /// <summary>Tạo mới hoặc ghi đè toàn bộ lý lịch. Trường bỏ trống được lưu là rỗng.</summary>
+    /// <summary>Thay thế các trường tổng hợp. Chi tiết chỉ được thay thế khi request có Details.</summary>
     public async Task<ScientificProfileResponse> UpsertAsync(
         long lecturerId, ScientificProfileRequest request, CancellationToken cancellationToken)
     {
@@ -31,6 +34,11 @@ public sealed class ScientificProfileService(
             throw new ForbiddenException("Không có quyền sửa lý lịch khoa học của giảng viên này.");
 
         var now = clock.GetUtcNow();
+        if (request.Details is not null)
+        {
+            try { request.Details.Validate(DateOnly.FromDateTime(now.UtcDateTime)); }
+            catch (ValidationException ex) { throw new BusinessRuleException(ex.Message); }
+        }
         var expertise = TextNormalizer.Clean(request.Expertise);
         var fields = TextNormalizer.Clean(request.ResearchFields);
         var directions = TextNormalizer.Clean(request.ResearchDirections);
@@ -46,6 +54,9 @@ public sealed class ScientificProfileService(
         {
             profile.Update(expertise, fields, directions, summary, now);
         }
+
+        if (request.Details is not null)
+            profile.UpdateDetails(JsonSerializer.Serialize(request.Details, JsonOptions));
 
         await profiles.SaveChangesAsync(cancellationToken);
         return ToResponse(profile);
@@ -71,8 +82,9 @@ public sealed class ScientificProfileService(
             ?? throw new NotFoundException("Không tìm thấy giảng viên.");
 
     private static ScientificProfileResponse Empty(long lecturerId) =>
-        new(lecturerId, null, null, null, null, null);
+        new(lecturerId, null, null, null, null, null, new());
 
     private static ScientificProfileResponse ToResponse(ScientificProfile p) =>
-        new(p.LecturerId, p.Expertise, p.ResearchFields, p.ResearchDirections, p.ActivitySummary, p.UpdatedAt);
+        new(p.LecturerId, p.Expertise, p.ResearchFields, p.ResearchDirections, p.ActivitySummary, p.UpdatedAt,
+            JsonSerializer.Deserialize<ScientificProfileDetails>(p.DetailsJson, JsonOptions) ?? new());
 }

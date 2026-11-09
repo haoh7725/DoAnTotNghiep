@@ -12,6 +12,7 @@ public sealed record ConversionRuleRequest(
     [Required] string ConditionDescription,
     [Range(0, double.MaxValue)] decimal ConversionValue,
     [Required, RegularExpression("^(GIO|DIEM)$")] string Unit,
+    [Range(0, int.MaxValue)] int Priority,
     [Required] string AuthorRuleDescription,
     DateOnly EffectiveFrom,
     DateOnly? EffectiveTo,

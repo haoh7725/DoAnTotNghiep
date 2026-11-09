@@ -7,14 +7,17 @@ using ResearchManagement.Application.Plagiarism.Models;
 using ResearchManagement.Application.Products.Abstractions;
 using ResearchManagement.Domain.Constants;
 using ResearchManagement.Domain.Entities;
+using ResearchManagement.Application.ResearchPlans.Abstractions;
 
 namespace ResearchManagement.Application.Plagiarism;
 
 public sealed class PlagiarismCheckService(
     IProductRepository products,
     IProductEvidenceRepository evidences,
+    IProductCoAuthorRepository coAuthors,
     IPlagiarismCheckRepository checks,
     ILecturerRepository lecturers,
+    ILecturerAccessRepository lecturerAccess,
     ICurrentUser currentUser,
     IFileStorage fileStorage,
     IPlagiarismProvider provider)
@@ -23,7 +26,8 @@ public sealed class PlagiarismCheckService(
 
     public async Task<IReadOnlyList<PlagiarismCheckResponse>> ListAsync(long productId, CancellationToken ct)
     {
-        _ = await products.GetByIdAsync(productId, ct) ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
+        var product = await products.GetByIdAsync(productId, ct) ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
+        await EnsureCanReadAsync(product, ct);
         return (await checks.GetByProductIdAsync(productId, ct)).Select(ToResponse).ToList();
     }
 
@@ -97,6 +101,24 @@ public sealed class PlagiarismCheckService(
         var owner = await lecturers.GetByIdAsync(product.SubmittedByLecturerId, ct);
         if (owner?.AccountId != currentUser.Id)
             throw new ForbiddenException("Chỉ tác giả chính được yêu cầu kiểm tra tương đồng.");
+    }
+
+    private async Task EnsureCanReadAsync(Product product, CancellationToken ct)
+    {
+        if (currentUser.IsInRole(Roles.Admin)) return;
+        var accountId = currentUser.Id
+            ?? throw new AuthenticationFailedException("Không xác định được người dùng.");
+        var access = await lecturerAccess.GetAccessInfoAsync(product.SubmittedByLecturerId, ct)
+            ?? throw new NotFoundException("Không tìm thấy giảng viên nộp sản phẩm.");
+        if (access.AccountId == accountId || currentUser.CanAccess(access.FacultyId, access.DepartmentId)) return;
+
+        var authors = await coAuthors.GetByProductIdAsync(product.Id, ct);
+        foreach (var author in authors)
+        {
+            var lecturer = await lecturers.GetByIdAsync(author.LecturerId, ct);
+            if (lecturer?.AccountId == accountId) return;
+        }
+        throw new ForbiddenException("Không có quyền xem kết quả kiểm tra tương đồng của sản phẩm này.");
     }
 
     private static PlagiarismCheckResponse ToResponse(PlagiarismCheck x) => new(

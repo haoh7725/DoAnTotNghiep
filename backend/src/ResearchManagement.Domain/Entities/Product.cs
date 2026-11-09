@@ -21,7 +21,9 @@ public sealed class Product : BaseEntity
         string? articleStatus = null,
         string? journalIndex = null,
         string? journalClassification = null,
-        string? projectLevel = null)
+        string? projectLevel = null,
+        long? journalConferenceId = null,
+        long? researchTargetId = null)
     {
         ResearchPlanItemId = researchPlanItemId;
         SubmittedByLecturerId = submittedByLecturerId;
@@ -33,6 +35,8 @@ public sealed class Product : BaseEntity
         JournalIndex = Normalize(journalIndex);
         JournalClassification = Normalize(journalClassification);
         ProjectLevel = Normalize(projectLevel);
+        JournalConferenceId = journalConferenceId;
+        ResearchTargetId = researchTargetId;
         Status = ProductStatuses.Draft;
         CreatedAt = DateTimeOffset.UtcNow;
         UpdatedAt = DateTimeOffset.UtcNow;
@@ -55,6 +59,8 @@ public sealed class Product : BaseEntity
     public string? JournalIndex { get; private set; }
     public string? JournalClassification { get; private set; }
     public string? ProjectLevel { get; private set; }
+    public long? JournalConferenceId { get; private set; }
+    public long? ResearchTargetId { get; private set; }
 
     public string Status { get; private set; } = ProductStatuses.Draft;
 

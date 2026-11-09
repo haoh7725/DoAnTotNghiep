@@ -3,6 +3,8 @@ import type { FormEvent } from 'react'
 import { api, ApiError } from './api'
 import type { Lookups, Profile } from './api'
 import './Lecturers.css'
+import { ProfileSection } from './ScientificProfile'
+import type { ScientificProfile } from './ScientificProfile'
 
 /* ===== Kiểu dữ liệu khớp với LecturerModels.cs ===== */
 export type Lecturer = {
@@ -11,21 +13,9 @@ export type Lecturer = {
   academicRank: string | null; degree: string | null; position: string | null
   departmentId: number; departmentName: string; facultyId: number; facultyName: string
 }
-type ScientificProfile = {
-  lecturerId: number; expertise: string | null; researchFields: string | null
-  researchDirections: string | null; activitySummary: string | null; updatedAt: string | null
-}
 type Paged<T> = { items: T[]; page: number; pageSize: number; totalCount: number; totalPages: number }
 
 const genderNames: Record<string, string> = { NAM: 'Nam', NU: 'Nữ', KHAC: 'Khác' }
-const profileFields = [
-  { key: 'expertise', label: 'Chuyên môn', hint: 'Ngành, chuyên ngành được đào tạo và đang giảng dạy.' },
-  { key: 'researchFields', label: 'Lĩnh vực nghiên cứu', hint: 'Các lĩnh vực khoa học chính.' },
-  { key: 'researchDirections', label: 'Hướng nghiên cứu', hint: 'Các hướng đề tài đang và sẽ theo đuổi.' },
-  { key: 'activitySummary', label: 'Tóm tắt hoạt động khoa học', hint: 'Đề tài, bài báo, sách, giải thưởng tiêu biểu.' },
-] as const
-type ProfileKey = (typeof profileFields)[number]['key']
-const MAX_TEXT = 4000
 
 /* ===== Quy tắc quyền, phản chiếu LecturerAccess.cs (backend vẫn là nơi quyết định cuối cùng) ===== */
 export const isOffice = (user: Profile) =>
@@ -44,7 +34,6 @@ function permissionsFor(user: Profile, lecturer: Lecturer) {
 }
 
 const fmtDate = (iso: string | null) => iso ? new Date(iso + (iso.length === 10 ? 'T00:00:00' : '')).toLocaleDateString('vi-VN') : '—'
-const fmtDateTime = (iso: string | null) => iso ? new Date(iso).toLocaleString('vi-VN') : null
 const show = (v: string | null | undefined) => v?.trim() ? v : '—'
 
 /* ===== Danh sách giảng viên (chỉ hiện các giảng viên trong phạm vi của người dùng) ===== */
@@ -214,46 +203,3 @@ function PersonalSection({ lecturer, perm, lookups, onSaved }: {
 }
 
 const Lock = () => <span className="lec-lock" title="Chỉ Phòng QLKH được sửa" aria-label="Bị khóa, chỉ Phòng QLKH được sửa">🔒</span>
-
-/* --- Lý lịch khoa học --- */
-function ProfileSection({ lecturer, profile, canEdit, onSaved }: {
-  lecturer: Lecturer; profile: ScientificProfile; canEdit: boolean; onSaved: (p: ScientificProfile) => void
-}) {
-  const [editing, setEditing] = useState(false); const [busy, setBusy] = useState(false)
-  const [error, setError] = useState(''); const [saved, setSaved] = useState(false)
-  const [draft, setDraft] = useState<Record<ProfileKey, string>>(() => toDraft(profile))
-  const empty = !profile.updatedAt
-  const updated = fmtDateTime(profile.updatedAt)
-
-  async function save(e: FormEvent) {
-    e.preventDefault(); setBusy(true); setError(''); setSaved(false)
-    try {
-      const body = Object.fromEntries(profileFields.map(f => [f.key, draft[f.key].trim() || null]))
-      onSaved(await api<ScientificProfile>(`/lecturers/${lecturer.id}/scientific-profile`, 'PUT', body))
-      setEditing(false); setSaved(true)
-    } catch (err) { setError((err as Error).message) } finally { setBusy(false) }
-  }
-
-  return <section className="panel">
-    <div className="section-top"><div><h2>Lý lịch khoa học</h2>
-      <p className="muted lec-sub">{updated ? `Cập nhật lần cuối: ${updated}` : 'Chưa lập lý lịch khoa học.'}</p></div>
-      {canEdit && !editing && <button className="primary" onClick={() => { setDraft(toDraft(profile)); setEditing(true); setSaved(false); setError('') }}>{empty ? 'Lập lý lịch' : 'Chỉnh sửa'}</button>}</div>
-    {saved && <p className="lec-ok" role="status">Đã lưu lý lịch khoa học.</p>}
-    {!editing ? <div className="lec-blocks">{profileFields.map(f => <article key={f.key}><h3>{f.label}</h3>
-      {profile[f.key]?.trim() ? <p className="lec-text">{profile[f.key]}</p> : <p className="muted">Chưa có thông tin.</p>}</article>)}</div> :
-      <form onSubmit={save}>
-        {error && <p className="alert" role="alert">{error}</p>}
-        {profileFields.map(f => <label key={f.key}>{f.label}
-          <span className="lec-hint">{f.hint}</span>
-          <textarea rows={4} maxLength={MAX_TEXT} value={draft[f.key]} onChange={e => setDraft(d => ({ ...d, [f.key]: e.target.value }))} />
-          <span className="lec-count">{draft[f.key].length}/{MAX_TEXT}</span></label>)}
-        <div className="actions"><button className="primary" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu lý lịch'}</button>
-          <button type="button" disabled={busy} onClick={() => { setEditing(false); setError('') }}>Hủy</button></div>
-      </form>}
-  </section>
-}
-
-const toDraft = (p: ScientificProfile): Record<ProfileKey, string> => ({
-  expertise: p.expertise ?? '', researchFields: p.researchFields ?? '',
-  researchDirections: p.researchDirections ?? '', activitySummary: p.activitySummary ?? '',
-})

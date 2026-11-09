@@ -273,6 +273,117 @@ public class LecturerServiceTests
 
     // ---- Fakes ----
 
+    [Fact]
+    public async Task Profile_Details_RoundTripsAllTemplateSections()
+    {
+        var lecturer = Seed(100, 10, "GV001");
+        var service = Profiles(Owner(100));
+        var details = new ScientificProfileDetails
+        {
+            BirthPlace = "TP. Hồ Chí Minh", Hometown = "Đồng Nai", Ethnicity = "Kinh",
+            HighestDegreeYear = 2020, HighestDegreeCountry = "Việt Nam", AcademicRankYear = 2022,
+            WorkUnit = "Trường Đại học", ContactAddress = "12 Nguyễn Huệ", OfficePhone = "02812345678",
+            HomePhone = "02511234567", Fax = "02812345679", IdentityNumber = "012345678901",
+            IdentityIssuedDate = new(2021, 1, 1), IdentityIssuedPlace = "Cục CSQLHC",
+            Education = [new() { Level = "TIEN_SI", Institution = "ĐHQG", Specialization = "CNTT",
+                TrainingMode = "Chính quy", Country = "Việt Nam", GraduationYear = 2020, ThesisTitle = "Học máy" }],
+            Languages = [new() { Name = "Tiếng Anh", Proficiency = "B2" }, new() { Name = "Tiếng Pháp", Proficiency = "Đọc hiểu" }],
+            Employment = [new() { FromDate = new(2020, 1, 1), Organization = "Trường Đại học", Position = "Giảng viên" }],
+            ResearchProjects = [new() { Title = "Nghiên cứu AI", StartYear = 2022, Level = "Bộ", Responsibility = "Chủ nhiệm" }],
+            Publications = [new() { Title = "Mô hình học máy", Year = 2023, Journal = "Tạp chí CNTT" }],
+            DeclarationPlace = "TP. Hồ Chí Minh", DeclarationDate = new(2024, 1, 1)
+        };
+        await service.UpsertMineAsync(new() { Expertise = "AI", Details = details }, default);
+        // Đọc từ JSON đã lưu thay vì dùng lại cùng đối tượng request.
+        details.BirthPlace = "Thay đổi sau lưu";
+        var result = await service.GetMineAsync(default);
+        Assert.Equal("TP. Hồ Chí Minh", result.Details.BirthPlace);
+        Assert.Equal("012345678901", result.Details.IdentityNumber);
+        Assert.Equal("Học máy", Assert.Single(result.Details.Education).ThesisTitle);
+        Assert.Equal(2, result.Details.Languages.Count);
+        Assert.Null(Assert.Single(result.Details.Employment).ToDate);
+        Assert.Equal("Chủ nhiệm", Assert.Single(result.Details.ResearchProjects).Responsibility);
+        Assert.Equal("Tạp chí CNTT", Assert.Single(result.Details.Publications).Journal);
+        Assert.Equal(new DateOnly(2024, 1, 1), result.Details.DeclarationDate);
+        Assert.Equal("AI", result.Expertise);
+    }
+
+    [Fact]
+    public async Task Profile_LegacyClientPreservesDetails_ExplicitEmptyObjectClearsThem()
+    {
+        Seed(100, 10, "GV001");
+        var service = Profiles(Owner(100));
+        await service.UpsertMineAsync(new() { Details = new() { Hometown = "Hà Nội",
+            Languages = [new() { Name = "Anh", Proficiency = "B2" }] } }, default);
+        var legacy = await service.UpsertMineAsync(new() { Expertise = "NLP" }, default);
+        Assert.Equal("Hà Nội", legacy.Details.Hometown);
+        Assert.Single(legacy.Details.Languages);
+        var cleared = await service.UpsertMineAsync(new() { Expertise = "NLP", Details = new() }, default);
+        Assert.Null(cleared.Details.Hometown);
+        Assert.Empty(cleared.Details.Languages);
+        Assert.Equal("NLP", cleared.Expertise);
+        Assert.Single(_profiles.Items);
+    }
+
+    [Fact]
+    public async Task Profile_InvalidDetailsDoNotOverwriteSavedData()
+    {
+        Seed(100, 10, "GV001");
+        var service = Profiles(Owner(100));
+        await service.UpsertMineAsync(new() { Expertise = "AI", Details = new() { Hometown = "Huế" } }, default);
+        await Assert.ThrowsAsync<BusinessRuleException>(() => service.UpsertMineAsync(new()
+        {
+            Expertise = "Sai", Details = new() { Employment = [new() { FromDate = new(2023, 1, 1),
+                ToDate = new(2022, 1, 1), Organization = "Trường", Position = "GV" }] }
+        }, default));
+        var result = await service.GetMineAsync(default);
+        Assert.Equal("AI", result.Expertise);
+        Assert.Equal("Huế", result.Details.Hometown);
+    }
+
+    [Fact]
+    public async Task Profile_RejectsNullRowsNullListsAndOversizedValues()
+    {
+        Seed(100, 10, "GV001");
+        var service = Profiles(Owner(100));
+        ScientificProfileDetails[] invalid = [
+            new() { Education = null! }, new() { Languages = [null!] },
+            new() { BirthPlace = new string('x', 201) },
+            new() { Languages = Enumerable.Range(0, 101).Select(_ => new LanguageEntry { Name = "Anh", Proficiency = "B2" }).ToList() },
+            new() { Education = [new() { Level = "KHAC", Institution = "Trường", Specialization = "CNTT" }] },
+            new() { Publications = [new() { Title = "  ", Journal = "Tạp chí" }] }
+        ];
+        foreach (var details in invalid)
+            await Assert.ThrowsAsync<BusinessRuleException>(() => service.UpsertMineAsync(new() { Details = details }, default));
+        Assert.Empty(_profiles.Items);
+    }
+
+    [Fact]
+    public async Task Profile_FutureCompletionAllowed_ButFuturePublicationAndReversedYearsRejected()
+    {
+        Seed(100, 10, "GV001");
+        var service = Profiles(Owner(100));
+        var year = DateTime.UtcNow.Year;
+        var saved = await service.UpsertMineAsync(new() { Details = new() { ResearchProjects = [new()
+            { Title = "AI", StartYear = year, EndYear = year + 1, Level = "Trường", Responsibility = "Thành viên" }] } }, default);
+        Assert.Equal(year + 1, Assert.Single(saved.Details.ResearchProjects).EndYear);
+        await Assert.ThrowsAsync<BusinessRuleException>(() => service.UpsertMineAsync(new() { Details = new()
+            { Publications = [new() { Title = "Bài báo", Year = year + 1, Journal = "Tạp chí" }] } }, default));
+        await Assert.ThrowsAsync<BusinessRuleException>(() => service.UpsertMineAsync(new() { Details = new()
+            { ResearchProjects = [new() { Title = "AI", StartYear = 2023, EndYear = 2022, Level = "Bộ", Responsibility = "Chủ nhiệm" }] } }, default));
+    }
+
+    [Fact]
+    public async Task Profile_DetailedDataRetainsExistingScopeRules()
+    {
+        var lecturer = Seed(100, 10, "GV001");
+        var request = new ScientificProfileRequest { Details = new() { Hometown = "Huế" } };
+        await Profiles(Office()).UpsertAsync(lecturer.Id, request, default);
+        Assert.Equal("Huế", (await Profiles(Head(1, 10)).GetAsync(lecturer.Id, default)).Details.Hometown);
+        await Assert.ThrowsAsync<ForbiddenException>(() => Profiles(Head(1, 10)).UpsertAsync(lecturer.Id, request, default));
+        await Assert.ThrowsAsync<ForbiddenException>(() => Profiles(Owner(101)).GetAsync(lecturer.Id, default));
+    }
+
     private sealed class FakeUser(long? id, params RoleAssignmentDto[] assignments) : ICurrentUser
     {
         public bool IsAuthenticated => Id.HasValue;

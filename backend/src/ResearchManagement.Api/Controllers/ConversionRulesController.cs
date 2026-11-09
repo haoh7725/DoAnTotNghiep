@@ -53,7 +53,7 @@ public sealed class ConversionRulesController(ApplicationDbContext db) : Control
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         rule.Update(request.ProductTypeId, request.Code, request.Version, request.Name, request.ConditionDescription,
-            request.ConversionValue, request.Unit, request.AuthorRuleDescription, request.EffectiveFrom, request.EffectiveTo, request.LegalBasis);
+            request.ConversionValue, request.Unit, request.Priority, request.AuthorRuleDescription, request.EffectiveFrom, request.EffectiveTo, request.LegalBasis);
         await db.ConversionCriteria.Where(x => x.ConversionRuleId == id).ExecuteDeleteAsync(ct);
         await db.AuthorConversionCoefficients.Where(x => x.ConversionRuleId == id).ExecuteDeleteAsync(ct);
         AddChildren(id, request); await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
@@ -72,7 +72,7 @@ public sealed class ConversionRulesController(ApplicationDbContext db) : Control
     }
 
     private static ConversionRule MakeRule(ConversionRuleRequest r) => new(r.ProductTypeId, r.Code, r.Version, r.Name,
-        r.ConditionDescription, r.ConversionValue, r.Unit, r.AuthorRuleDescription, r.EffectiveFrom, r.EffectiveTo, r.LegalBasis);
+        r.ConditionDescription, r.ConversionValue, r.Unit, r.Priority, r.AuthorRuleDescription, r.EffectiveFrom, r.EffectiveTo, r.LegalBasis);
 
     private void AddChildren(long id, ConversionRuleRequest r)
     {
@@ -105,7 +105,7 @@ public sealed class ConversionRulesController(ApplicationDbContext db) : Control
         var criteria = await db.ConversionCriteria.AsNoTracking().Where(x => ids.Contains(x.ConversionRuleId)).OrderBy(x => x.Id).ToListAsync(ct);
         var coefficients = await db.AuthorConversionCoefficients.AsNoTracking().Where(x => ids.Contains(x.ConversionRuleId)).OrderBy(x => x.AuthorRole).ToListAsync(ct);
         return rules.Select(x => (object)new { x.Id, x.ProductTypeId, x.Code, x.Version, x.Name, x.ConditionDescription,
-            x.ConversionValue, x.Unit, x.AuthorRuleDescription, x.EffectiveFrom, x.EffectiveTo, x.LegalBasis,
+            x.ConversionValue, x.Unit, x.Priority, x.AuthorRuleDescription, x.EffectiveFrom, x.EffectiveTo, x.LegalBasis,
             criteria = criteria.Where(c => c.ConversionRuleId == x.Id).Select(c => new { c.Id, c.Field, c.Operator, c.StringValue, c.NumericValue }),
             authorCoefficients = coefficients.Where(c => c.ConversionRuleId == x.Id).Select(c => new { c.AuthorRole, c.Coefficient }) }).ToList();
     }

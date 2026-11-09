@@ -11,6 +11,7 @@ type Target = {
   assignedArticleCount: number
   deadline: string | null
   journalConferenceId: number | null
+  status: string
 }
 type JournalConference = { id: number; name: string; type: string }
 
@@ -22,19 +23,18 @@ type Allocation = {
   allocatedArticleCount: number
   allocationDate: string
 }
+type LecturerOption = { id: number; code: string; fullName: string }
+type LecturerAssignment = { id: number; departmentAllocationId: number; lecturerId: number; lecturerCode: string; lecturerName: string; allocatedArticleCount: number; allocationDate: string }
+type TargetProgress = { assignedArticleCount: number; approvedArticles: number; completionPercent: number; isCompleted: boolean; units: { departmentId: number; departmentName: string; allocatedArticles: number; approvedArticles: number; completionPercent: number; isCompleted: boolean }[] }
 
 type Props = {
   lookups: Lookups | null
   canEdit: boolean
   canEditAllocations: boolean
-
+  roles: string[]
 }
 
-export function ResearchTargets({
-  lookups,
-  canEdit,
-  canEditAllocations,
-}: Props) {
+export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }: Props) {
   const [targets, setTargets] = useState<Target[]>([])
   const [allocations, setAllocations] = useState<Allocation[]>([])
   const [catalog, setCatalog] = useState<JournalConference[]>([])
@@ -47,6 +47,10 @@ export function ResearchTargets({
   const [editingAllocation, setEditingAllocation] = useState<Allocation | null>(null)
   const [targetFormOpen, setTargetFormOpen] = useState(false)
   const [allocationFormOpen, setAllocationFormOpen] = useState(false)
+  const [selectedAllocation, setSelectedAllocation] = useState<Allocation | null>(null)
+  const [lecturerOptions, setLecturerOptions] = useState<LecturerOption[]>([])
+  const [lecturerAssignments, setLecturerAssignments] = useState<LecturerAssignment[]>([])
+  const [progress, setProgress] = useState<TargetProgress | null>(null)
 
   const selectedTarget = targets.find(t => t.id === selectedId)
   const faculties = lookups?.faculties ?? []
@@ -110,6 +114,15 @@ export function ResearchTargets({
     }
   }, [selectedId])
 
+  useEffect(() => {
+    if (selectedId === null) { setProgress(null); return }
+    let active = true
+    api<TargetProgress>(`/research-progress/targets/${selectedId}`)
+      .then(data => { if (active) setProgress(data) })
+      .catch(() => { if (active) setProgress(null) })
+    return () => { active = false }
+  }, [selectedId, allocations])
+
   async function saveTarget(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!canEdit || busy) return
@@ -162,27 +175,20 @@ export function ResearchTargets({
 
     const form = new FormData(e.currentTarget)
     const count = Number(form.get('allocatedArticleCount'))
-    const allocationDate = String(form.get('allocationDate'))
 
     if (!Number.isInteger(count) || count < 0) {
       setError('Số bài phân bổ phải là số nguyên không âm.')
       return
     }
 
-    if (!allocationDate) {
-      setError('Vui lòng chọn ngày phân bổ.')
-      return
-    }
-
     const body = editingAllocation
-      ? { allocatedArticleCount: count, allocationDate }
+      ? { allocatedArticleCount: count }
       : {
-        researchTargetId: selectedTarget.id,
-        facultyId: selectedTarget.facultyId,
-        departmentId: Number(form.get('departmentId')),
-        allocatedArticleCount: count,
-        allocationDate,
-      }
+          researchTargetId: selectedTarget.id,
+          facultyId: selectedTarget.facultyId,
+          departmentId: Number(form.get('departmentId')),
+          allocatedArticleCount: count,
+        }
 
     setBusy(true)
     setError('')
@@ -211,6 +217,54 @@ export function ResearchTargets({
     } finally {
       setBusy(false)
     }
+  }
+
+  async function openLecturerAssignments(allocation: Allocation) {
+    setSelectedAllocation(allocation); setError(''); setMessage('')
+    try {
+      const [items, options] = await Promise.all([
+        api<LecturerAssignment[]>(`/lecturer-target-allocations?departmentAllocationId=${allocation.id}`),
+        api<LecturerOption[]>(`/lecturer-target-allocations/options?departmentAllocationId=${allocation.id}`)
+      ])
+      setLecturerAssignments(items); setLecturerOptions(options)
+    } catch (e) { setError((e as Error).message) }
+  }
+
+  async function saveLecturerAssignment(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault(); if (!selectedAllocation || busy) return
+    const element = e.currentTarget
+    const form = new FormData(element)
+    setBusy(true); setError(''); setMessage('')
+    try {
+      await api('/lecturer-target-allocations', 'POST', {
+        departmentAllocationId: selectedAllocation.id,
+        lecturerId: Number(form.get('lecturerId')),
+        allocatedArticleCount: Number(form.get('allocatedArticleCount'))
+      })
+      await openLecturerAssignments(selectedAllocation)
+      setMessage('Đã phân công chỉ tiêu cho giảng viên.')
+      element.reset()
+    } catch (e) { setError((e as Error).message) }
+    finally { setBusy(false) }
+  }
+
+  async function deleteLecturerAssignment(id: number) {
+    if (!selectedAllocation || busy) return
+    setBusy(true); setError('')
+    try { await api(`/lecturer-target-allocations/${id}`, 'DELETE'); await openLecturerAssignments(selectedAllocation) }
+    catch (e) { setError((e as Error).message) }
+    finally { setBusy(false) }
+  }
+
+  async function transition(action: 'accept' | 'publish' | 'lock' | 'cancel') {
+    if (!selectedTarget || busy) return
+    setBusy(true); setError(''); setMessage('')
+    try {
+      await api(`/research-targets/${selectedTarget.id}/${action}`, 'POST')
+      setMessage('Cập nhật trạng thái chỉ tiêu thành công.')
+      await loadTargets()
+    } catch (e) { setError((e as Error).message) }
+    finally { setBusy(false) }
   }
 
   function openNewTarget() {
@@ -294,6 +348,7 @@ export function ResearchTargets({
                   <th>Năm học</th>
                   <th>Số bài giao</th>
                   <th>Hạn hoàn thành</th>
+                  <th>Trạng thái</th>
                   <th>Thao tác</th>
                 </tr>
               </thead>
@@ -304,6 +359,7 @@ export function ResearchTargets({
                     <td>{yearName(target.academicYearId)}</td>
                     <td>{target.assignedArticleCount}{target.journalConferenceId ? ` · ${catalog.find(x => x.id === target.journalConferenceId)?.name ?? 'Danh mục đã xóa'}` : ''}</td>
                     <td>{target.deadline || 'Chưa quy định'}</td>
+                    <td>{({ CHO_TIEP_NHAN: 'Chờ tiếp nhận', DA_TIEP_NHAN: 'Đã tiếp nhận', CONG_BO: 'Đã công bố', DA_KHOA: 'Đã khóa', DA_HUY: 'Đã hủy' } as Record<string,string>)[target.status] ?? target.status}</td>
                     <td>
                       <button
                         type="button"
@@ -392,6 +448,7 @@ export function ResearchTargets({
               <input
                 name="deadline"
                 type="date"
+                min={new Date().toLocaleDateString('en-CA')}
                 defaultValue={editingTarget?.deadline ?? ''}
               />
             </label>
@@ -415,7 +472,7 @@ export function ResearchTargets({
       <section className="panel">
         <div className="section-heading">
           <h2>Phân bổ chỉ tiêu theo bộ môn</h2>
-          {canEditAllocations && selectedTarget && (
+          {canEditAllocations && selectedTarget?.status === 'CONG_BO' && (
             <button
               type="button"
               className="primary"
@@ -444,6 +501,18 @@ export function ResearchTargets({
               <strong>Chênh lệch:</strong>{' '}
               {selectedTarget.assignedArticleCount - allocatedTotal} bài
             </p>
+            {progress && <section className="panel" style={{ marginTop: 16 }}>
+              <h3>Dashboard tiến độ chỉ tiêu</h3>
+              <p><strong>Toàn khoa:</strong> {progress.approvedArticles}/{progress.assignedArticleCount} bài · {progress.completionPercent}% {progress.isCompleted ? '· Đã hoàn thành' : ''}</p>
+              <div style={{ height: 12, background: '#e5e7eb', borderRadius: 99, overflow: 'hidden', marginBottom: 14 }}><div style={{ height: '100%', width: `${Math.min(progress.completionPercent, 100)}%`, background: progress.isCompleted ? '#15803d' : '#0f766e' }} /></div>
+              <div style={{ overflowX: 'auto' }}><table><thead><tr><th>Bộ môn</th><th>Đã duyệt / chỉ tiêu</th><th>Tỷ lệ</th><th>Biểu đồ</th></tr></thead><tbody>{progress.units.map(unit => <tr key={unit.departmentId}><td>{unit.departmentName}</td><td>{unit.approvedArticles}/{unit.allocatedArticles}</td><td>{unit.completionPercent}% {unit.isCompleted ? '✓' : ''}</td><td style={{ minWidth: 150 }}><div style={{ height: 10, background: '#e5e7eb', borderRadius: 99, overflow: 'hidden' }}><div style={{ height: '100%', width: `${Math.min(unit.completionPercent, 100)}%`, background: unit.isCompleted ? '#15803d' : '#0f766e' }} /></div></td></tr>)}</tbody></table></div>
+            </section>}
+            {canEdit && <div className="actions">
+              {selectedTarget.status === 'CHO_TIEP_NHAN' && roles.some(x => x === 'TRUONG_KHOA' || x === 'QUAN_TRI') && <button onClick={() => void transition('accept')} disabled={busy}>Tiếp nhận chỉ tiêu</button>}
+              {selectedTarget.status === 'DA_TIEP_NHAN' && <button className="primary" onClick={() => void transition('publish')} disabled={busy}>Công bố để phân bổ</button>}
+              {selectedTarget.status === 'CONG_BO' && <button onClick={() => void transition('lock')} disabled={busy}>Khóa phân bổ</button>}
+              {!allocations.length && selectedTarget.status !== 'DA_KHOA' && selectedTarget.status !== 'DA_HUY' && <button className="danger" onClick={() => void transition('cancel')} disabled={busy}>Hủy chỉ tiêu</button>}
+            </div>}
 
             {allocations.length === 0 ? (
               <p className="muted">Chưa có phân bổ cho chỉ tiêu này.</p>
@@ -455,6 +524,7 @@ export function ResearchTargets({
                       <th>Bộ môn</th>
                       <th>Số bài phân bổ</th>
                       <th>Ngày phân bổ</th>
+                      <th>Phân công giảng viên</th>
                       <th>Thao tác</th>
                     </tr>
                   </thead>
@@ -464,8 +534,9 @@ export function ResearchTargets({
                         <td>{departmentName(item.departmentId)}</td>
                         <td>{item.allocatedArticleCount}</td>
                         <td>{item.allocationDate}</td>
+                        <td><button type="button" onClick={() => void openLecturerAssignments(item)}>Xem / phân công</button></td>
                         <td>
-                          {canEditAllocations ? (
+                          {canEditAllocations && selectedTarget.status === 'CONG_BO' ? (
                             <button
                               type="button"
                               onClick={() => openEditAllocation(item)}
@@ -484,7 +555,23 @@ export function ResearchTargets({
         )}
       </section>
 
-      {canEditAllocations && allocationFormOpen && selectedTarget && (
+      {selectedAllocation && <section className="panel">
+        <div className="section-heading"><h2>Phân công cho giảng viên — {departmentName(selectedAllocation.departmentId)}</h2>
+          <button onClick={() => setSelectedAllocation(null)}>Đóng</button></div>
+        <p><strong>Chỉ tiêu bộ môn:</strong> {selectedAllocation.allocatedArticleCount} bài · <strong>Đã giao cá nhân:</strong> {lecturerAssignments.reduce((s, x) => s + x.allocatedArticleCount, 0)} bài</p>
+        {lecturerAssignments.length > 0 && <div style={{ overflowX: 'auto' }}><table><thead><tr><th>Giảng viên</th><th>Số bài</th><th>Ngày giao</th><th></th></tr></thead><tbody>
+          {lecturerAssignments.map(x => <tr key={x.id}><td>{x.lecturerCode} — {x.lecturerName}</td><td>{x.allocatedArticleCount}</td><td>{x.allocationDate}</td><td><button className="danger" disabled={busy} onClick={() => void deleteLecturerAssignment(x.id)}>Hủy</button></td></tr>)}
+        </tbody></table></div>}
+        {roles.some(x => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'QUAN_TRI'].includes(x)) && <form onSubmit={saveLecturerAssignment}>
+          <label>Giảng viên<select name="lecturerId" required defaultValue=""><option value="">-- Chọn giảng viên --</option>
+            {lecturerOptions.filter(x => !lecturerAssignments.some(a => a.lecturerId === x.id)).map(x => <option key={x.id} value={x.id}>{x.code} — {x.fullName}</option>)}
+          </select></label>
+          <label>Số bài giao<input name="allocatedArticleCount" type="number" min="1" step="1" required /></label>
+          <button className="primary" disabled={busy}>Giao chỉ tiêu</button>
+        </form>}
+      </section>}
+
+      {canEditAllocations && allocationFormOpen && selectedTarget?.status === 'CONG_BO' && (
         <section className="panel">
           <h2>
             {editingAllocation ? 'Sửa phân bổ' : 'Thêm phân bổ'}
@@ -520,19 +607,6 @@ export function ResearchTargets({
                 required
                 defaultValue={
                   editingAllocation?.allocatedArticleCount ?? 0
-                }
-              />
-            </label>
-
-            <label>
-              Ngày phân bổ
-              <input
-                name="allocationDate"
-                type="date"
-                required
-                defaultValue={
-                  editingAllocation?.allocationDate ??
-                  new Date().toLocaleDateString('en-CA')
                 }
               />
             </label>

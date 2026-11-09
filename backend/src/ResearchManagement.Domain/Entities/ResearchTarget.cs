@@ -26,6 +26,7 @@ public sealed class ResearchTarget : BaseEntity
         AssignedArticleCount = assignedArticleCount;
         Deadline = deadline;
         JournalConferenceId = journalConferenceId;
+        Status = "CHO_TIEP_NHAN";
     }
 
     public long FacultyId { get; private set; }
@@ -36,6 +37,12 @@ public sealed class ResearchTarget : BaseEntity
 
     public DateOnly? Deadline { get; private set; }
     public long? JournalConferenceId { get; private set; }
+    public string Status { get; private set; } = "CHO_TIEP_NHAN";
+    public long? AssignedByAccountId { get; private set; }
+    public long? AcceptedByAccountId { get; private set; }
+    public DateTimeOffset? AcceptedAt { get; private set; }
+    public DateTimeOffset? PublishedAt { get; private set; }
+    public DateTimeOffset? LockedAt { get; private set; }
 
     public void Update(
         int assignedArticleCount,
@@ -52,5 +59,35 @@ public sealed class ResearchTarget : BaseEntity
         AssignedArticleCount = assignedArticleCount;
         Deadline = deadline;
         JournalConferenceId = journalConferenceId;
+    }
+
+    public void MarkAssigned(long accountId) => AssignedByAccountId = accountId;
+
+    public void Accept(long accountId, DateTimeOffset now)
+    {
+        if (Status != "CHO_TIEP_NHAN") throw new InvalidOperationException("Chỉ tiêu không ở trạng thái chờ tiếp nhận.");
+        AcceptedByAccountId = accountId;
+        AcceptedAt = now;
+        Status = "DA_TIEP_NHAN";
+    }
+
+    public void Publish(DateTimeOffset now)
+    {
+        if (Status != "DA_TIEP_NHAN") throw new InvalidOperationException("Phải tiếp nhận chỉ tiêu trước khi công bố.");
+        PublishedAt = now;
+        Status = "CONG_BO";
+    }
+
+    public void Lock(DateTimeOffset now)
+    {
+        if (Status != "CONG_BO") throw new InvalidOperationException("Chỉ chỉ tiêu đã công bố mới được khóa.");
+        LockedAt = now;
+        Status = "DA_KHOA";
+    }
+
+    public void Cancel()
+    {
+        if (Status == "DA_KHOA") throw new InvalidOperationException("Chỉ tiêu đã khóa không thể hủy.");
+        Status = "DA_HUY";
     }
 }

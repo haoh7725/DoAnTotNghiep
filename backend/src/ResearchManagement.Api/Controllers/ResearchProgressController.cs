@@ -14,6 +14,35 @@ public sealed class ResearchProgressController(
     ApplicationDbContext db,
     ICurrentUser currentUser) : ControllerBase
 {
+    [HttpGet("targets/{targetId:long}")]
+    [Authorize(Policy = ResearchManagement.Api.Authorization.Policies.Management)]
+    public async Task<IActionResult> TargetProgress(long targetId, CancellationToken ct)
+    {
+        var target = await db.ResearchTargets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == targetId, ct)
+            ?? throw new NotFoundException("Không tìm thấy chỉ tiêu NCKH.");
+        if (!currentUser.CanAccess(target.FacultyId, null))
+            throw new ForbiddenException("Không có quyền xem tiến độ chỉ tiêu này.");
+        var allocations = await (from allocation in db.ResearchTargetAllocations.AsNoTracking()
+                                 join department in db.Departments.AsNoTracking() on allocation.DepartmentId equals department.Id
+                                 where allocation.ResearchTargetId == targetId
+                                 orderby department.Name
+                                 select new { allocation.DepartmentId, DepartmentName = department.Name, allocation.AllocatedArticleCount }).ToListAsync(ct);
+        var approved = await (from product in db.Products.AsNoTracking()
+                              join lecturer in db.Lecturers.AsNoTracking() on product.SubmittedByLecturerId equals lecturer.Id
+                              where product.ResearchTargetId == targetId && product.Status == "DA_DUYET" && product.ArticleStatus == "DA_XUAT_BAN"
+                              group product by lecturer.DepartmentId into grouped
+                              select new { DepartmentId = grouped.Key, Count = grouped.Select(x => x.Id).Distinct().Count() })
+            .ToDictionaryAsync(x => x.DepartmentId, x => x.Count, ct);
+        var units = allocations.Select(x => new { x.DepartmentId, x.DepartmentName,
+            AllocatedArticles = x.AllocatedArticleCount, ApprovedArticles = approved.GetValueOrDefault(x.DepartmentId),
+            CompletionPercent = x.AllocatedArticleCount == 0 ? 0m : Math.Round(approved.GetValueOrDefault(x.DepartmentId) * 100m / x.AllocatedArticleCount, 2),
+            IsCompleted = approved.GetValueOrDefault(x.DepartmentId) >= x.AllocatedArticleCount }).ToList();
+        var totalApproved = units.Sum(x => x.ApprovedArticles);
+        return Ok(new { target.Id, target.AssignedArticleCount, target.Status, ApprovedArticles = totalApproved,
+            CompletionPercent = target.AssignedArticleCount == 0 ? 0m : Math.Round(totalApproved * 100m / target.AssignedArticleCount, 2),
+            IsCompleted = totalApproved >= target.AssignedArticleCount, Units = units });
+    }
+
     [HttpGet("targets/my-department")]
     public async Task<IActionResult> MyDepartmentTargets(
     [FromQuery] long academicYearId,
@@ -80,6 +109,12 @@ public sealed class ResearchProgressController(
                 && plan.AcademicYearId == academicYearId
                 && productType.Code == "BAI_BAO"
                 && product.Status == "DA_DUYET"
+                && product.ArticleStatus == "DA_XUAT_BAN"
+                && product.ResearchTargetId.HasValue
+                && db.ResearchTargetAllocations.Any(a =>
+                    a.ResearchTargetId == product.ResearchTargetId &&
+                    a.DepartmentId == department.Id &&
+                    a.FacultyId == department.FacultyId)
             select product.Id;
 
         var approvedArticles = await approvedArticleIds

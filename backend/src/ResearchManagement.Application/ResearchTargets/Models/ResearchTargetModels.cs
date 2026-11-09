@@ -18,4 +18,10 @@ public sealed record ResearchTargetResponse(
     long AcademicYearId,
     int AssignedArticleCount,
     DateOnly? Deadline,
-    long? JournalConferenceId);
+    long? JournalConferenceId,
+    string Status,
+    long? AssignedByAccountId,
+    long? AcceptedByAccountId,
+    DateTimeOffset? AcceptedAt,
+    DateTimeOffset? PublishedAt,
+    DateTimeOffset? LockedAt);

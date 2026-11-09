@@ -29,6 +29,8 @@ public sealed class ApplicationDbContext(
     public DbSet<ResearchTarget> ResearchTargets => Set<ResearchTarget>();
     public DbSet<ResearchTargetAllocation> ResearchTargetAllocations
         => Set<ResearchTargetAllocation>();
+    public DbSet<LecturerTargetAllocation> LecturerTargetAllocations
+        => Set<LecturerTargetAllocation>();
 
     // Lecturers and scientific profiles
     public DbSet<ScientificProfile> ScientificProfiles => Set<ScientificProfile>();
@@ -54,6 +56,8 @@ public sealed class ApplicationDbContext(
     public DbSet<Evaluation> Evaluations => Set<Evaluation>();
     public DbSet<EvaluationConversionDetail> EvaluationConversionDetails
         => Set<EvaluationConversionDetail>();
+    public DbSet<EmulationClassificationRule> EmulationClassificationRules
+        => Set<EmulationClassificationRule>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
