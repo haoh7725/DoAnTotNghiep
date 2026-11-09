@@ -11,10 +11,13 @@ type DetailLine = { id: number; productId: number; productTitle: string; product
 type Detail = Summary & { classificationBasis: string | null; lecturerCodeSnapshot: string; lecturerNameSnapshot: string; details: DetailLine[] }
 
 const office = (user: Profile) => user.roles.some(x => x.role === 'PHONG_QLKH' || x.role === 'QUAN_TRI')
+const manager = (user: Profile) => user.roles.some(x => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'BAN_GIAM_HIEU'].includes(x.role))
 const fmt = (value: number) => value.toLocaleString('vi-VN', { maximumFractionDigits: 4 })
 
 export function Evaluations({ user, lookups }: { user: Profile; lookups: Lookups | null }) {
-  return office(user) ? <EvaluationManagement lookups={lookups} /> : <MyEvaluation lookups={lookups} />
+  if (office(user)) return <EvaluationManagement lookups={lookups} />
+  if (manager(user)) return <ReadOnlyEvaluationResults lookups={lookups} />
+  return <MyEvaluation lookups={lookups} />
 }
 
 function YearSelect({ lookups, value, onChange }: { lookups: Lookups | null; value: string; onChange: (value: string) => void }) {
@@ -27,6 +30,18 @@ function MyEvaluation({ lookups }: { lookups: Lookups | null }) {
   async function load() { if (!year) return; setLoading(true); setError(''); setData(null); try { setData(await api<Detail>(`/evaluations/me?academicYearId=${year}`)) } catch (e) { setError((e as Error).message) } finally { setLoading(false) } }
   useEffect(() => { if (year) void load() }, [year]) // eslint-disable-line react-hooks/exhaustive-deps
   return <><p className="eyebrow">ĐÁNH GIÁ THI ĐUA</p><h1>Kết quả đánh giá của tôi</h1><p className="muted">Kết quả chỉ hiển thị sau khi Phòng Quản lý khoa học chốt.</p>{!lookups?.academicYears.length ? <p className="alert" role="alert">Chưa có năm học. Vui lòng liên hệ quản trị viên để cấu hình năm học trước.</p> : <section className="panel evaluation-filter"><YearSelect lookups={lookups} value={year} onChange={setYear} /><button className="primary" disabled={!year || loading} onClick={load}>{loading ? 'Đang tải…' : 'Xem kết quả'}</button></section>}{error && <p className="alert" role="alert">{error}</p>}{data && <EvaluationDetail data={data} />}</>
+}
+
+function ReadOnlyEvaluationResults({ lookups }: { lookups: Lookups | null }) {
+  const [year, setYear] = useState(''); const [rows, setRows] = useState<Summary[]>([]); const [lecturers, setLecturers] = useState<Lecturer[]>([]); const [detail, setDetail] = useState<Detail | null>(null); const [error, setError] = useState(''); const [loading, setLoading] = useState(false)
+  useEffect(() => { if (!year && lookups?.academicYears.length) setYear(String(lookups.academicYears[0].id)) }, [lookups, year])
+  useEffect(() => { let active = true; api<Paged<Lecturer>>('/lecturers?page=1&pageSize=100').then(x => { if (active) setLecturers(x.items) }).catch(e => { if (active) setError((e as Error).message) }); return () => { active = false } }, [])
+  async function load() { if (!year) return; setLoading(true); setError(''); try { setRows(await api<Summary[]>(`/evaluations?academicYearId=${year}`)) } catch (e) { setError((e as Error).message) } finally { setLoading(false) } }
+  useEffect(() => { if (year) void load() }, [year]) // eslint-disable-line react-hooks/exhaustive-deps
+  async function open(id: number) { setLoading(true); setError(''); try { setDetail(await api<Detail>(`/evaluations/${id}`)) } catch (e) { setError((e as Error).message) } finally { setLoading(false) } }
+  const lecturerMap = useMemo(() => new Map(lecturers.map(x => [x.id, x])), [lecturers])
+  if (detail) return <><button onClick={() => setDetail(null)}>← Danh sách kết quả</button><EvaluationDetail data={detail} /></>
+  return <><p className="eyebrow">KẾT QUẢ THI ĐUA</p><h1>Kết quả đã chốt theo phạm vi quản lý</h1><p className="muted">Chỉ đọc. Bạn chỉ xem được kết quả đã chốt của các đơn vị được phân quyền; không thể tạo hoặc chốt đánh giá.</p>{error && <p className="alert" role="alert">{error}</p>}<section className="panel evaluation-filter"><YearSelect lookups={lookups} value={year} onChange={setYear} /><button className="primary" disabled={!year || loading} onClick={() => void load()}>{loading ? 'Đang tải…' : 'Xem kết quả'}</button></section><section className="panel"><div className="section-top"><h2>Danh sách kết quả đã chốt</h2><span className="muted">{loading ? 'Đang tải…' : `${rows.length} kết quả`}</span></div><div className="table-wrap"><table><thead><tr><th>Giảng viên</th><th>Năm học</th><th>Lần</th><th>Giờ</th><th>Điểm</th><th>Xếp loại</th><th /></tr></thead><tbody>{rows.map(x => <tr key={x.id}><td>{lecturerMap.get(x.lecturerId)?.fullName ?? `Giảng viên #${x.lecturerId}`}</td><td>{x.academicYearCode}</td><td>{x.attempt}</td><td>{fmt(x.totalHours)}</td><td>{fmt(x.totalPoints)}</td><td>{x.classification ?? '—'}</td><td><button onClick={() => void open(x.id)}>Xem chi tiết</button></td></tr>)}</tbody></table></div>{!loading && !rows.length && <p className="empty">Không có kết quả đã chốt trong phạm vi được phép.</p>}</section></>
 }
 
 function EvaluationManagement({ lookups }: { lookups: Lookups | null }) {
