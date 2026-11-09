@@ -51,8 +51,10 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
   const [lecturerOptions, setLecturerOptions] = useState<LecturerOption[]>([])
   const [lecturerAssignments, setLecturerAssignments] = useState<LecturerAssignment[]>([])
   const [progress, setProgress] = useState<TargetProgress | null>(null)
+  const [targetPanel, setTargetPanel] = useState<'overview' | 'allocations' | 'lecturers'>('overview')
 
   const selectedTarget = targets.find(t => t.id === selectedId)
+  const canReceiveAndDistribute = roles.some(x => x === 'TRUONG_KHOA' || x === 'QUAN_TRI')
   const faculties = lookups?.faculties ?? []
   const departments = lookups?.departments ?? []
   const years = lookups?.academicYears ?? []
@@ -220,7 +222,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
   }
 
   async function openLecturerAssignments(allocation: Allocation) {
-    setSelectedAllocation(allocation); setError(''); setMessage('')
+    setSelectedAllocation(allocation); setTargetPanel('lecturers'); setError(''); setMessage('')
     try {
       const [items, options] = await Promise.all([
         api<LecturerAssignment[]>(`/lecturer-target-allocations?departmentAllocationId=${allocation.id}`),
@@ -287,6 +289,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
     setEditingAllocation(null)
     setAllocationFormOpen(true)
     setTargetFormOpen(false)
+    setTargetPanel('allocations')
     setError('')
     setMessage('')
   }
@@ -295,6 +298,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
     setEditingAllocation(allocation)
     setAllocationFormOpen(true)
     setTargetFormOpen(false)
+    setTargetPanel('allocations')
     setError('')
     setMessage('')
   }
@@ -365,11 +369,13 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
                         type="button"
                         onClick={() => {
                           setSelectedId(target.id)
+                          setTargetPanel('overview')
+                          setSelectedAllocation(null)
                           setTargetFormOpen(false)
                           setAllocationFormOpen(false)
                         }}
                       >
-                        {selectedId === target.id ? 'Đang xem' : 'Xem phân bổ'}
+                        {selectedId === target.id ? 'Đang xem' : 'Mở chi tiết'}
                       </button>
                       {' '}
                       {canEdit && (
@@ -471,8 +477,8 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
 
       <section className="panel">
         <div className="section-heading">
-          <h2>Phân bổ chỉ tiêu theo bộ môn</h2>
-          {canEditAllocations && selectedTarget?.status === 'CONG_BO' && (
+          <h2>Thực hiện chỉ tiêu</h2>
+          {targetPanel === 'allocations' && canEditAllocations && selectedTarget?.status === 'CONG_BO' && (
             <button
               type="button"
               className="primary"
@@ -501,19 +507,29 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
               <strong>Chênh lệch:</strong>{' '}
               {selectedTarget.assignedArticleCount - allocatedTotal} bài
             </p>
+            <div className="tabs target-workflow-tabs" aria-label="Các bước thực hiện chỉ tiêu">
+              <button className={targetPanel === 'overview' ? 'active' : ''} onClick={() => setTargetPanel('overview')}>1. Tổng quan</button>
+              <button className={targetPanel === 'allocations' ? 'active' : ''} onClick={() => setTargetPanel('allocations')}>2. Phân bổ bộ môn</button>
+              <button className={targetPanel === 'lecturers' ? 'active' : ''} onClick={() => setTargetPanel('lecturers')}>3. Phân công giảng viên</button>
+            </div>
+            {targetPanel === 'overview' && <>
+            <p className="muted">Thực hiện lần lượt: tiếp nhận chỉ tiêu → công bố để phân bổ xuống bộ môn → giao cho từng giảng viên.</p>
             {progress && <section className="panel" style={{ marginTop: 16 }}>
               <h3>Dashboard tiến độ chỉ tiêu</h3>
               <p><strong>Toàn khoa:</strong> {progress.approvedArticles}/{progress.assignedArticleCount} bài · {progress.completionPercent}% {progress.isCompleted ? '· Đã hoàn thành' : ''}</p>
               <div style={{ height: 12, background: '#e5e7eb', borderRadius: 99, overflow: 'hidden', marginBottom: 14 }}><div style={{ height: '100%', width: `${Math.min(progress.completionPercent, 100)}%`, background: progress.isCompleted ? '#15803d' : '#0f766e' }} /></div>
               <div style={{ overflowX: 'auto' }}><table><thead><tr><th>Bộ môn</th><th>Đã duyệt / chỉ tiêu</th><th>Tỷ lệ</th><th>Biểu đồ</th></tr></thead><tbody>{progress.units.map(unit => <tr key={unit.departmentId}><td>{unit.departmentName}</td><td>{unit.approvedArticles}/{unit.allocatedArticles}</td><td>{unit.completionPercent}% {unit.isCompleted ? '✓' : ''}</td><td style={{ minWidth: 150 }}><div style={{ height: 10, background: '#e5e7eb', borderRadius: 99, overflow: 'hidden' }}><div style={{ height: '100%', width: `${Math.min(unit.completionPercent, 100)}%`, background: unit.isCompleted ? '#15803d' : '#0f766e' }} /></div></td></tr>)}</tbody></table></div>
             </section>}
-            {canEdit && <div className="actions">
-              {selectedTarget.status === 'CHO_TIEP_NHAN' && roles.some(x => x === 'TRUONG_KHOA' || x === 'QUAN_TRI') && <button onClick={() => void transition('accept')} disabled={busy}>Tiếp nhận chỉ tiêu</button>}
-              {selectedTarget.status === 'DA_TIEP_NHAN' && <button className="primary" onClick={() => void transition('publish')} disabled={busy}>Công bố để phân bổ</button>}
-              {selectedTarget.status === 'CONG_BO' && <button onClick={() => void transition('lock')} disabled={busy}>Khóa phân bổ</button>}
-              {!allocations.length && selectedTarget.status !== 'DA_KHOA' && selectedTarget.status !== 'DA_HUY' && <button className="danger" onClick={() => void transition('cancel')} disabled={busy}>Hủy chỉ tiêu</button>}
+            {(canEdit || canReceiveAndDistribute) && <div className="actions">
+              {selectedTarget.status === 'CHO_TIEP_NHAN' && canReceiveAndDistribute && <button className="primary" onClick={() => void transition('accept')} disabled={busy}>Tiếp nhận chỉ tiêu</button>}
+              {selectedTarget.status === 'DA_TIEP_NHAN' && canReceiveAndDistribute && <button className="primary" onClick={() => void transition('publish')} disabled={busy}>Công bố để phân bổ</button>}
+              {selectedTarget.status === 'CONG_BO' && canReceiveAndDistribute && <button onClick={() => void transition('lock')} disabled={busy}>Khóa phân bổ</button>}
+              {!allocations.length && selectedTarget.status !== 'DA_KHOA' && selectedTarget.status !== 'DA_HUY' && (canEdit || canReceiveAndDistribute) && <button className="danger" onClick={() => void transition('cancel')} disabled={busy}>Hủy chỉ tiêu</button>}
             </div>}
+            </>}
 
+            {targetPanel === 'allocations' && <>
+            <p className="muted">Bước 2: chia tổng chỉ tiêu của khoa cho các bộ môn. Tổng số bài đã phân bổ không được vượt chỉ tiêu của khoa.</p>
             {allocations.length === 0 ? (
               <p className="muted">Chưa có phân bổ cho chỉ tiêu này.</p>
             ) : (
@@ -551,13 +567,15 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
                 </table>
               </div>
             )}
+            </>}
+            {targetPanel === 'lecturers' && <p className="muted">Bước 3: chọn một bộ môn ở bước 2, sau đó bấm “Xem / phân công” để giao chỉ tiêu cho từng giảng viên.</p>}
           </>
         )}
       </section>
 
-      {selectedAllocation && <section className="panel">
+      {targetPanel === 'lecturers' && selectedAllocation && <section className="panel">
         <div className="section-heading"><h2>Phân công cho giảng viên — {departmentName(selectedAllocation.departmentId)}</h2>
-          <button onClick={() => setSelectedAllocation(null)}>Đóng</button></div>
+          <button onClick={() => { setSelectedAllocation(null); setTargetPanel('allocations') }}>Quay lại phân bổ bộ môn</button></div>
         <p><strong>Chỉ tiêu bộ môn:</strong> {selectedAllocation.allocatedArticleCount} bài · <strong>Đã giao cá nhân:</strong> {lecturerAssignments.reduce((s, x) => s + x.allocatedArticleCount, 0)} bài</p>
         {lecturerAssignments.length > 0 && <div style={{ overflowX: 'auto' }}><table><thead><tr><th>Giảng viên</th><th>Số bài</th><th>Ngày giao</th><th></th></tr></thead><tbody>
           {lecturerAssignments.map(x => <tr key={x.id}><td>{x.lecturerCode} — {x.lecturerName}</td><td>{x.allocatedArticleCount}</td><td>{x.allocationDate}</td><td><button className="danger" disabled={busy} onClick={() => void deleteLecturerAssignment(x.id)}>Hủy</button></td></tr>)}

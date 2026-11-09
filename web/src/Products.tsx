@@ -10,6 +10,7 @@ type CoAuthor = { id: number; lecturerId: number; lecturerFullName: string; lect
 type Evidence = { id: number; originalFileName: string; fileSizeBytes: number; description: string | null; uploadedAt: string }
 type Product = Summary & { submittedByLecturerId: number; submittedByLecturerFullName: string; description: string | null; publicationInfo: string | null; publishedDate: string | null; journalIndex: string | null; journalClassification: string | null; projectLevel: string | null; coAuthors: CoAuthor[]; evidences: Evidence[] }
 type PlanItem = { id: number; name: string; productTypeName: string; academicYearCode: string; status: string }
+type LecturerOption = { id: number; fullName: string; code: string; departmentName: string }
 type AvailableTarget = { id: number; academicYearId: number; academicYearCode: string; allocatedArticleCount: number; journalConferenceId: number | null; journalConferenceName: string | null; deadline: string | null; status: string }
 type ReviewHistory = { id: number; productId: number; actorAccountId: number; actorUsername: string; fromStatus: string; toStatus: string; comment: string | null; occurredAt: string }
 type ProductSnapshot = { productId: number; version: number; snapshotByAccountId: number; snapshotAt: string; title: string; description: string | null; publicationInfo: string | null; publishedDate: string | null; articleStatus: string | null; journalIndex: string | null; journalClassification: string | null; projectLevel: string | null; status: string }
@@ -149,6 +150,7 @@ export function ProductReviewWorkspace({ user }: { user: Profile }) {
 // ── ProductWorkspace (entry) ───────────────────────────────────────────────────
 export function ProductWorkspace({ user }: { user?: Profile | null }) {
   const [items, setItems] = useState<Summary[]>([])
+  const [planItems, setPlanItems] = useState<PlanItem[]>([])
   const [selected, setSelected] = useState<number | null>(null)
   const [revision, setRevision] = useState(0)
   const [error, setError] = useState('')
@@ -163,13 +165,19 @@ export function ProductWorkspace({ user }: { user?: Profile | null }) {
     return () => { active = false }
   }, [revision])
 
+  useEffect(() => {
+    api<PlanItem[]>('/products/available-plan-items').then(setPlanItems).catch(() => {
+      // Danh sách sản phẩm vẫn dùng được nếu chưa tải được nhãn kế hoạch.
+    })
+  }, [revision])
+
   if (selected !== null)
     return <ProductDetail id={selected} user={user ?? null} onBack={() => { setSelected(null); setRevision(x => x + 1) }} />
 
   return <>
     <p className="eyebrow">SẢN PHẨM KHOA HỌC</p>
     <h1>Sản phẩm của tôi</h1>
-    <p className="muted">Quản lý bài viết, đồng tác giả và minh chứng gắn với nội dung kế hoạch.</p>
+    <p className="muted">Khai báo sản phẩm thực tế và minh chứng để gửi xét duyệt. Kế hoạch chỉ là phần cam kết đầu năm.</p>
     {error && <p className="alert">{error}</p>}
     <CreateProduct onCreated={id => { setRevision(x => x + 1); setSelected(id) }} />
     <section className="panel">
@@ -179,7 +187,10 @@ export function ProductWorkspace({ user }: { user?: Profile | null }) {
           <th>Tên sản phẩm</th><th>Trạng thái bài viết</th><th>Xét duyệt</th><th>Điểm quy đổi</th><th>Cập nhật</th><th></th>
         </tr></thead><tbody>
             {items.map(p => <tr key={p.id}>
-              <td><strong>{p.title}</strong><br /><small>Kế hoạch #{p.researchPlanItemId}</small></td>
+              <td><strong>{p.title}</strong><br /><small>{(() => {
+                const plan = planItems.find(item => item.id === p.researchPlanItemId)
+                return plan ? `${plan.productTypeName} · ${plan.name}` : 'Nội dung kế hoạch đã liên kết'
+              })()}</small></td>
               <td>{p.articleStatus ? article[p.articleStatus] ?? p.articleStatus : '—'}</td>
               <td><span className={`status-chip status-chip--${p.status.toLowerCase()}`}>{workflow[p.status] ?? p.status}</span></td>
               <td>{p.scoreEquivalent !== null ? p.scoreEquivalent : '—'}</td>
@@ -228,7 +239,7 @@ function CreateProduct({ onCreated }: { onCreated: (id: number) => void }) {
 
   return <section className="panel">
     <div className="section-top">
-      <div><h2>Thêm sản phẩm</h2><p className="muted product-sub">Chọn nội dung trong kế hoạch nghiên cứu của bạn.</p></div>
+      <div><h2>Khai báo sản phẩm thực tế</h2><p className="muted product-sub">Bước 1: chọn nội dung đã cam kết trong kế hoạch. Bước 2: nhập sản phẩm và minh chứng để gửi xét duyệt.</p></div>
       <button className="primary" onClick={() => setOpen(x => !x)}>{open ? 'Đóng' : '+ Thêm'}</button>
     </div>
     {open && <ProductForm onSubmit={submit} busy={busy} error={error} planItems={plans} targets={targets} />}
@@ -607,36 +618,42 @@ function ProductForm({ product, onSubmit, busy, error, planItems, targets }: {
   product?: Product; onSubmit: (e: FormEvent<HTMLFormElement>) => void
   busy: boolean; error: string; planItems?: PlanItem[]; targets?: AvailableTarget[]
 }) {
+  const [selectedPlanItemId, setSelectedPlanItemId] = useState('')
+  const selectedPlan = planItems?.find(x => x.id === Number(selectedPlanItemId))
+  const isArticle = selectedPlan?.productTypeName.trim().toLocaleLowerCase('vi-VN') === 'bài báo'
+  const isProject = selectedPlan?.productTypeName.trim().toLocaleLowerCase('vi-VN') === 'đề tài'
   return <form onSubmit={onSubmit}>
     {error && <p className="alert">{error}</p>}
     <div className="form-grid">
-      {planItems && <label className="wide">Nội dung kế hoạch
-        <select name="researchPlanItemId" required defaultValue="">
+      {planItems && <><label className="wide">1. Nội dung đã cam kết trong kế hoạch
+        <select name="researchPlanItemId" required value={selectedPlanItemId} onChange={e => setSelectedPlanItemId(e.target.value)}>
           <option value="">Chọn nội dung kế hoạch</option>
           {planItems.map(x => <option value={x.id} key={x.id}>{x.academicYearCode} · {x.productTypeName} · {x.name}</option>)}
         </select>
-      </label>}
-      {planItems && <label className="wide">Chỉ tiêu bài báo được phân bổ
+        <small className="muted">Dùng để đối chiếu sản phẩm này với cam kết đầu năm; đây không phải nơi gửi duyệt.</small>
+      </label>
+      {selectedPlan && <div className="wide product-context"><strong>Loại đã chọn: {selectedPlan.productTypeName}</strong><span>{isArticle ? 'Bài báo có thể được gắn với chỉ tiêu được giao.' : 'Loại này không dùng chỉ tiêu bài báo; chỉ cần khai báo thông tin và minh chứng.'}</span></div>}
+      {isArticle && <label className="wide">2. Chỉ tiêu bài báo được giao <small className="muted">(nếu áp dụng)</small>
         <select name="researchTargetId" defaultValue="">
-          <option value="">Không áp dụng (sản phẩm không phải bài báo)</option>
+          <option value="">Không gắn chỉ tiêu cụ thể</option>
           {(targets ?? []).map(x => <option value={x.id} key={x.id}>
             {x.academicYearCode} · {x.journalConferenceName ?? 'Chỉ tiêu bài báo chung'} · phân bổ {x.allocatedArticleCount} bài
           </option>)}
         </select>
-        {targets?.length === 0 && <small className="muted">Bộ môn chưa được phân bổ chỉ tiêu đã công bố.</small>}
-      </label>}
-      <label className="wide">Tên sản phẩm<input name="title" required minLength={3} maxLength={500} defaultValue={product?.title} /></label>
-      <label>Trạng thái bài viết
+        {targets?.length === 0 && <small className="muted">Bạn chưa được giao chỉ tiêu bài báo đang công bố; vẫn có thể lưu sản phẩm nhưng không tính vào chỉ tiêu.</small>}
+      </label>}</>}
+      <label className="wide">{planItems ? '3. Tên sản phẩm thực tế' : 'Tên sản phẩm'}<input name="title" required minLength={3} maxLength={500} defaultValue={product?.title} /></label>
+      {(isArticle || !planItems) && <label>Trạng thái bài viết
         <select name="articleStatus" defaultValue={product?.articleStatus ?? ''}>
           <option value="">Không áp dụng</option>
           {Object.entries(article).map(([v, n]) => <option value={v} key={v}>{n}</option>)}
         </select>
-      </label>
-      <label>Ngày công bố<input type="date" name="publishedDate" defaultValue={product?.publishedDate ?? ''} /></label>
-      <label>Nơi công bố<input name="publicationInfo" maxLength={500} defaultValue={product?.publicationInfo ?? ''} /></label>
-      <label>Chỉ số tạp chí<input name="journalIndex" maxLength={100} placeholder="Scopus, WoS…" defaultValue={product?.journalIndex ?? ''} /></label>
-      <label>Phân loại tạp chí<input name="journalClassification" maxLength={100} placeholder="Q1, Q2…" defaultValue={product?.journalClassification ?? ''} /></label>
-      <label>Cấp đề tài<input name="projectLevel" maxLength={100} placeholder="Trường, Bộ, Nhà nước…" defaultValue={product?.projectLevel ?? ''} /></label>
+      </label>}
+      {(isArticle || !planItems) && <label>Ngày công bố<input type="date" name="publishedDate" defaultValue={product?.publishedDate ?? ''} /></label>}
+      <label>Nơi công bố / đơn vị cấp<input name="publicationInfo" maxLength={500} defaultValue={product?.publicationInfo ?? ''} /></label>
+      {(isArticle || !planItems) && <label>Chỉ số tạp chí<input name="journalIndex" maxLength={100} placeholder="Scopus, WoS…" defaultValue={product?.journalIndex ?? ''} /></label>}
+      {(isArticle || !planItems) && <label>Phân loại tạp chí<input name="journalClassification" maxLength={100} placeholder="Q1, Q2…" defaultValue={product?.journalClassification ?? ''} /></label>}
+      {(isProject || !planItems) && <label>Cấp đề tài<input name="projectLevel" maxLength={100} placeholder="Trường, Bộ, Nhà nước…" defaultValue={product?.projectLevel ?? ''} /></label>}
       <label className="wide">Mô tả<textarea name="description" rows={4} defaultValue={product?.description ?? ''} /></label>
     </div>
     <button className="primary" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu sản phẩm'}</button>
@@ -646,6 +663,12 @@ function ProductForm({ product, onSubmit, busy, error, planItems, targets }: {
 // ── CoAuthors ──────────────────────────────────────────────────────────────────
 function CoAuthors({ product, onChanged }: { product: Product; onChanged: () => void }) {
   const [error, setError] = useState('')
+  const [lecturers, setLecturers] = useState<LecturerOption[]>([])
+  useEffect(() => {
+    api<LecturerOption[]>('/products/co-author-options')
+      .then(setLecturers)
+      .catch(e => setError((e as Error).message))
+  }, [])
   async function add(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const form = e.currentTarget; const f = new FormData(form)
     try {
@@ -668,7 +691,12 @@ function CoAuthors({ product, onChanged }: { product: Product; onChanged: () => 
     </ul>
     {editable(product) && (
       <form className="inline-editor product-author" onSubmit={add}>
-        <input name="lecturerId" type="number" min="1" required placeholder="ID giảng viên" />
+        <select name="lecturerId" required defaultValue="">
+          <option value="" disabled>Chọn giảng viên đồng tác giả</option>
+          {lecturers.map(lecturer => <option key={lecturer.id} value={lecturer.id}>
+            {lecturer.fullName} ({lecturer.code}) · {lecturer.departmentName}
+          </option>)}
+        </select>
         <input name="displayOrder" type="number" min="1" required defaultValue="1" />
         <input name="authorRole" required maxLength={100} defaultValue="DONG_TAC_GIA" />
         <button>Thêm</button>

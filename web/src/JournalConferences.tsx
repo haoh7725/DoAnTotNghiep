@@ -298,6 +298,7 @@ export default function JournalConferences({ canEdit }: Props) {
                   <option value="TAP_CHI">Tạp chí</option>
                   <option value="HOI_NGHI">Hội nghị</option>
                 </select>
+                <small className="muted">Danh mục nơi công bố chỉ gồm Tạp chí và Hội nghị. Đề tài, sách, chứng nhận được chọn ở loại nội dung trong Kế hoạch NCKH.</small>
               </label>
 
               <label>
