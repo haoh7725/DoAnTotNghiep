@@ -13,6 +13,7 @@ public sealed class ConversionRuleConfiguration : IEntityTypeConfiguration<Conve
         b.Property(x => x.Code).HasColumnName("ma_quy_dinh").HasMaxLength(50); b.Property(x => x.Version).HasColumnName("phien_ban");
         b.Property(x => x.Name).HasColumnName("ten_quy_dinh").HasMaxLength(300); b.Property(x => x.ConditionDescription).HasColumnName("mo_ta_dieu_kien");
         b.Property(x => x.ConversionValue).HasColumnName("muc_quy_doi").HasPrecision(14, 4); b.Property(x => x.Unit).HasColumnName("don_vi").HasMaxLength(10);
+        b.Property(x => x.Priority).HasColumnName("do_uu_tien").HasDefaultValue(100);
         b.Property(x => x.AuthorRuleDescription).HasColumnName("mo_ta_quy_tac_tac_gia"); b.Property(x => x.EffectiveFrom).HasColumnName("hieu_luc_tu").HasColumnType("date");
         b.Property(x => x.EffectiveTo).HasColumnName("hieu_luc_den").HasColumnType("date"); b.Property(x => x.LegalBasis).HasColumnName("van_ban_can_cu").HasMaxLength(512);
         b.HasOne<ProductType>().WithMany().HasForeignKey(x => x.ProductTypeId).OnDelete(DeleteBehavior.Restrict);

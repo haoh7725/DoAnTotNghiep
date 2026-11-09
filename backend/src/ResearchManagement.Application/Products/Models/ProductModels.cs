@@ -22,6 +22,8 @@ public sealed class CreateProductRequest
     [StringLength(100)] public string? JournalIndex { get; set; }
     [StringLength(100)] public string? JournalClassification { get; set; }
     [StringLength(100)] public string? ProjectLevel { get; set; }
+    public long? JournalConferenceId { get; set; }
+    public long? ResearchTargetId { get; set; }
 }
 
 public sealed class UpdateProductRequest
@@ -114,6 +116,8 @@ public sealed record ProductResponse(
     string? JournalIndex,
     string? JournalClassification,
     string? ProjectLevel,
+    long? JournalConferenceId,
+    long? ResearchTargetId,
     string Status,
     decimal? ScoreEquivalent,
     DateTimeOffset CreatedAt,

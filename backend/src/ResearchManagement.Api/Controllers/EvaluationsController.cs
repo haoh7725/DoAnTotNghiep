@@ -74,7 +74,7 @@ public sealed class EvaluationsController(ApplicationDbContext db, ICurrentUser 
                               join item in db.ResearchPlanItems.AsNoTracking() on p.ResearchPlanItemId equals item.Id
                               join plan in db.ResearchPlans.AsNoTracking() on item.ResearchPlanId equals plan.Id
                               join type in db.ProductTypes.AsNoTracking() on item.ProductTypeId equals type.Id
-                              where plan.AcademicYearId == request.AcademicYearId && p.Status == ProductStatuses.Approved &&
+                              where plan.AcademicYearId == request.AcademicYearId && p.Status == ProductStatuses.Approved && p.PublishedDate.HasValue &&
                                   (p.SubmittedByLecturerId == lecturer.Id || db.ProductCoAuthors.Any(a => a.ProductId == p.Id && a.LecturerId == lecturer.Id))
                               select new { Product = p, ProductTypeId = type.Id, ProductTypeName = type.Name,
                                   AuthorRole = p.SubmittedByLecturerId == lecturer.Id ? "TAC_GIA_CHINH" :
@@ -83,7 +83,7 @@ public sealed class EvaluationsController(ApplicationDbContext db, ICurrentUser 
 
         foreach (var product in products)
         {
-            var date = product.Product.PublishedDate ?? DateOnly.FromDateTime(product.Product.UpdatedAt.UtcDateTime);
+            var date = product.Product.PublishedDate!.Value;
             var rules = await db.ConversionRules.AsNoTracking()
                 .Where(x => x.ProductTypeId == product.ProductTypeId && x.EffectiveFrom <= date &&
                     (!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= date))
@@ -91,7 +91,14 @@ public sealed class EvaluationsController(ApplicationDbContext db, ICurrentUser 
             var criteria = await db.ConversionCriteria.AsNoTracking()
                 .Where(x => rules.Select(r => r.Id).Contains(x.ConversionRuleId)).ToListAsync(ct);
             var matched = rules.Where(r => criteria.Where(c => c.ConversionRuleId == r.Id).All(c => Matches(c, product.Product)))
-                .GroupBy(r => r.Unit).Select(g => g.First());
+                .GroupBy(r => r.Unit)
+                .Select(group =>
+                {
+                    var selected = group.OrderByDescending(x => x.Priority).ThenByDescending(x => x.Version).ThenBy(x => x.Id).First();
+                    if (group.Count(x => x.Priority == selected.Priority && x.Version == selected.Version) > 1)
+                        throw new BusinessRuleException($"Có nhiều quy định cùng ưu tiên cho đơn vị {group.Key}. Vui lòng cấu hình lại độ ưu tiên.");
+                    return selected;
+                });
             foreach (var rule in matched)
             {
                 var role = product.AuthorRole ?? "DONG_TAC_GIA";
@@ -118,7 +125,8 @@ public sealed class EvaluationsController(ApplicationDbContext db, ICurrentUser 
             ?? throw new NotFoundException("Không tìm thấy kết quả đánh giá.");
         if (evaluation.EvaluatorAccountId != UserId() && !currentUser.IsInRole(Roles.Admin))
             throw new ForbiddenException("Chỉ người đánh giá hoặc quản trị viên được chốt kết quả.");
-        try { evaluation.Finalize(request.Classification, request.ClassificationBasis); }
+        var classification = await CalculateClassificationAsync(evaluation, ct);
+        try { evaluation.Finalize(classification.Name, classification.Basis); }
         catch (InvalidOperationException e) { throw new ConflictException(e.Message); }
         await db.SaveChangesAsync(ct);
         return await ToDetail(evaluation, ct);
@@ -171,6 +179,28 @@ public sealed class EvaluationsController(ApplicationDbContext db, ICurrentUser 
                           on l.DepartmentId equals d.Id where l.Id == lecturerId
                           select new { d.FacultyId, DepartmentId = d.Id }).SingleOrDefaultAsync(ct);
         return unit is not null && currentUser.CanAccess(unit.FacultyId, unit.DepartmentId);
+    }
+
+    private async Task<(string Name, string Basis)> CalculateClassificationAsync(Evaluation evaluation, CancellationToken ct)
+    {
+        var requiredHours = await db.ResearchNorms.AsNoTracking()
+            .Where(x => x.LecturerId == evaluation.LecturerId && x.AcademicYearId == evaluation.AcademicYearId)
+            .Select(x => (decimal?)x.RequiredHours).SingleOrDefaultAsync(ct);
+        if (!requiredHours.HasValue || requiredHours.Value <= 0)
+            throw new BusinessRuleException("Chưa có định mức NCKH hợp lệ để hệ thống tự xếp loại.");
+        var totals = await Totals(evaluation.Id, ct);
+        var percent = decimal.Round(totals.Hours * 100m / requiredHours.Value, 2);
+        var rules = await db.EmulationClassificationRules.AsNoTracking()
+            .Where(x => x.AcademicYearId == evaluation.AcademicYearId)
+            .OrderByDescending(x => x.MinimumPercent).ThenBy(x => x.SortOrder).ToListAsync(ct);
+        if (rules.Count == 0)
+            throw new BusinessRuleException("Chưa cấu hình quy chế xếp loại cho năm học này.");
+        var rule = rules.FirstOrDefault(x => percent >= x.MinimumPercent);
+        var name = rule?.Name ?? "Chưa đạt";
+        var basis = rule is null
+            ? "Không đạt ngưỡng thấp nhất của quy chế xếp loại."
+            : $"Đạt ngưỡng {rule.Name} từ {rule.MinimumPercent:0.##}% theo quy chế năm học.";
+        return (name, $"Tự động theo tỷ lệ giờ NCKH: {totals.Hours:0.####}/{requiredHours.Value:0.####} giờ ({percent:0.##}%). {basis}");
     }
 
     private async Task<EvaluationSummaryResponse> ToSummary(Evaluation e, CancellationToken ct)

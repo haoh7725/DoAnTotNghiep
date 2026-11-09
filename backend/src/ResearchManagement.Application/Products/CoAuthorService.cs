@@ -5,6 +5,7 @@ using ResearchManagement.Application.Products.Models;
 using ResearchManagement.Application.Lecturers.Abstractions;
 using ResearchManagement.Domain.Constants;
 using ResearchManagement.Domain.Entities;
+using ResearchManagement.Application.ResearchPlans.Abstractions;
 
 namespace ResearchManagement.Application.Products;
 
@@ -12,14 +13,16 @@ public sealed class CoAuthorService(
     IProductRepository products,
     IProductCoAuthorRepository coAuthors,
     ILecturerRepository lecturers,
+    ILecturerAccessRepository lecturerAccess,
     ICurrentUser currentUser)
 {
     public async Task<IReadOnlyList<CoAuthorResponse>> GetByProductIdAsync(
         long productId,
         CancellationToken cancellationToken)
     {
-        _ = await products.GetByIdAsync(productId, cancellationToken)
+        var product = await products.GetByIdAsync(productId, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
+        await EnsureCanReadAsync(product, cancellationToken);
 
         var list = await coAuthors.GetByProductIdAsync(productId, cancellationToken);
         return await EnrichAsync(list, cancellationToken);
@@ -116,6 +119,24 @@ public sealed class CoAuthorService(
         var owner = await lecturers.GetByIdAsync(product.SubmittedByLecturerId, cancellationToken);
         if (owner?.AccountId != currentUser.Id)
             throw new ForbiddenException("Chỉ tác giả chính được quản lý đồng tác giả.");
+    }
+
+    private async Task EnsureCanReadAsync(Product product, CancellationToken cancellationToken)
+    {
+        if (currentUser.IsInRole(Roles.Admin)) return;
+        var accountId = currentUser.Id
+            ?? throw new AuthenticationFailedException("Không xác định được người dùng hiện tại.");
+        var access = await lecturerAccess.GetAccessInfoAsync(product.SubmittedByLecturerId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy giảng viên nộp sản phẩm.");
+        if (access.AccountId == accountId || currentUser.CanAccess(access.FacultyId, access.DepartmentId)) return;
+
+        var authors = await coAuthors.GetByProductIdAsync(product.Id, cancellationToken);
+        foreach (var author in authors)
+        {
+            var lecturer = await lecturers.GetByIdAsync(author.LecturerId, cancellationToken);
+            if (lecturer?.AccountId == accountId) return;
+        }
+        throw new ForbiddenException("Không có quyền xem đồng tác giả của sản phẩm này.");
     }
 
     private async Task<IReadOnlyList<CoAuthorResponse>> EnrichAsync(

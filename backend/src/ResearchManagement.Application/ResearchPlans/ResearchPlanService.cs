@@ -8,6 +8,7 @@ namespace ResearchManagement.Application.ResearchPlans;
 
 public sealed class ResearchPlanService(
     IResearchPlanRepository researchPlans,
+    IResearchPlanItemRepository planItems,
     ILecturerAccessRepository lecturerAccess,
     ICurrentUser currentUser)
 {
@@ -15,7 +16,7 @@ public sealed class ResearchPlanService(
         CreateResearchPlanRequest request,
         CancellationToken cancellationToken)
     {
-        await EnsureCanAccessLecturerAsync(
+        await EnsureOwnerLecturerAsync(
             request.LecturerId,
             cancellationToken);
 
@@ -93,7 +94,7 @@ public sealed class ResearchPlanService(
             ?? throw new NotFoundException(
                 "Không tìm thấy kế hoạch NCKH.");
 
-        await EnsureCanAccessLecturerAsync(
+        await EnsureOwnerLecturerAsync(
             plan.LecturerId,
             cancellationToken);
 
@@ -127,7 +128,7 @@ public sealed class ResearchPlanService(
             ?? throw new NotFoundException(
                 "Không tìm thấy kế hoạch NCKH.");
 
-        await EnsureCanAccessLecturerAsync(
+        await EnsureOwnerLecturerAsync(
             plan.LecturerId,
             cancellationToken);
 
@@ -136,6 +137,13 @@ public sealed class ResearchPlanService(
             throw new ConflictException(
                 "Kế hoạch đã được đăng ký trước đó.");
         }
+
+        var items = await planItems.GetByResearchPlanIdAsync(plan.Id, cancellationToken);
+        if (items.Count == 0)
+            throw new BusinessRuleException("Kế hoạch phải có ít nhất một nội dung nghiên cứu trước khi đăng ký.");
+        var committedTotal = items.Sum(x => x.CommittedQuantity);
+        if (committedTotal != plan.CommittedProductCount)
+            throw new BusinessRuleException("Tổng số lượng trong các nội dung phải bằng số sản phẩm cam kết của kế hoạch.");
 
         plan.Submit();
 
@@ -169,6 +177,16 @@ public sealed class ResearchPlanService(
             throw new ForbiddenException(
                 "Bạn không có quyền truy cập dữ liệu của giảng viên này.");
         }
+    }
+
+    private async Task EnsureOwnerLecturerAsync(long lecturerId, CancellationToken cancellationToken)
+    {
+        var lecturer = await lecturerAccess.GetAccessInfoAsync(lecturerId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy giảng viên.");
+        var accountId = currentUser.Id
+            ?? throw new AuthenticationFailedException("Không xác định được người dùng hiện tại.");
+        if (lecturer.AccountId != accountId)
+            throw new ForbiddenException("Chỉ giảng viên chính chủ được tạo, sửa hoặc đăng ký kế hoạch.");
     }
 
     private static ResearchPlanResponse ToResponse(

@@ -15,3 +15,5 @@ public sealed record PasswordRequest([Required, StringLength(128, MinimumLength 
 public sealed record PermissionRequest([Required] string Role, [Required] string Scope, long? FacultyId, long? DepartmentId);
 public sealed record ChangePasswordRequest([Required, StringLength(128)] string CurrentPassword,
     [Required, StringLength(128, MinimumLength = 12)] string NewPassword);
+public sealed record EmulationClassificationRuleRequest(long AcademicYearId, [Required, StringLength(100)] string Name,
+    [Range(0, 99999)] decimal MinimumPercent, [Range(0, 9999)] int SortOrder);

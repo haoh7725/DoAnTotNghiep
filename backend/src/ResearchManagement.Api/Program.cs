@@ -10,12 +10,17 @@ using ResearchManagement.Infrastructure.Auth;
 using ResearchManagement.Infrastructure.Persistence.Seed;
 using QuestPDF.Infrastructure;
 using ResearchManagement.Api.BackgroundServices;
+using ResearchManagement.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using ResearchManagement.Domain.Constants;
 
 var builder = WebApplication.CreateBuilder(args);
 QuestPDF.Settings.License = LicenseType.Community;
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddHttpContextAccessor();
@@ -36,6 +41,29 @@ builder.Services
                 if (!context.Request.Headers.ContainsKey("Authorization"))
                     context.Token = context.Request.Cookies["research_session"];
                 return Task.CompletedTask;
+            },
+            OnTokenValidated = async context =>
+            {
+                var subject = context.Principal?.FindFirst(AppClaimTypes.Subject)?.Value;
+                if (!long.TryParse(subject, out var accountId))
+                {
+                    context.Fail("Token không xác định được tài khoản.");
+                    return;
+                }
+
+                var db = context.HttpContext.RequestServices.GetRequiredService<ApplicationDbContext>();
+                var account = await db.Accounts.AsNoTracking()
+                    .Include(x => x.RoleAssignments)
+                    .SingleOrDefaultAsync(x => x.Id == accountId, context.HttpContext.RequestAborted);
+                if (account is null || account.Status != AccountStatuses.Active)
+                {
+                    context.Fail("Tài khoản không còn hoạt động.");
+                    return;
+                }
+
+                var tokenVersion = context.Principal?.FindFirst(AppClaimTypes.AuthorizationVersion)?.Value;
+                if (!string.Equals(tokenVersion, AuthorizationVersion.For(account), StringComparison.Ordinal))
+                    context.Fail("Quyền hoặc thông tin xác thực đã thay đổi. Vui lòng đăng nhập lại.");
             }
         };
         options.TokenValidationParameters = new TokenValidationParameters
@@ -85,6 +113,8 @@ app.UseExceptionHandler();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();

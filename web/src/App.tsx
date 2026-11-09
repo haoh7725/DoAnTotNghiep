@@ -13,6 +13,7 @@ import { ResearchTargets } from './ResearchTargets'
 import JournalConferences from './JournalConferences'
 import Notifications from './Notifications'
 import { Evaluations } from './Evaluations'
+import { EmulationClassificationRules } from './EmulationClassificationRules'
 import './App.css'
 
 export default function App() {
@@ -35,7 +36,7 @@ export default function App() {
   ) ?? false
 
   const canEditResearchTargets = user?.roles.some(p =>
-    ['PHONG_QLKH', 'QUAN_TRI'].includes(p.role)
+    ['TRUONG_KHOA', 'PHONG_QLKH', 'QUAN_TRI'].includes(p.role)
   ) ?? false
 
   const canEditResearchAllocations = user?.roles.some(p =>
@@ -210,6 +211,7 @@ export default function App() {
             </button>
           )}
         {(canEvaluate || user.roles.some(r => r.role === 'GIANG_VIEN')) && <button className={tab === 'evaluations' ? 'active' : ''} onClick={() => setTab('evaluations')}>{canEvaluate ? 'Đánh giá thi đua' : 'Kết quả thi đua của tôi'}</button>}
+        {canEvaluate && <button className={tab === 'emulation-rules' ? 'active' : ''} onClick={() => setTab('emulation-rules')}>Quy chế xếp loại</button>}
         {canBrowseLecturers(user) && <button className={tab === 'lecturers' ? 'active' : ''} onClick={() => setTab('lecturers')}>Hồ sơ giảng viên</button>}
         {canViewResearchNorms && <button className={tab === 'research-norms' ? 'active' : ''} onClick={() => setTab('research-norms')}>Định mức NCKH</button>}
         {canViewResearchTargets && (
@@ -281,6 +283,7 @@ export default function App() {
         )
       }
       {tab === 'evaluations' && <Evaluations user={user} lookups={lookups} />}
+      {tab === 'emulation-rules' && (canEvaluate ? <EmulationClassificationRules years={lookups?.academicYears ?? []} /> : <p role="alert">Bạn không có quyền cấu hình quy chế.</p>)}
       {tab === 'lecturers' && (canBrowseLecturers(user) ? <LecturerDirectory user={user} lookups={lookups} /> : <p role="alert">Bạn không có quyền xem danh sách giảng viên.</p>)}
       {tab === 'research-norms' && (canViewResearchNorms ? <ResearchNorms academicYears={lookups?.academicYears ?? []} canEdit={canEditResearchNorms} /> : <p role="alert">Bạn không có quyền xem định mức NCKH.</p>)}
       {tab === 'research-targets' && (
@@ -289,6 +292,7 @@ export default function App() {
             lookups={lookups}
             canEdit={canEditResearchTargets}
             canEditAllocations={canEditResearchAllocations}
+            roles={user?.roles.map(x => x.role) ?? []}
           />
           : <p role="alert">Bạn không có quyền xem chỉ tiêu NCKH.</p>
       )}

@@ -24,8 +24,7 @@ public sealed class ReminderService(
                 ? "QUA_HAN"
                 : "NHAC_HAN";
 
-            var deduplicationKey =
-                $"{type}:ITEM:{item.ResearchPlanItemId}:{today:yyyyMMdd}";
+            var deduplicationKey = $"{type}:{item.DeduplicationKey}";
 
             var exists = await notifications.ExistsAsync(
                 item.RecipientAccountId,
@@ -37,8 +36,8 @@ public sealed class ReminderService(
                 continue;
 
             var content = type == "QUA_HAN"
-                ? $"Nội dung '{item.ItemName}' đã quá hạn ngày {item.Deadline:dd/MM/yyyy}. Vui lòng cập nhật tiến độ."
-                : $"Nội dung '{item.ItemName}' sắp đến hạn ngày {item.Deadline:dd/MM/yyyy}. Vui lòng kiểm tra tiến độ.";
+                ? $"{item.ItemName} đã quá hạn ngày {item.Deadline:dd/MM/yyyy}. Vui lòng cập nhật tiến độ."
+                : $"{item.ItemName} sắp đến hạn ngày {item.Deadline:dd/MM/yyyy}. Vui lòng kiểm tra tiến độ.";
 
             var notification = new Notification(
                 recipientAccountId: item.RecipientAccountId,

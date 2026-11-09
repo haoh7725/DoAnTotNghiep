@@ -2,6 +2,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ResearchManagement.Application.ResearchPlans;
 using ResearchManagement.Application.ResearchPlans.Models;
+using ResearchManagement.Application.Common;
+using ResearchManagement.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace ResearchManagement.Api.Controllers;
 
@@ -9,7 +12,8 @@ namespace ResearchManagement.Api.Controllers;
 [Route("api/research-plans")]
 [Authorize]
 public sealed class ResearchPlansController(
-    ResearchPlanService researchPlanService) : ControllerBase
+    ResearchPlanService researchPlanService,
+    ApplicationDbContext db) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<ResearchPlanResponse>> GetByLecturerAndAcademicYear(
@@ -49,6 +53,15 @@ public sealed class ResearchPlansController(
         [FromBody] CreateResearchPlanRequest request,
         CancellationToken cancellationToken)
     {
+        var year = await db.AcademicYears.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == request.AcademicYearId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy năm học.");
+        if (request.PlanDate < year.StartDate || request.PlanDate > year.EndDate)
+            throw new BusinessRuleException("Ngày lập kế hoạch phải nằm trong năm học.");
+        if (request.Deadline.HasValue &&
+            (request.Deadline.Value < year.StartDate || request.Deadline.Value > year.EndDate))
+            throw new BusinessRuleException("Hạn kế hoạch phải nằm trong năm học.");
+
         var result = await researchPlanService.CreateAsync(
             request,
             cancellationToken);
@@ -65,6 +78,15 @@ public sealed class ResearchPlansController(
         [FromBody] UpdateResearchPlanRequest request,
         CancellationToken cancellationToken)
     {
+        var plan = await db.ResearchPlans.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy kế hoạch NCKH.");
+        var year = await db.AcademicYears.AsNoTracking()
+            .SingleAsync(x => x.Id == plan.AcademicYearId, cancellationToken);
+        if (request.Deadline.HasValue &&
+            (request.Deadline.Value < year.StartDate || request.Deadline.Value > year.EndDate))
+            throw new BusinessRuleException("Hạn kế hoạch phải nằm trong năm học.");
+
         var result = await researchPlanService.UpdateAsync(
             id,
             request,

@@ -4,6 +4,7 @@ namespace ResearchManagement.Application.Products.Abstractions;
 
 public interface IProductRepository
 {
+    Task<int> CountByTargetAndLecturerAsync(long targetId, long lecturerId, CancellationToken cancellationToken);
     Task<Product?> GetByIdAsync(long id, CancellationToken cancellationToken);
 
     /// <summary>Lấy kèm đồng tác giả và minh chứng.</summary>

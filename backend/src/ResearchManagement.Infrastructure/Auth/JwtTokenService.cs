@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using ResearchManagement.Application.Auth.Abstractions;
 using ResearchManagement.Application.Auth.Models;
 using ResearchManagement.Domain.Entities;
+using System.Security.Cryptography;
 
 namespace ResearchManagement.Infrastructure.Auth;
 
@@ -17,6 +18,7 @@ public static class AppClaimTypes
 
     /// <summary>Mỗi phân quyền một claim, dạng "VAI_TRO|PHAM_VI|khoaId|boMonId" (id rỗng nếu không có).</summary>
     public const string Assignment = "phan_quyen";
+    public const string AuthorizationVersion = "auth_ver";
 }
 
 public sealed class JwtTokenService(JwtOptions options, TimeProvider clock) : ITokenService
@@ -29,7 +31,8 @@ public sealed class JwtTokenService(JwtOptions options, TimeProvider clock) : IT
         var claims = new List<Claim>
         {
             new(AppClaimTypes.Subject, account.Id.ToString()),
-            new(AppClaimTypes.Name, account.Username)
+            new(AppClaimTypes.Name, account.Username),
+            new(AppClaimTypes.AuthorizationVersion, AuthorizationVersion.For(account))
         };
 
         foreach (var role in account.RoleAssignments.Select(r => r.Role).Distinct())
@@ -53,6 +56,18 @@ public sealed class JwtTokenService(JwtOptions options, TimeProvider clock) : IT
 
         var token = new JsonWebTokenHandler().CreateToken(descriptor);
         return new AccessToken(token, expires);
+    }
+}
+
+public static class AuthorizationVersion
+{
+    public static string For(Account account)
+    {
+        var assignments = account.RoleAssignments
+            .Select(x => $"{x.Role}|{x.Scope}|{x.FacultyId}|{x.DepartmentId}")
+            .OrderBy(x => x, StringComparer.Ordinal);
+        var source = $"{account.PasswordHash}\n{string.Join("\n", assignments)}";
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(source))).ToLowerInvariant();
     }
 }
 

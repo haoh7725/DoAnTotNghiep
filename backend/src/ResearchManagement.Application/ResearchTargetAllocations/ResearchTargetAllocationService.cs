@@ -1,12 +1,14 @@
 using ResearchManagement.Application.Common;
 using ResearchManagement.Application.ResearchTargetAllocations.Abstractions;
 using ResearchManagement.Application.ResearchTargetAllocations.Models;
+using ResearchManagement.Application.ResearchTargets.Abstractions;
 using ResearchManagement.Domain.Entities;
 
 namespace ResearchManagement.Application.ResearchTargetAllocations;
 
 public sealed class ResearchTargetAllocationService(
-    IResearchTargetAllocationRepository allocations)
+    IResearchTargetAllocationRepository allocations,
+    IResearchTargetRepository targets)
 {
     public async Task<List<ResearchTargetAllocationResponse>> GetByResearchTargetIdAsync(
         long researchTargetId,
@@ -45,6 +47,12 @@ public sealed class ResearchTargetAllocationService(
             throw new BusinessRuleException(
                 "Bộ môn đã được phân bổ chỉ tiêu này.");
 
+        await EnsureTotalDoesNotExceedTargetAsync(
+            request.ResearchTargetId,
+            request.AllocatedArticleCount,
+            null,
+            cancellationToken);
+
         var allocation = new ResearchTargetAllocation(
             request.ResearchTargetId,
             request.FacultyId,
@@ -69,6 +77,12 @@ public sealed class ResearchTargetAllocationService(
         if (request.AllocatedArticleCount < 0)
             throw new BusinessRuleException("Số bài phân bổ không được âm.");
 
+        await EnsureTotalDoesNotExceedTargetAsync(
+            allocation.ResearchTargetId,
+            request.AllocatedArticleCount,
+            allocation.Id,
+            cancellationToken);
+
         allocation.Update(
             request.AllocatedArticleCount,
             request.AllocationDate);
@@ -76,6 +90,22 @@ public sealed class ResearchTargetAllocationService(
         await allocations.SaveChangesAsync(cancellationToken);
 
         return ToResponse(allocation);
+    }
+
+    private async Task EnsureTotalDoesNotExceedTargetAsync(
+        long researchTargetId,
+        int requestedCount,
+        long? allocationId,
+        CancellationToken cancellationToken)
+    {
+        var target = await targets.GetByIdAsync(researchTargetId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy chỉ tiêu NCKH.");
+        if (target.Status != "CONG_BO")
+            throw new BusinessRuleException("Chỉ được phân bổ khi chỉ tiêu đã công bố và chưa khóa.");
+        var items = await allocations.GetByResearchTargetIdAsync(researchTargetId, cancellationToken);
+        var total = items.Where(x => x.Id != allocationId).Sum(x => x.AllocatedArticleCount) + requestedCount;
+        if (total > target.AssignedArticleCount)
+            throw new BusinessRuleException("Tổng số bài phân bổ không được vượt chỉ tiêu của khoa.");
     }
 
     private static ResearchTargetAllocationResponse ToResponse(

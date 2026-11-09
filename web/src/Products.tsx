@@ -10,6 +10,7 @@ type CoAuthor = { id: number; lecturerId: number; lecturerFullName: string; lect
 type Evidence = { id: number; originalFileName: string; fileSizeBytes: number; description: string | null; uploadedAt: string }
 type Product = Summary & { submittedByLecturerId: number; submittedByLecturerFullName: string; description: string | null; publicationInfo: string | null; publishedDate: string | null; journalIndex: string | null; journalClassification: string | null; projectLevel: string | null; coAuthors: CoAuthor[]; evidences: Evidence[] }
 type PlanItem = { id: number; name: string; productTypeName: string; academicYearCode: string; status: string }
+type AvailableTarget = { id: number; academicYearId: number; academicYearCode: string; allocatedArticleCount: number; journalConferenceId: number | null; journalConferenceName: string | null; deadline: string | null; status: string }
 type ReviewHistory = { id: number; productId: number; actorAccountId: number; actorUsername: string; fromStatus: string; toStatus: string; comment: string | null; occurredAt: string }
 type ProductSnapshot = { productId: number; version: number; snapshotByAccountId: number; snapshotAt: string; title: string; description: string | null; publicationInfo: string | null; publishedDate: string | null; articleStatus: string | null; journalIndex: string | null; journalClassification: string | null; projectLevel: string | null; status: string }
 type PlagiarismCheck = { id: number; productId: number; evidenceId: number | null; provider: string; status: string; similarityScore: number | null; matchedSourceCount: number | null; totalWords: number | null; creditsUsed: number | null; reportUrl: string | null; errorMessage: string | null; requestedByAccountId: number; createdAt: string; startedAt: string | null; completedAt: string | null }
@@ -198,17 +199,29 @@ function CreateProduct({ onCreated }: { onCreated: (id: number) => void }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [plans, setPlans] = useState<PlanItem[]>([])
+  const [targets, setTargets] = useState<AvailableTarget[]>([])
 
   useEffect(() => {
-    if (open && !plans.length)
-      api<PlanItem[]>('/products/available-plan-items').then(setPlans).catch(e => setError((e as Error).message))
+    if (open && !plans.length) {
+      Promise.all([
+        api<PlanItem[]>('/products/available-plan-items'),
+        api<AvailableTarget[]>('/products/available-research-targets')
+      ]).then(([planData, targetData]) => { setPlans(planData); setTargets(targetData) })
+        .catch(e => setError((e as Error).message))
+    }
   }, [open, plans.length])
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const f = new FormData(e.currentTarget)
     const itemId = Number(f.get('researchPlanItemId'))
+    const targetId = Number(f.get('researchTargetId')) || null
+    const target = targets.find(x => x.id === targetId)
     setBusy(true); setError('')
-    try { const p = await api<Product>(`/research-plan-items/${itemId}/products`, 'POST', formBody(f, itemId)); onCreated(p.id) }
+    try {
+      const body = { ...formBody(f, itemId), journalConferenceId: target?.journalConferenceId ?? null }
+      const p = await api<Product>(`/research-plan-items/${itemId}/products`, 'POST', body)
+      onCreated(p.id)
+    }
     catch (x) { setError((x as Error).message) }
     finally { setBusy(false) }
   }
@@ -218,7 +231,7 @@ function CreateProduct({ onCreated }: { onCreated: (id: number) => void }) {
       <div><h2>Thêm sản phẩm</h2><p className="muted product-sub">Chọn nội dung trong kế hoạch nghiên cứu của bạn.</p></div>
       <button className="primary" onClick={() => setOpen(x => !x)}>{open ? 'Đóng' : '+ Thêm'}</button>
     </div>
-    {open && <ProductForm onSubmit={submit} busy={busy} error={error} planItems={plans} />}
+    {open && <ProductForm onSubmit={submit} busy={busy} error={error} planItems={plans} targets={targets} />}
   </section>
 }
 
@@ -590,9 +603,9 @@ function SnapshotPanel({ productId }: { productId: number }) {
 }
 
 // ── ProductForm ────────────────────────────────────────────────────────────────
-function ProductForm({ product, onSubmit, busy, error, planItems }: {
+function ProductForm({ product, onSubmit, busy, error, planItems, targets }: {
   product?: Product; onSubmit: (e: FormEvent<HTMLFormElement>) => void
-  busy: boolean; error: string; planItems?: PlanItem[]
+  busy: boolean; error: string; planItems?: PlanItem[]; targets?: AvailableTarget[]
 }) {
   return <form onSubmit={onSubmit}>
     {error && <p className="alert">{error}</p>}
@@ -602,6 +615,15 @@ function ProductForm({ product, onSubmit, busy, error, planItems }: {
           <option value="">Chọn nội dung kế hoạch</option>
           {planItems.map(x => <option value={x.id} key={x.id}>{x.academicYearCode} · {x.productTypeName} · {x.name}</option>)}
         </select>
+      </label>}
+      {planItems && <label className="wide">Chỉ tiêu bài báo được phân bổ
+        <select name="researchTargetId" defaultValue="">
+          <option value="">Không áp dụng (sản phẩm không phải bài báo)</option>
+          {(targets ?? []).map(x => <option value={x.id} key={x.id}>
+            {x.academicYearCode} · {x.journalConferenceName ?? 'Chỉ tiêu bài báo chung'} · phân bổ {x.allocatedArticleCount} bài
+          </option>)}
+        </select>
+        {targets?.length === 0 && <small className="muted">Bộ môn chưa được phân bổ chỉ tiêu đã công bố.</small>}
       </label>}
       <label className="wide">Tên sản phẩm<input name="title" required minLength={3} maxLength={500} defaultValue={product?.title} /></label>
       <label>Trạng thái bài viết
@@ -690,8 +712,10 @@ function Evidences({ product, onChanged }: { product: Product; onChanged: () => 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function formBody(f: FormData, researchPlanItemId?: number) {
   const text = (k: string) => String(f.get(k) ?? '').trim() || null
+  const researchTargetId = Number(f.get('researchTargetId')) || null
   return {
     ...(researchPlanItemId ? { researchPlanItemId } : {}),
+    ...(researchPlanItemId ? { researchTargetId } : {}),
     title: text('title'), description: text('description'),
     publicationInfo: text('publicationInfo'), publishedDate: text('publishedDate'),
     articleStatus: text('articleStatus'), journalIndex: text('journalIndex'),

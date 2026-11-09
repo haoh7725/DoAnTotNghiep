@@ -22,6 +22,8 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(x => x.JournalIndex).HasColumnName("chi_so_tap_chi").HasMaxLength(100);
         builder.Property(x => x.JournalClassification).HasColumnName("phan_loai_tap_chi").HasMaxLength(100);
         builder.Property(x => x.ProjectLevel).HasColumnName("cap_de_tai").HasMaxLength(100);
+        builder.Property(x => x.JournalConferenceId).HasColumnName("tap_chi_hoi_nghi_id");
+        builder.Property(x => x.ResearchTargetId).HasColumnName("chi_tieu_id");
         builder.Property(x => x.Status).HasColumnName("trang_thai").HasMaxLength(30).IsRequired();
         builder.Property(x => x.ScoreEquivalent).HasColumnName("diem_quy_doi").HasPrecision(5, 2);
         builder.Property(x => x.CreatedAt).HasColumnName("tao_luc").HasColumnType("timestamptz").IsRequired();
@@ -36,6 +38,8 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
             .WithMany()
             .HasForeignKey(x => x.SubmittedByLecturerId)
             .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<JournalConference>().WithMany().HasForeignKey(x => x.JournalConferenceId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<ResearchTarget>().WithMany().HasForeignKey(x => x.ResearchTargetId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 

@@ -2,11 +2,15 @@ using ResearchManagement.Application.Common;
 using ResearchManagement.Application.ResearchTargets.Abstractions;
 using ResearchManagement.Application.ResearchTargets.Models;
 using ResearchManagement.Domain.Entities;
+using ResearchManagement.Application.ResearchTargetAllocations.Abstractions;
+using ResearchManagement.Application.Auth.Abstractions;
 
 namespace ResearchManagement.Application.ResearchTargets;
 
 public sealed class ResearchTargetService(
-    IResearchTargetRepository researchTargets)
+    IResearchTargetRepository researchTargets,
+    IResearchTargetAllocationRepository allocations,
+    ICurrentUser currentUser)
 {
     public async Task<List<ResearchTargetResponse>> GetAllAsync(
         CancellationToken cancellationToken)
@@ -50,6 +54,7 @@ public sealed class ResearchTargetService(
             request.AssignedArticleCount,
             request.Deadline,
             request.JournalConferenceId);
+        researchTarget.MarkAssigned(currentUser.Id ?? throw new ForbiddenException("Không xác định được tài khoản giao chỉ tiêu."));
 
         await researchTargets.AddAsync(researchTarget, cancellationToken);
         await researchTargets.SaveChangesAsync(cancellationToken);
@@ -65,9 +70,16 @@ public sealed class ResearchTargetService(
         var researchTarget =
             await researchTargets.GetByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy chỉ tiêu NCKH.");
+        if (researchTarget.Status is "DA_KHOA" or "DA_HUY")
+            throw new BusinessRuleException("Chỉ tiêu đã khóa hoặc đã hủy nên không thể chỉnh sửa.");
 
         if (request.AssignedArticleCount < 0)
             throw new BusinessRuleException("Số bài được giao không được âm.");
+
+        var allocatedTotal = (await allocations.GetByResearchTargetIdAsync(id, cancellationToken))
+            .Sum(x => x.AllocatedArticleCount);
+        if (request.AssignedArticleCount < allocatedTotal)
+            throw new BusinessRuleException("Chỉ tiêu mới không được nhỏ hơn tổng số bài đã phân bổ.");
 
         researchTarget.Update(
             request.AssignedArticleCount,
@@ -88,6 +100,12 @@ public sealed class ResearchTargetService(
             researchTarget.AcademicYearId,
             researchTarget.AssignedArticleCount,
             researchTarget.Deadline,
-            researchTarget.JournalConferenceId);
+            researchTarget.JournalConferenceId,
+            researchTarget.Status,
+            researchTarget.AssignedByAccountId,
+            researchTarget.AcceptedByAccountId,
+            researchTarget.AcceptedAt,
+            researchTarget.PublishedAt,
+            researchTarget.LockedAt);
     }
 }

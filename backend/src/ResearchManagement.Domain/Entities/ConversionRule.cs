@@ -6,9 +6,9 @@ public sealed class ConversionRule : BaseEntity
 {
     private ConversionRule() { }
     public ConversionRule(long productTypeId, string code, int version, string name, string conditionDescription,
-        decimal conversionValue, string unit, string authorRuleDescription, DateOnly effectiveFrom,
+        decimal conversionValue, string unit, int priority, string authorRuleDescription, DateOnly effectiveFrom,
         DateOnly? effectiveTo, string legalBasis) => Update(productTypeId, code, version, name,
-            conditionDescription, conversionValue, unit, authorRuleDescription, effectiveFrom, effectiveTo, legalBasis);
+            conditionDescription, conversionValue, unit, priority, authorRuleDescription, effectiveFrom, effectiveTo, legalBasis);
 
     public long ProductTypeId { get; private set; }
     public string Code { get; private set; } = string.Empty;
@@ -17,18 +17,19 @@ public sealed class ConversionRule : BaseEntity
     public string ConditionDescription { get; private set; } = string.Empty;
     public decimal ConversionValue { get; private set; }
     public string Unit { get; private set; } = string.Empty;
+    public int Priority { get; private set; } = 100;
     public string AuthorRuleDescription { get; private set; } = string.Empty;
     public DateOnly EffectiveFrom { get; private set; }
     public DateOnly? EffectiveTo { get; private set; }
     public string LegalBasis { get; private set; } = string.Empty;
 
     public void Update(long productTypeId, string code, int version, string name, string conditionDescription,
-        decimal conversionValue, string unit, string authorRuleDescription, DateOnly effectiveFrom,
+        decimal conversionValue, string unit, int priority, string authorRuleDescription, DateOnly effectiveFrom,
         DateOnly? effectiveTo, string legalBasis)
     {
         ProductTypeId = productTypeId; Code = code.Trim(); Version = version; Name = name.Trim();
         ConditionDescription = conditionDescription.Trim(); ConversionValue = conversionValue;
-        Unit = unit.Trim().ToUpperInvariant(); AuthorRuleDescription = authorRuleDescription.Trim();
+        Unit = unit.Trim().ToUpperInvariant(); Priority = priority; AuthorRuleDescription = authorRuleDescription.Trim();
         EffectiveFrom = effectiveFrom; EffectiveTo = effectiveTo; LegalBasis = legalBasis.Trim();
     }
 }

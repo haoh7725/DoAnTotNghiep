@@ -95,6 +95,28 @@ public sealed class ProductsController(ProductService productService, Applicatio
         return Ok(items);
     }
 
+    [HttpGet("api/products/available-research-targets")]
+    public async Task<IActionResult> AvailableResearchTargets(CancellationToken cancellationToken)
+    {
+        var accountId = currentUser.Id ?? throw new ForbiddenException("Không xác định được tài khoản hiện tại.");
+        var lecturer = await db.Lecturers.AsNoTracking().SingleOrDefaultAsync(x => x.AccountId == accountId, cancellationToken)
+            ?? throw new NotFoundException("Tài khoản chưa liên kết với giảng viên.");
+        var targets = await (from allocation in db.ResearchTargetAllocations.AsNoTracking()
+                             join personal in db.LecturerTargetAllocations.AsNoTracking() on allocation.Id equals personal.DepartmentAllocationId
+                             join target in db.ResearchTargets.AsNoTracking() on allocation.ResearchTargetId equals target.Id
+                             join year in db.AcademicYears.AsNoTracking() on target.AcademicYearId equals year.Id
+                             join journal in db.JournalConferences.AsNoTracking() on target.JournalConferenceId equals journal.Id into journals
+                             from journal in journals.DefaultIfEmpty()
+                             where allocation.DepartmentId == lecturer.DepartmentId && personal.LecturerId == lecturer.Id
+                                && (target.Status == "CONG_BO" || target.Status == "DA_KHOA")
+                             orderby year.StartDate descending, target.Id descending
+                             select new { target.Id, target.AcademicYearId, AcademicYearCode = year.Code,
+                                 AllocatedArticleCount = personal.AllocatedArticleCount, target.JournalConferenceId,
+                                 JournalConferenceName = journal == null ? null : journal.Name,
+                                 target.Deadline, target.Status }).ToListAsync(cancellationToken);
+        return Ok(targets);
+    }
+
     // GET /api/research-plan-items/{itemId}/products
     [HttpGet("api/research-plan-items/{itemId:long}/products")]
     public async Task<ActionResult<IReadOnlyList<ProductSummaryResponse>>> GetByPlanItem(

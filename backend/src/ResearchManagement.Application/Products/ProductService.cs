@@ -4,6 +4,10 @@ using ResearchManagement.Application.Products.Abstractions;
 using ResearchManagement.Application.Products.Models;
 using ResearchManagement.Application.ResearchPlans.Abstractions;
 using ResearchManagement.Application.Lecturers.Abstractions;
+using ResearchManagement.Application.ProductTypes.Abstractions;
+using ResearchManagement.Application.Notifications.Abstractions;
+using ResearchManagement.Application.ResearchTargets.Abstractions;
+using ResearchManagement.Application.ResearchTargetAllocations.Abstractions;
 using ResearchManagement.Domain.Constants;
 using ResearchManagement.Domain.Entities;
 
@@ -15,6 +19,13 @@ public sealed class ProductService(
     IProductEvidenceRepository evidences,
     IReviewHistoryRepository reviewHistories,
     IResearchPlanItemRepository planItems,
+    IResearchPlanRepository plans,
+    IResearchTargetRepository targets,
+    IResearchTargetAllocationRepository targetAllocations,
+    ILecturerTargetAllocationRepository lecturerTargetAllocations,
+    ILecturerAccessRepository lecturerAccess,
+    IProductTypeRepository productTypes,
+    INotificationRepository notifications,
     ILecturerRepository lecturers,
     ICurrentUser currentUser)
 {
@@ -45,6 +56,8 @@ public sealed class ProductService(
         var product = await products.GetByIdWithDetailsAsync(id, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
 
+        await EnsureCanReadAsync(product, cancellationToken);
+
         var coAuthorList = await coAuthors.GetByProductIdAsync(id, cancellationToken);
         var evidenceList = await evidences.GetByProductIdAsync(id, cancellationToken);
 
@@ -55,8 +68,16 @@ public sealed class ProductService(
         long planItemId,
         CancellationToken cancellationToken)
     {
-        _ = await planItems.GetByIdAsync(planItemId, cancellationToken)
+        var planItem = await planItems.GetByIdAsync(planItemId, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy nội dung kế hoạch.");
+
+        var plan = await plans.GetByIdAsync(planItem.ResearchPlanId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy kế hoạch NCKH.");
+        var access = await lecturerAccess.GetAccessInfoAsync(plan.LecturerId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy giảng viên.");
+        if (access.AccountId != GetCurrentAccountId() &&
+            !currentUser.CanAccess(access.FacultyId, access.DepartmentId))
+            throw new ForbiddenException("Không có quyền xem sản phẩm của nội dung kế hoạch này.");
 
         var list = await products.GetByPlanItemIdAsync(planItemId, cancellationToken);
         return list.Select(ToSummary).ToList();
@@ -74,8 +95,10 @@ public sealed class ProductService(
         long productId,
         CancellationToken cancellationToken)
     {
-        _ = await products.GetByIdAsync(productId, cancellationToken)
+        var product = await products.GetByIdAsync(productId, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
+
+        await EnsureCanReadAsync(product, cancellationToken);
 
         var histories = await reviewHistories.GetByProductIdAsync(productId, cancellationToken);
         return histories.Select(h => new ReviewHistoryResponse(
@@ -104,6 +127,38 @@ public sealed class ProductService(
         var lecturer = await lecturers.GetByAccountIdAsync(actorId, cancellationToken)
             ?? throw new BusinessRuleException("Tài khoản này chưa được liên kết với giảng viên.");
 
+        var plan = await plans.GetByIdAsync(planItem.ResearchPlanId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy kế hoạch NCKH.");
+        if (plan.LecturerId != lecturer.Id)
+            throw new ForbiddenException("Chỉ được khai báo sản phẩm cho kế hoạch của chính mình.");
+        if (plan.Status != "DA_DANG_KY")
+            throw new BusinessRuleException("Phải đăng ký kế hoạch trước khi khai báo sản phẩm.");
+
+        var productType = await productTypes.GetByIdAsync(planItem.ProductTypeId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy loại sản phẩm khoa học.");
+        if (productType.Code == "BAI_BAO")
+        {
+            if (!request.ResearchTargetId.HasValue)
+                throw new BusinessRuleException("Bài báo phải được gắn với một chỉ tiêu NCKH cụ thể.");
+            var target = await targets.GetByIdAsync(request.ResearchTargetId.Value, cancellationToken)
+                ?? throw new NotFoundException("Không tìm thấy chỉ tiêu NCKH.");
+            var access = await lecturerAccess.GetAccessInfoAsync(lecturer.Id, cancellationToken)
+                ?? throw new NotFoundException("Không tìm thấy đơn vị của giảng viên.");
+            if (target.AcademicYearId != plan.AcademicYearId || target.FacultyId != access.FacultyId)
+                throw new BusinessRuleException("Chỉ tiêu không thuộc năm học hoặc khoa của kế hoạch.");
+            var allocation = await targetAllocations.GetByTargetAndDepartmentAsync(target.Id, access.DepartmentId, cancellationToken);
+            if (allocation is null)
+                throw new BusinessRuleException("Bộ môn của giảng viên chưa được phân bổ chỉ tiêu này.");
+            var personalTarget = await lecturerTargetAllocations.GetAllocatedArticleCountAsync(allocation.Id, lecturer.Id, cancellationToken);
+            if (!personalTarget.HasValue)
+                throw new BusinessRuleException("Giảng viên chưa được phân công thực hiện chỉ tiêu này.");
+            var registeredCount = await products.CountByTargetAndLecturerAsync(target.Id, lecturer.Id, cancellationToken);
+            if (registeredCount >= personalTarget.Value)
+                throw new BusinessRuleException("Số bài đăng ký đã đạt chỉ tiêu được phân công cho giảng viên.");
+            if (target.JournalConferenceId != request.JournalConferenceId)
+                throw new BusinessRuleException("Tạp chí/hội nghị của sản phẩm không khớp chỉ tiêu đã chọn.");
+        }
+
         var product = new Product(
             planItem.Id,
             lecturer.Id,
@@ -114,7 +169,9 @@ public sealed class ProductService(
             request.ArticleStatus,
             request.JournalIndex,
             request.JournalClassification,
-            request.ProjectLevel);
+            request.ProjectLevel,
+            request.JournalConferenceId,
+            request.ResearchTargetId);
 
         await products.AddAsync(product, cancellationToken);
         await products.SaveChangesAsync(cancellationToken);
@@ -189,12 +246,25 @@ public sealed class ProductService(
         if (!currentUser.IsInRole(requiredRole) && !currentUser.IsInRole(Roles.Admin))
             throw new ForbiddenException("Bạn không có quyền xét duyệt ở bước này.");
 
+        var access = await lecturerAccess.GetAccessInfoAsync(product.SubmittedByLecturerId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy giảng viên nộp sản phẩm.");
+        if (!currentUser.IsInRole(Roles.Admin) &&
+            !currentUser.CanAccess(access.FacultyId, access.DepartmentId))
+            throw new ForbiddenException("Bạn không có quyền xét duyệt sản phẩm ngoài đơn vị được phân công.");
+
+        if (request.ScoreEquivalent.HasValue &&
+            product.Status != ProductStatuses.ResearchOfficeApproved &&
+            !currentUser.IsInRole(Roles.Admin))
+            throw new BusinessRuleException("Chỉ Phòng QLKH được nhập điểm quy đổi ở bước duyệt cuối.");
+
         var actorId = GetCurrentAccountId();
         var fromStatus = product.Status;
 
         if (action == "APPROVE")
         {
             var nextStatus = ApproveTransitions[product.Status];
+            if (nextStatus == ProductStatuses.Approved)
+                await EnsureReadyForFinalApprovalAsync(product, cancellationToken);
             product.Approve(nextStatus, request.ScoreEquivalent);
             var history = new ReviewHistory(product.Id, actorId, fromStatus, product.Status, request.Comment);
             await reviewHistories.AddAsync(history, cancellationToken);
@@ -204,6 +274,20 @@ public sealed class ProductService(
             product.Return();
             var history = new ReviewHistory(product.Id, actorId, fromStatus, ProductStatuses.Returned, request.Comment);
             await reviewHistories.AddAsync(history, cancellationToken);
+
+            var owner = await lecturers.GetByIdAsync(product.SubmittedByLecturerId, cancellationToken)
+                ?? throw new NotFoundException("Không tìm thấy giảng viên nộp sản phẩm.");
+            var reason = string.IsNullOrWhiteSpace(request.Comment)
+                ? "Sản phẩm đã được trả lại để bổ sung."
+                : $"Sản phẩm đã được trả lại: {request.Comment.Trim()}";
+            var notification = new Notification(
+                owner.AccountId,
+                "PHAN_HOI",
+                reason,
+                $"TRA_LAI:PRODUCT:{product.Id}:{Guid.NewGuid():N}",
+                scientificProductId: product.Id);
+            notification.MarkAsSent();
+            await notifications.AddAsync(notification, cancellationToken);
         }
 
         await products.SaveChangesAsync(cancellationToken);
@@ -230,6 +314,38 @@ public sealed class ProductService(
         var owner = await lecturers.GetByIdAsync(product.SubmittedByLecturerId, cancellationToken);
         if (owner?.AccountId != GetCurrentAccountId())
             throw new ForbiddenException("Chỉ tác giả chính được sửa hoặc gửi duyệt sản phẩm.");
+    }
+
+    private async Task EnsureCanReadAsync(Product product, CancellationToken cancellationToken)
+    {
+        if (currentUser.IsInRole(Roles.Admin)) return;
+
+        var accountId = GetCurrentAccountId();
+        var access = await lecturerAccess.GetAccessInfoAsync(product.SubmittedByLecturerId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy giảng viên nộp sản phẩm.");
+        if (access.AccountId == accountId ||
+            currentUser.CanAccess(access.FacultyId, access.DepartmentId))
+            return;
+
+        var authors = await coAuthors.GetByProductIdAsync(product.Id, cancellationToken);
+        foreach (var author in authors)
+        {
+            var lecturer = await lecturers.GetByIdAsync(author.LecturerId, cancellationToken);
+            if (lecturer?.AccountId == accountId) return;
+        }
+
+        throw new ForbiddenException("Không có quyền xem sản phẩm này.");
+    }
+
+    private async Task EnsureReadyForFinalApprovalAsync(Product product, CancellationToken cancellationToken)
+    {
+        var item = await planItems.GetByIdAsync(product.ResearchPlanItemId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy nội dung kế hoạch của sản phẩm.");
+        var type = await productTypes.GetByIdAsync(item.ProductTypeId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy loại sản phẩm khoa học.");
+        if (type.Code == "BAI_BAO" &&
+            (product.ArticleStatus != "DA_XUAT_BAN" || !product.PublishedDate.HasValue))
+            throw new BusinessRuleException("Bài báo chỉ được duyệt hoàn tất khi đã xuất bản và có ngày công bố.");
     }
 
     private async Task<ProductResponse> ToResponseAsync(
@@ -271,6 +387,8 @@ public sealed class ProductService(
             product.JournalIndex,
             product.JournalClassification,
             product.ProjectLevel,
+            product.JournalConferenceId,
+            product.ResearchTargetId,
             product.Status,
             product.ScoreEquivalent,
             product.CreatedAt,

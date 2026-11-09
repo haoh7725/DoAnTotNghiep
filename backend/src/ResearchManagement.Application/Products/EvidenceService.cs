@@ -3,6 +3,7 @@ using ResearchManagement.Application.Auth.Abstractions;
 using ResearchManagement.Application.Products.Abstractions;
 using ResearchManagement.Application.Products.Models;
 using ResearchManagement.Application.Lecturers.Abstractions;
+using ResearchManagement.Application.ResearchPlans.Abstractions;
 using ResearchManagement.Domain.Constants;
 using ResearchManagement.Domain.Entities;
 using Microsoft.AspNetCore.Http;
@@ -12,7 +13,9 @@ namespace ResearchManagement.Application.Products;
 public sealed class EvidenceService(
     IProductRepository products,
     IProductEvidenceRepository evidences,
+    IProductCoAuthorRepository coAuthors,
     ILecturerRepository lecturers,
+    ILecturerAccessRepository lecturerAccess,
     ICurrentUser currentUser,
     IFileStorage fileStorage)
 {
@@ -25,8 +28,9 @@ public sealed class EvidenceService(
         long productId,
         CancellationToken cancellationToken)
     {
-        _ = await products.GetByIdAsync(productId, cancellationToken)
+        var product = await products.GetByIdAsync(productId, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
+        await EnsureCanReadAsync(product, cancellationToken);
 
         var list = await evidences.GetByProductIdAsync(productId, cancellationToken);
         return list.Select(ToResponse).ToList();
@@ -41,8 +45,7 @@ public sealed class EvidenceService(
         var product = await products.GetByIdAsync(productId, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
 
-        if (product.Status == ProductStatuses.Approved)
-            throw new BusinessRuleException("Sản phẩm đã được duyệt hoàn toàn, không thể thêm minh chứng.");
+        EnsureEvidenceEditable(product);
         await EnsureOwnerOrAdminAsync(product, cancellationToken);
 
         if (file.Length == 0)
@@ -99,8 +102,7 @@ public sealed class EvidenceService(
         var product = await products.GetByIdAsync(productId, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
 
-        if (product.Status == ProductStatuses.Approved)
-            throw new BusinessRuleException("Sản phẩm đã được duyệt hoàn toàn, không thể xóa minh chứng.");
+        EnsureEvidenceEditable(product);
         await EnsureOwnerOrAdminAsync(product, cancellationToken);
 
         var evidence = await evidences.GetByIdAsync(evidenceId, cancellationToken)
@@ -121,8 +123,9 @@ public sealed class EvidenceService(
     public async Task<(Stream Content, string FileName)> GetDownloadAsync(
         long productId, long evidenceId, CancellationToken cancellationToken)
     {
-        _ = await products.GetByIdAsync(productId, cancellationToken)
+        var product = await products.GetByIdAsync(productId, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
+        await EnsureCanReadAsync(product, cancellationToken);
         var evidence = await evidences.GetByIdAsync(evidenceId, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy minh chứng.");
         if (evidence.ProductId != productId)
@@ -137,5 +140,29 @@ public sealed class EvidenceService(
         var owner = await lecturers.GetByIdAsync(product.SubmittedByLecturerId, cancellationToken);
         if (owner?.AccountId != currentUser.Id)
             throw new ForbiddenException("Chỉ tác giả chính được quản lý minh chứng.");
+    }
+
+    private static void EnsureEvidenceEditable(Product product)
+    {
+        if (product.Status is not (ProductStatuses.Draft or ProductStatuses.Returned))
+            throw new BusinessRuleException("Chỉ được thay đổi minh chứng khi sản phẩm ở trạng thái Nháp hoặc Trả lại.");
+    }
+
+    private async Task EnsureCanReadAsync(Product product, CancellationToken cancellationToken)
+    {
+        if (currentUser.IsInRole(Roles.Admin)) return;
+        var accountId = currentUser.Id
+            ?? throw new AuthenticationFailedException("Không xác định được người dùng hiện tại.");
+        var access = await lecturerAccess.GetAccessInfoAsync(product.SubmittedByLecturerId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy giảng viên nộp sản phẩm.");
+        if (access.AccountId == accountId || currentUser.CanAccess(access.FacultyId, access.DepartmentId)) return;
+
+        var authors = await coAuthors.GetByProductIdAsync(product.Id, cancellationToken);
+        foreach (var author in authors)
+        {
+            var lecturer = await lecturers.GetByIdAsync(author.LecturerId, cancellationToken);
+            if (lecturer?.AccountId == accountId) return;
+        }
+        throw new ForbiddenException("Không có quyền xem minh chứng của sản phẩm này.");
     }
 }

@@ -89,6 +89,7 @@ public static class DependencyInjection
         services.AddScoped<IResearchTargetRepository, ResearchTargetRepository>();
         services.AddScoped<ResearchTargetService>();
         services.AddScoped<IResearchTargetAllocationRepository, ResearchTargetAllocationRepository>();
+        services.AddScoped<ILecturerTargetAllocationRepository, LecturerTargetAllocationRepository>();
         services.AddScoped<ResearchTargetAllocationService>();
 
         // Lecturers and scientific profiles
