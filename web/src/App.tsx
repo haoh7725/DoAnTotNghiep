@@ -210,7 +210,7 @@ export default function App() {
               Sản phẩm chờ duyệt
             </button>
           )}
-        {(canEvaluate || user.roles.some(r => r.role === 'GIANG_VIEN')) && <button className={tab === 'evaluations' ? 'active' : ''} onClick={() => setTab('evaluations')}>{canEvaluate ? 'Đánh giá thi đua' : 'Kết quả thi đua của tôi'}</button>}
+        {(canEvaluate || manager || user.roles.some(r => r.role === 'GIANG_VIEN')) && <button className={tab === 'evaluations' ? 'active' : ''} onClick={() => setTab('evaluations')}>{canEvaluate ? 'Đánh giá thi đua' : manager ? 'Kết quả thi đua đơn vị' : 'Kết quả thi đua của tôi'}</button>}
         {canEvaluate && <button className={tab === 'emulation-rules' ? 'active' : ''} onClick={() => setTab('emulation-rules')}>Quy chế xếp loại</button>}
         {canBrowseLecturers(user) && <button className={tab === 'lecturers' ? 'active' : ''} onClick={() => setTab('lecturers')}>Hồ sơ giảng viên</button>}
         {canViewResearchNorms && <button className={tab === 'research-norms' ? 'active' : ''} onClick={() => setTab('research-norms')}>Định mức NCKH</button>}
@@ -232,7 +232,7 @@ export default function App() {
         )}
         {administrator && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>Quản trị dữ liệu nền</button>}
         {administrator && <button className={tab === 'conversion-rules' ? 'active' : ''} onClick={() => setTab('conversion-rules')}>Quy định quy đổi</button>}
-        {manager && <button className={tab === 'reports' ? 'active' : ''} onClick={() => setTab('reports')}>Thống kê kết quả</button>}
+        {manager && <button className={tab === 'reports' ? 'active' : ''} onClick={() => setTab('reports')}>{user.roles.some(r => r.role === 'BAN_GIAM_HIEU') ? 'Tổng hợp toàn trường' : 'Thống kê kết quả'}</button>}
         <button className={tab === 'password' ? 'active' : ''} onClick={() => setTab('password')}>Đổi mật khẩu</button></nav>
       <div className="sidebar-bottom"><strong>{user.fullName}</strong><span>@{user.username}</span><button onClick={logout} disabled={busy}>Đăng xuất</button></div>
     </aside>
