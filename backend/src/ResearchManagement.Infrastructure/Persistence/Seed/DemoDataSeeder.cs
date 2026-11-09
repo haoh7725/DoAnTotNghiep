@@ -48,6 +48,7 @@ public static class DemoDataSeeder
             await using var supplementTransaction = await db.Database.BeginTransactionAsync(cancellationToken);
             await EnsureExtendedDemoDataAsync(db, existingMarker.Id, cancellationToken);
             await EnsureLargeSampleDataAsync(db, passwordService, cancellationToken);
+            await EnsureLargeReportEvaluationsAsync(db, existingMarker.Id, cancellationToken);
             await supplementTransaction.CommitAsync(cancellationToken);
             logger.LogInformation("Đã kiểm tra và bổ sung dữ liệu mẫu còn thiếu.");
             return;
@@ -298,6 +299,7 @@ public static class DemoDataSeeder
             await db.SaveChangesAsync(cancellationToken);
             await EnsureExtendedDemoDataAsync(db, researchOffice.Id, cancellationToken);
             await EnsureLargeSampleDataAsync(db, passwordService, cancellationToken);
+            await EnsureLargeReportEvaluationsAsync(db, researchOffice.Id, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             logger.LogInformation("Đã tạo dữ liệu mẫu nghiệp vụ thành công.");
         }
@@ -647,6 +649,50 @@ public static class DemoDataSeeder
 
         db.ScientificProfiles.AddRange(newLecturers.Select(lecturer =>
             new ScientificProfile(lecturer.Id, "Công nghệ thông tin", "Chuyển đổi số và dữ liệu", "Nghiên cứu ứng dụng", "Hồ sơ NCKH được khởi tạo phục vụ dữ liệu vận hành.", DateTimeOffset.UtcNow)));
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Tạo kết quả chốt cho năm hiện hành để dashboard/báo cáo có quy mô tương xứng.</summary>
+    private static async Task EnsureLargeReportEvaluationsAsync(
+        ApplicationDbContext db,
+        long researchOfficeAccountId,
+        CancellationToken cancellationToken)
+    {
+        var academicYear = await db.AcademicYears.SingleAsync(x => x.Code == "2026-2027", cancellationToken);
+        var seedAccountIds = await db.Accounts.Where(x => x.Username.StartsWith("seed.gv"))
+            .Select(x => x.Id).ToListAsync(cancellationToken);
+        var seedLecturers = await db.Lecturers.Where(x => seedAccountIds.Contains(x.AccountId))
+            .ToListAsync(cancellationToken);
+        var articleTypeId = await db.ProductTypes.Where(x => x.Code == "BAI_BAO").Select(x => x.Id).SingleAsync(cancellationToken);
+        var rule = await db.ConversionRules
+            .Where(x => x.ProductTypeId == articleTypeId && x.Code == "QD_BAI_BAO")
+            .SingleAsync(cancellationToken);
+
+        foreach (var lecturer in seedLecturers)
+        {
+            if (await db.Evaluations.AnyAsync(x => x.LecturerId == lecturer.Id && x.AcademicYearId == academicYear.Id && x.Attempt == 1, cancellationToken))
+                continue;
+
+            var product = await (from item in db.ResearchPlanItems
+                                 join plan in db.ResearchPlans on item.ResearchPlanId equals plan.Id
+                                 join candidate in db.Products on item.Id equals candidate.ResearchPlanItemId
+                                 where plan.LecturerId == lecturer.Id
+                                    && plan.AcademicYearId == academicYear.Id
+                                    && item.ProductTypeId == articleTypeId
+                                 select candidate).FirstOrDefaultAsync(cancellationToken);
+            if (product is null) continue;
+            if (product.Status != ProductStatuses.Approved)
+                product.Approve(ProductStatuses.Approved, 120m);
+
+            var evaluation = new Evaluation(lecturer.Id, academicYear.Id, 1, researchOfficeAccountId,
+                lecturer.Code, lecturer.FullName, lecturer.DepartmentId, lecturer.AcademicRank, lecturer.Degree);
+            evaluation.Finalize(lecturer.Degree == "TIẾN SĨ" ? "HOAN_THANH_TOT" : "HOAN_THANH", "Đủ sản phẩm công bố được quy đổi theo quy định hiện hành.");
+            db.Evaluations.Add(evaluation);
+            await db.SaveChangesAsync(cancellationToken);
+            db.EvaluationConversionDetails.Add(new EvaluationConversionDetail(
+                evaluation.Id, lecturer.Id, academicYear.Id, product.Id, articleTypeId, rule.Id,
+                rule.ConversionValue, 1m, rule.Unit, $"Quy định {rule.Code} phiên bản {rule.Version}; tác giả chính."));
+        }
         await db.SaveChangesAsync(cancellationToken);
     }
 }
