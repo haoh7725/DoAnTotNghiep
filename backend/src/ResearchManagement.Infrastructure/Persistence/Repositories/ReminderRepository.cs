@@ -8,13 +8,13 @@ namespace ResearchManagement.Infrastructure.Persistence.Repositories;
 public sealed class ReminderRepository(ApplicationDbContext db)
     : IReminderRepository
 {
-    public Task<List<ReminderCandidate>> GetCandidatesAsync(
+    public async Task<List<ReminderCandidate>> GetCandidatesAsync(
         DateOnly today,
         CancellationToken cancellationToken)
     {
         var reminderLimit = today.AddDays(3);
 
-        var planItems =
+        var planItemsQuery =
             from item in db.ResearchPlanItems.AsNoTracking()
             join plan in db.ResearchPlans.AsNoTracking()
                 on item.ResearchPlanId equals plan.Id
@@ -25,14 +25,10 @@ public sealed class ReminderRepository(ApplicationDbContext db)
                 && item.Deadline.Value <= reminderLimit
                 && item.Status != "DA_THUC_HIEN"
             select new ReminderCandidate(
-                lecturer.AccountId,
-                item.Name,
-                item.Deadline!.Value,
-                $"ITEM:{item.Id}",
-                item.Id,
-                plan.Id);
+                lecturer.AccountId, item.Name, item.Deadline!.Value,
+                "ITEM:" + item.Id, item.Id, plan.Id);
 
-        var assignedTargets =
+        var assignedTargetsQuery =
             from assignment in db.LecturerTargetAllocations.AsNoTracking()
             join allocation in db.ResearchTargetAllocations.AsNoTracking()
                 on assignment.DepartmentAllocationId equals allocation.Id
@@ -50,12 +46,17 @@ public sealed class ReminderRepository(ApplicationDbContext db)
                     && product.ArticleStatus == "DA_XUAT_BAN") < assignment.AllocatedArticleCount
             select new ReminderCandidate(
                 lecturer.AccountId,
-                $"Chỉ tiêu NCKH ({assignment.AllocatedArticleCount} bài)",
+                "Chỉ tiêu NCKH (" + assignment.AllocatedArticleCount + " bài)",
                 target.Deadline!.Value,
-                $"TARGET_ASSIGNMENT:{assignment.Id}",
+                "TARGET_ASSIGNMENT:" + assignment.Id,
                 null,
                 null);
 
-        return planItems.Concat(assignedTargets).ToListAsync(cancellationToken);
+        // PostgreSQL/EF Core không dịch được Concat sau projection có chuỗi định dạng.
+        // Hai truy vấn nhỏ, rồi ghép trong bộ nhớ, giúp tác vụ chạy ổn định mỗi giờ.
+        var planItems = await planItemsQuery.ToListAsync(cancellationToken);
+        var assignedTargets = await assignedTargetsQuery.ToListAsync(cancellationToken);
+        planItems.AddRange(assignedTargets);
+        return planItems;
     }
 }
