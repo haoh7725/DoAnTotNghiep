@@ -605,6 +605,10 @@ export function ResearchPlans({ academicYears }: Props) {
                                     <article key={item.id} className="plan-item">
                                         <h3>{item.name}</h3>
 
+                                        <p className="muted">
+                                            Cam kết: {productTypes.find(type => type.id === item.productTypeId)?.name ?? 'Nội dung NCKH'}
+                                        </p>
+
                                         <p>
                                             <strong>Trạng thái:</strong>{' '}
                                             {progressLabels[item.status] ?? item.status}
@@ -635,7 +639,7 @@ export function ResearchPlans({ academicYears }: Props) {
                                             onClick={() => openProgress(item)}
                                             disabled={itemBusy}
                                         >
-                                            Cập nhật tiến độ / Xem lịch sử
+                                            Báo cáo tiến độ / Xem lịch sử
                                         </button>
                                     </article>
                                 ))}
@@ -704,7 +708,8 @@ export function ResearchPlans({ academicYears }: Props) {
 
                     {selectedItem !== null && (
                         <section className="panel">
-                            <h2>Cập nhật tiến độ</h2>
+                            <h2>Báo cáo tiến độ thực hiện</h2>
+                            <p className="muted">Chỉ dùng để báo cáo mức độ thực hiện cam kết và khó khăn. Để nộp bài/đề tài có minh chứng xét duyệt, vào mục <strong>Sản phẩm khoa học</strong>.</p>
 
                             <form onSubmit={saveProgress}>
                                 <label>
@@ -721,13 +726,13 @@ export function ResearchPlans({ academicYears }: Props) {
                                 </label>
 
                                 <label>
-                                    Kết quả thực hiện
+                                    Báo cáo ngắn về tiến độ
                                     <textarea
                                         value={progressResult}
                                         onChange={e => setProgressResult(e.target.value)}
                                         disabled={itemBusy}
                                         rows={3}
-                                        placeholder="Nhập kết quả nghiên cứu…"
+                                        placeholder="Ví dụ: đã hoàn thành bản thảo, đang thu thập dữ liệu…"
                                     />
                                 </label>
 

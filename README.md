@@ -11,6 +11,71 @@
 
 ## Khởi động nhanh
 
+## Hướng dẫn chạy sau khi pull code (dành cho thành viên trong nhóm)
+
+Điều kiện: cài **Docker Desktop**, **Node.js 20+** và **.NET SDK 9**. Mở Docker
+Desktop trước khi chạy. Từ thư mục gốc của dự án, thực hiện đúng thứ tự sau:
+
+```powershell
+# 1. Lấy phiên bản mới nhất của đúng nhánh làm việc
+git pull origin <ten-nhanh>
+
+# 2. Tạo cấu hình local (chỉ làm lần đầu trên mỗi máy)
+Copy-Item .env.example .env
+Copy-Item web\.env.example web\.env.local
+```
+
+Mở `.env` và tối thiểu thay ba giá trị mẫu: `POSTGRES_PASSWORD`,
+`MINIO_ROOT_PASSWORD`, `JWT_SECRET_KEY` (khóa JWT dài từ 32 ký tự). Không commit
+file `.env` hay `web/.env.local`.
+
+```powershell
+# 3. Chạy Database + MinIO + API
+docker compose --env-file .env -f infra/compose.yaml up --build -d
+
+# 4. Kiểm tra ba container đều đang chạy
+docker compose --env-file .env -f infra/compose.yaml ps
+
+# 5. Cài và chạy Web (mở terminal thứ hai)
+Set-Location web
+npm install
+npm run dev
+```
+
+Mở `http://localhost:5173`. API phải phản hồi tại `http://localhost:8081/health`
+(hoặc endpoint Swagger nếu được bật). Khi khởi tạo database mới với
+`SEED_DEMO_DATA=true`, đăng nhập được bằng `demo.qlkh`, `demo.truongkhoa`,
+`demo.truongbomon`, `demo.gv01`… với mật khẩu `Demo@12345678`.
+
+### Nếu pull về nhưng không chạy được
+
+- Cổng `5173`, `8081`, `5433`, `9000` hoặc `9001` đang được dùng: tắt ứng dụng
+  chiếm cổng, rồi chạy lại lệnh Docker/Web.
+- API không lên: xem log bằng
+  `docker compose --env-file .env -f infra/compose.yaml logs api --tail=100`.
+- Web báo không kết nối API: kiểm tra API đã ở trạng thái `running`, và đảm bảo
+  `web/.env.local` có `API_PROXY_TARGET=http://localhost:8081` khi dùng Docker.
+- Sau khi backend hoặc SQL đổi: chạy `docker compose --env-file .env -f infra/compose.yaml up --build -d`
+  để build lại API.
+- Muốn làm sạch toàn bộ dữ liệu local để tạo lại dữ liệu demo: `docker compose --env-file .env -f infra/compose.yaml down -v`, rồi chạy lại bước 3. Lệnh này xóa dữ liệu local của dự án.
+
+### Database đã được tạo từ phiên bản cũ
+
+Các script SQL chỉ tự chạy khi volume PostgreSQL được tạo lần đầu. Với database
+đã tồn tại, chạy lần lượt các migration còn thiếu bên dưới trong PowerShell:
+
+```powershell
+Get-Content -Raw -Encoding UTF8 infra/database/08_scientific_profile_details.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 infra/database/08_target_workflow.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 infra/database/09_lecturer_target_allocations.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 infra/database/10_conversion_priority.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 infra/database/11_emulation_classification_and_target_reminders.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+```
+
+Nếu đã đổi tên database hoặc user trong `.env`, thay `research_management` và
+`postgres` trong các lệnh trên. Mỗi script có thể báo dữ liệu/ràng buộc đã tồn tại
+nếu đã được áp dụng; không chạy song song nhiều thành viên trên cùng một database.
+
 ### Cơ sở dữ liệu và API bằng Docker
 
 ```bash
@@ -41,6 +106,10 @@ Get-Content -Raw infra/database/05_notification_products.sql | docker exec -i re
 Get-Content -Raw infra/database/06_feedback_and_target_catalog.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 Get-Content -Raw infra/database/07_plagiarism_checks.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 Get-Content -Raw -Encoding UTF8 infra/database/08_scientific_profile_details.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 infra/database/08_target_workflow.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 infra/database/09_lecturer_target_allocations.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 infra/database/10_conversion_priority.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 infra/database/11_emulation_classification_and_target_reminders.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 ```
 
 Nếu đã thay đổi `POSTGRES_USER` hoặc `POSTGRES_DB` trong `.env`, thay hai giá trị

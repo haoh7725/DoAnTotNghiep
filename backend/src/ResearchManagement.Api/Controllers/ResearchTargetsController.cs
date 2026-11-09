@@ -51,7 +51,7 @@ public sealed class ResearchTargetsController(
     }
 
     [HttpPost]
-    [Authorize(Roles = "TRUONG_KHOA,PHONG_QLKH,QUAN_TRI")]
+    [Authorize(Roles = "PHONG_QLKH,QUAN_TRI")]
     public async Task<ActionResult<ResearchTargetResponse>> Create(
         CreateResearchTargetRequest request,
         CancellationToken cancellationToken)
@@ -82,7 +82,7 @@ public sealed class ResearchTargetsController(
     }
 
     [HttpPut("{id:long}")]
-    [Authorize(Roles = "TRUONG_KHOA,PHONG_QLKH,QUAN_TRI")]
+    [Authorize(Roles = "PHONG_QLKH,QUAN_TRI")]
     public async Task<ActionResult<ResearchTargetResponse>> Update(
         long id,
         UpdateResearchTargetRequest request,

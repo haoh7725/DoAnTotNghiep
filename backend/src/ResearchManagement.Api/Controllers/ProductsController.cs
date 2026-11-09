@@ -95,6 +95,36 @@ public sealed class ProductsController(ProductService productService, Applicatio
         return Ok(items);
     }
 
+    // Danh sách gọn để giảng viên chọn đồng tác giả bằng tên thay vì phải biết ID nội bộ.
+    [HttpGet("api/products/co-author-options")]
+    public async Task<IActionResult> CoAuthorOptions(CancellationToken cancellationToken)
+    {
+        var accountId = currentUser.Id ?? throw new ForbiddenException("Không xác định được tài khoản hiện tại.");
+        var currentLecturer = await db.Lecturers.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.AccountId == accountId, cancellationToken)
+            ?? throw new NotFoundException("Tài khoản chưa liên kết với giảng viên.");
+
+        var facultyId = await db.Departments.AsNoTracking()
+            .Where(x => x.Id == currentLecturer.DepartmentId)
+            .Select(x => (long?)x.FacultyId)
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy đơn vị của giảng viên.");
+
+        var lecturers = await (from lecturer in db.Lecturers.AsNoTracking()
+                               join department in db.Departments.AsNoTracking()
+                                   on lecturer.DepartmentId equals department.Id
+                               where department.FacultyId == facultyId && lecturer.Id != currentLecturer.Id
+                               orderby lecturer.FullName
+                               select new
+                               {
+                                   lecturer.Id,
+                                   lecturer.FullName,
+                                   lecturer.Code,
+                                   DepartmentName = department.Name
+                               }).ToListAsync(cancellationToken);
+        return Ok(lecturers);
+    }
+
     [HttpGet("api/products/available-research-targets")]
     public async Task<IActionResult> AvailableResearchTargets(CancellationToken cancellationToken)
     {

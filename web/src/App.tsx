@@ -36,7 +36,7 @@ export default function App() {
   ) ?? false
 
   const canEditResearchTargets = user?.roles.some(p =>
-    ['TRUONG_KHOA', 'PHONG_QLKH', 'QUAN_TRI'].includes(p.role)
+    ['PHONG_QLKH', 'QUAN_TRI'].includes(p.role)
   ) ?? false
 
   const canEditResearchAllocations = user?.roles.some(p =>
@@ -183,6 +183,7 @@ export default function App() {
   return <div className="workspace">
     <aside className="sidebar"><div className="brand"><span className="brand-mark">R</span> ResearchHub</div><p className="nav-label">KHÔNG GIAN LÀM VIỆC</p>
       <nav aria-label="Điều hướng chính"><button className={tab === 'overview' ? 'active' : ''} onClick={() => setTab('overview')}>Tổng quan tài khoản</button>
+        <p className="nav-section">CÁ NHÂN</p>
         <button className={tab === 'my-profile' ? 'active' : ''} onClick={() => setTab('my-profile')}>Hồ sơ của tôi</button>
         {user.roles.some(r => r.role === 'GIANG_VIEN') && (
           <button
@@ -199,6 +200,7 @@ export default function App() {
           Thông báo
         </button>
         {user.roles.some(r => r.role === 'GIANG_VIEN') && <button className={tab === 'products' ? 'active' : ''} onClick={() => setTab('products')}>Sản phẩm khoa học</button>}
+        {(user.roles.some(r => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'QUAN_TRI'].includes(r.role)) || canBrowseLecturers(user) || canViewResearchNorms || canViewResearchTargets || canViewJournalConferences) && <p className="nav-section">QUẢN LÝ, ĐÁNH GIÁ & BÁO CÁO</p>}
         {user.roles.some(r =>
           ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'QUAN_TRI']
             .includes(r.role)
@@ -230,6 +232,7 @@ export default function App() {
             Danh mục tạp chí/hội nghị
           </button>
         )}
+        {administrator && <p className="nav-section">CẤU HÌNH HỆ THỐNG</p>}
         {administrator && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>Quản trị dữ liệu nền</button>}
         {administrator && <button className={tab === 'conversion-rules' ? 'active' : ''} onClick={() => setTab('conversion-rules')}>Quy định quy đổi</button>}
         {manager && <button className={tab === 'reports' ? 'active' : ''} onClick={() => setTab('reports')}>{user.roles.some(r => r.role === 'BAN_GIAM_HIEU') ? 'Tổng hợp toàn trường' : 'Thống kê kết quả'}</button>}
