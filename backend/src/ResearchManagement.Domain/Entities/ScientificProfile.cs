@@ -20,7 +20,11 @@ public sealed class ScientificProfile : BaseEntity
     public string? ResearchFields { get; private set; }
     public string? ResearchDirections { get; private set; }
     public string? ActivitySummary { get; private set; }
+    // Nội dung có cấu trúc theo Phụ lục V, giữ riêng các trường tóm tắt cũ.
+    public string DetailsJson { get; private set; } = "{}";
     public DateTimeOffset UpdatedAt { get; private set; }
+
+    public void UpdateDetails(string json) => DetailsJson = json;
 
     public void Update(
         string? expertise, string? researchFields,

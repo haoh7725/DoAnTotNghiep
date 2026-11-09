@@ -39,6 +39,7 @@ public sealed class ScientificProfileConfiguration : IEntityTypeConfiguration<Sc
         builder.Property(x => x.ResearchFields).HasColumnName("linh_vuc_nghien_cuu");
         builder.Property(x => x.ResearchDirections).HasColumnName("huong_nghien_cuu");
         builder.Property(x => x.ActivitySummary).HasColumnName("tom_tat_hoat_dong");
+        builder.Property(x => x.DetailsJson).HasColumnName("chi_tiet").HasColumnType("jsonb").IsRequired();
         builder.Property(x => x.UpdatedAt).HasColumnName("cap_nhat_luc").IsRequired();
         builder.HasIndex(x => x.LecturerId).IsUnique();
 

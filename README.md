@@ -42,6 +42,7 @@ Get-Content -Raw infra/database/04_journal_conference_catalog.sql | docker exec 
 Get-Content -Raw infra/database/05_notification_products.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 Get-Content -Raw infra/database/06_feedback_and_target_catalog.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 Get-Content -Raw infra/database/07_plagiarism_checks.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 infra/database/08_scientific_profile_details.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 ```
 
 Nếu đã thay đổi `POSTGRES_USER` hoặc `POSTGRES_DB` trong `.env`, thay hai giá trị
@@ -82,6 +83,8 @@ flutter run --dart-define=API_URL=http://10.0.2.2:8081/api
 Xem [bàn giao tuần 1 của Hào](docs/HAO_TUAN_1.md) để chạy seed tài khoản, cấu hình Web/API và tích hợp các endpoint cho nhóm.
 
 Xem [hợp đồng API giảng viên, lý lịch khoa học và loại sản phẩm của Lâm](docs/LAM_TUAN_1.md) để tích hợp `/api/lecturers` và `/api/product-types`.
+
+Xem [lý lịch khoa học theo mẫu Bộ GDĐT](docs/LY_LICH_KHOA_HOC.md) về các trường chi tiết, quy tắc nhập liệu và cập nhật database.
 
 Backend đã có xác thực JWT và phân quyền theo vai trò/phạm vi:
 
