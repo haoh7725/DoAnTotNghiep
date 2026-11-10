@@ -8,7 +8,7 @@ using ResearchManagement.Infrastructure.Persistence;
 
 namespace ResearchManagement.Api.Controllers;
 
-[ApiController, Route("api/admin/conversion-rules"), Authorize(Policy = Policies.Admin)]
+[ApiController, Route("api/admin/conversion-rules"), Authorize(Policy = Policies.ResearchOffice)]
 public sealed class ConversionRulesController(ApplicationDbContext db) : ControllerBase
 {
     [HttpGet]

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { api } from './api'
 import type { Lookups } from './api'
+import { Toast } from './Toast'
 
 type Target = {
   id: number
@@ -138,12 +139,18 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
     }
 
     const deadline = String(form.get('deadline') || '') || null
+    const academicYearId = editingTarget?.academicYearId ?? Number(form.get('academicYearId'))
+    const academicYear = years.find(y => y.id === academicYearId)
+    if (deadline && academicYear && (deadline < academicYear.startDate || deadline > academicYear.endDate)) {
+      setError(`Hạn hoàn thành phải nằm trong năm học ${academicYear.code} (${academicYear.startDate} đến ${academicYear.endDate}).`)
+      return
+    }
 
     const body = editingTarget
       ? { assignedArticleCount: count, deadline, journalConferenceId: Number(form.get('journalConferenceId')) || null }
       : {
         facultyId: Number(form.get('facultyId')),
-        academicYearId: Number(form.get('academicYearId')),
+        academicYearId,
         assignedArticleCount: count,
         deadline,
         journalConferenceId: Number(form.get('journalConferenceId')) || null,
@@ -311,6 +318,9 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
     d => d.facultyId === selectedTarget?.facultyId &&
       !allocations.some(a => a.departmentId === d.id)
   )
+  const isAllocationLocked = selectedTarget?.status === 'DA_KHOA'
+  const canAssignLecturers = roles.some(x => ['TRUONG_BO_MON', 'QUAN_TRI'].includes(x))
+  const canViewLecturerAssignments = roles.some(x => ['TRUONG_BO_MON', 'PHONG_QLKH', 'QUAN_TRI'].includes(x))
 
   return (
     <>
@@ -321,8 +331,8 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
         và phân bổ chỉ tiêu cho từng bộ môn.
       </p>
 
-      {error && <p className="alert" role="alert">{error}</p>}
-      {message && <p role="status">{message}</p>}
+      <Toast message={error} kind="error" onClose={() => setError('')} />
+      <Toast message={message} kind="success" onClose={() => setMessage('')} />
 
       <section className="panel">
         <div className="section-heading">
@@ -378,7 +388,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
                         {selectedId === target.id ? 'Đang xem' : 'Mở chi tiết'}
                       </button>
                       {' '}
-                      {canEdit && (
+                      {canEdit && target.status === 'CHO_TIEP_NHAN' && (
                         <button
                           type="button"
                           onClick={() => openEditTarget(target)}
@@ -442,7 +452,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
               <input
                 name="assignedArticleCount"
                 type="number"
-                min="0"
+                min="1"
                 step="1"
                 required
                 defaultValue={editingTarget?.assignedArticleCount ?? 0}
@@ -454,7 +464,8 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
               <input
                 name="deadline"
                 type="date"
-                min={new Date().toLocaleDateString('en-CA')}
+                min={years.find(y => y.id === editingTarget?.academicYearId)?.startDate}
+                max={years.find(y => y.id === editingTarget?.academicYearId)?.endDate}
                 defaultValue={editingTarget?.deadline ?? ''}
               />
             </label>
@@ -510,10 +521,10 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
             <div className="tabs target-workflow-tabs" aria-label="Các bước thực hiện chỉ tiêu">
               <button className={targetPanel === 'overview' ? 'active' : ''} onClick={() => setTargetPanel('overview')}>1. Tổng quan</button>
               <button className={targetPanel === 'allocations' ? 'active' : ''} onClick={() => setTargetPanel('allocations')}>2. Phân bổ bộ môn</button>
-              <button className={targetPanel === 'lecturers' ? 'active' : ''} onClick={() => setTargetPanel('lecturers')}>3. Phân công giảng viên</button>
+              {isAllocationLocked && canViewLecturerAssignments && <button className={targetPanel === 'lecturers' ? 'active' : ''} onClick={() => setTargetPanel('lecturers')}>3. Phân công giảng viên</button>}
             </div>
             {targetPanel === 'overview' && <>
-            <p className="muted">Thực hiện lần lượt: tiếp nhận chỉ tiêu → công bố để phân bổ xuống bộ môn → giao cho từng giảng viên.</p>
+            <p className="muted">Thực hiện lần lượt: tiếp nhận chỉ tiêu → phân bổ đủ xuống bộ môn → khóa phân bổ. Sau khi khóa, Trưởng bộ môn mới giao cho giảng viên.</p>
             {progress && <section className="panel" style={{ marginTop: 16 }}>
               <h3>Dashboard tiến độ chỉ tiêu</h3>
               <p><strong>Toàn khoa:</strong> {progress.approvedArticles}/{progress.assignedArticleCount} bài · {progress.completionPercent}% {progress.isCompleted ? '· Đã hoàn thành' : ''}</p>
@@ -550,7 +561,9 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
                         <td>{departmentName(item.departmentId)}</td>
                         <td>{item.allocatedArticleCount}</td>
                         <td>{item.allocationDate}</td>
-                        <td><button type="button" onClick={() => void openLecturerAssignments(item)}>Xem / phân công</button></td>
+                        <td>{isAllocationLocked && canViewLecturerAssignments
+                          ? <button type="button" onClick={() => void openLecturerAssignments(item)}>Xem / phân công</button>
+                          : 'Chờ Trưởng khoa khóa phân bổ'}</td>
                         <td>
                           {canEditAllocations && selectedTarget.status === 'CONG_BO' ? (
                             <button
@@ -568,7 +581,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
               </div>
             )}
             </>}
-            {targetPanel === 'lecturers' && <p className="muted">Bước 3: chọn một bộ môn ở bước 2, sau đó bấm “Xem / phân công” để giao chỉ tiêu cho từng giảng viên.</p>}
+            {targetPanel === 'lecturers' && isAllocationLocked && <p className="muted">Bước 3: Trưởng bộ môn chọn bộ môn của mình, sau đó phân công chỉ tiêu cho từng giảng viên.</p>}
           </>
         )}
       </section>
@@ -580,7 +593,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
         {lecturerAssignments.length > 0 && <div style={{ overflowX: 'auto' }}><table><thead><tr><th>Giảng viên</th><th>Số bài</th><th>Ngày giao</th><th></th></tr></thead><tbody>
           {lecturerAssignments.map(x => <tr key={x.id}><td>{x.lecturerCode} — {x.lecturerName}</td><td>{x.allocatedArticleCount}</td><td>{x.allocationDate}</td><td><button className="danger" disabled={busy} onClick={() => void deleteLecturerAssignment(x.id)}>Hủy</button></td></tr>)}
         </tbody></table></div>}
-        {roles.some(x => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'QUAN_TRI'].includes(x)) && <form onSubmit={saveLecturerAssignment}>
+        {isAllocationLocked && canAssignLecturers && <form onSubmit={saveLecturerAssignment}>
           <label>Giảng viên<select name="lecturerId" required defaultValue=""><option value="">-- Chọn giảng viên --</option>
             {lecturerOptions.filter(x => !lecturerAssignments.some(a => a.lecturerId === x.id)).map(x => <option key={x.id} value={x.id}>{x.code} — {x.fullName}</option>)}
           </select></label>
@@ -620,11 +633,11 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
               <input
                 name="allocatedArticleCount"
                 type="number"
-                min="0"
+                min="1"
                 step="1"
                 required
                 defaultValue={
-                  editingAllocation?.allocatedArticleCount ?? 0
+                  editingAllocation?.allocatedArticleCount ?? 1
                 }
               />
             </label>

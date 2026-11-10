@@ -35,8 +35,8 @@ public sealed class ResearchTargetAllocationService(
         CreateResearchTargetAllocationRequest request,
         CancellationToken cancellationToken)
     {
-        if (request.AllocatedArticleCount < 0)
-            throw new BusinessRuleException("Số bài phân bổ không được âm.");
+        if (request.AllocatedArticleCount <= 0)
+            throw new BusinessRuleException("Số bài phân bổ phải lớn hơn 0.");
 
         var existing = await allocations.GetByTargetAndDepartmentAsync(
             request.ResearchTargetId,
@@ -74,8 +74,8 @@ public sealed class ResearchTargetAllocationService(
         var allocation = await allocations.GetByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy phân bổ chỉ tiêu.");
 
-        if (request.AllocatedArticleCount < 0)
-            throw new BusinessRuleException("Số bài phân bổ không được âm.");
+        if (request.AllocatedArticleCount <= 0)
+            throw new BusinessRuleException("Số bài phân bổ phải lớn hơn 0.");
 
         await EnsureTotalDoesNotExceedTargetAsync(
             allocation.ResearchTargetId,

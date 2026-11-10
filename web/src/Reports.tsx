@@ -22,6 +22,10 @@ type Row = { lecturerId: number; lecturerCode: string; lecturerName: string; dep
 type Report = { academicYearId: number; academicYearCode: string; totals: Totals; byAcademicRank: Group[]; byDegree: Group[]; byDepartment: Group[]; rows: Row[] }
 const CHART_COLORS = ['#168c8c', '#17324d', '#e6a45c', '#8b7fc7', '#65a886', '#d47d91']
 
+// Tên bộ môn đều cùng tiền tố, bỏ tiền tố trên trục để mỗi nhãn chỉ còn một dòng.
+// Tooltip vẫn dùng tên đầy đủ từ dữ liệu báo cáo.
+const departmentAxisLabel = (name: string) => name.replace(/^Bộ môn\s+/i, '')
+
 export function ResearchReports({ lookups }: { lookups: Lookups | null }) {
   const [year, setYear] = useState(''); const [faculty, setFaculty] = useState(''); const [department, setDepartment] = useState('')
   const [rank, setRank] = useState(''); const [degree, setDegree] = useState(''); const [dimension, setDimension] = useState<'byDepartment' | 'byAcademicRank' | 'byDegree'>('byDepartment')
@@ -111,10 +115,16 @@ function ResearchDashboard({ report }: { report: Report }) {
         <article className="dashboard-chart">
           <h3>Tổng giờ quy đổi theo bộ môn</h3>
           <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={departments} layout="vertical" margin={{ left: 12 }}>
+            <BarChart data={departments} layout="vertical" margin={{ left: 8, right: 18 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis type="number" />
-              <YAxis type="category" dataKey="name" width={110} />
+              <YAxis
+                type="category"
+                dataKey="name"
+                width={156}
+                tick={{ fontSize: 11, fill: '#43566a' }}
+                tickFormatter={departmentAxisLabel}
+              />
               <Tooltip />
               <Bar dataKey="hours" name="Giờ quy đổi" fill="#65a886" />
             </BarChart>
