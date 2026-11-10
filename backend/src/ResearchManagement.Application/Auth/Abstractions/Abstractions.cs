@@ -7,6 +7,7 @@ public interface IAccountRepository
 {
     Task<Account?> GetByUsernameAsync(string username, CancellationToken cancellationToken);
     Task<Account?> GetByIdAsync(long id, CancellationToken cancellationToken);
+    Task<IReadOnlyList<LecturerAccountOptionResponse>> GetAvailableLecturerAccountsAsync(CancellationToken cancellationToken);
     Task<bool> ExistsByUsernameAsync(string username, CancellationToken cancellationToken);
     Task AddAsync(Account account, CancellationToken cancellationToken);
     Task SaveChangesAsync(CancellationToken cancellationToken);

@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using ResearchManagement.Application.Auth.Abstractions;
+using ResearchManagement.Application.Auth.Models;
+using ResearchManagement.Domain.Constants;
 using ResearchManagement.Domain.Entities;
 
 namespace ResearchManagement.Infrastructure.Persistence.Repositories;
@@ -13,6 +15,36 @@ public sealed class AccountRepository(ApplicationDbContext db) : IAccountReposit
     public Task<Account?> GetByIdAsync(long id, CancellationToken cancellationToken) =>
         db.Accounts.Include(a => a.RoleAssignments)
             .FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+
+    public async Task<IReadOnlyList<LecturerAccountOptionResponse>> GetAvailableLecturerAccountsAsync(
+        CancellationToken cancellationToken)
+    {
+        var eligibleRoles = new[] { Roles.Lecturer, Roles.DepartmentHead, Roles.FacultyDean };
+        var officeRoles = new[] { Roles.ResearchOffice, Roles.BoardOfDirectors, Roles.Admin };
+        var rows = await db.Accounts.AsNoTracking()
+            .Where(account => account.Status == AccountStatuses.Active)
+            .Where(account => !db.Lecturers.Any(lecturer => lecturer.AccountId == account.Id))
+            .Where(account => account.RoleAssignments.Any(role => eligibleRoles.Contains(role.Role)))
+            .Where(account => !account.RoleAssignments.Any(role => officeRoles.Contains(role.Role)))
+            .OrderBy(account => account.FullName).ThenBy(account => account.Username)
+            .Select(account => new
+            {
+                account.Id,
+                account.Username,
+                account.FullName,
+                account.Email,
+                Roles = account.RoleAssignments
+                    .Where(role => eligibleRoles.Contains(role.Role))
+                    .Select(role => role.Role)
+                    .Distinct()
+                    .OrderBy(role => role)
+                    .ToList()
+            })
+            .ToListAsync(cancellationToken);
+
+        return rows.Select(account => new LecturerAccountOptionResponse(
+            account.Id, account.Username, account.FullName, account.Email, account.Roles)).ToList();
+    }
 
     public Task<bool> ExistsByUsernameAsync(string username, CancellationToken cancellationToken) =>
         db.Accounts.AnyAsync(a => a.Username == username, cancellationToken);
