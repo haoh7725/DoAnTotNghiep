@@ -22,6 +22,7 @@ type ResearchNorm = {
   lecturerName: string
   academicYearId: number
   requiredHours: number
+  requiredPoints: number
   basis: string | null
 }
 
@@ -116,9 +117,14 @@ export function ResearchNorms({ academicYears, canEdit }: Props) {
 
     const form = new FormData(e.currentTarget)
     const requiredHours = Number(form.get('requiredHours'))
+    const requiredPoints = Number(form.get('requiredPoints'))
 
-    if (!Number.isFinite(requiredHours) || requiredHours < 0) {
-      setError('Số giờ định mức phải lớn hơn hoặc bằng 0.')
+    if (!Number.isFinite(requiredHours) || requiredHours < 0 || !Number.isFinite(requiredPoints) || requiredPoints < 0) {
+      setError('Số giờ và điểm định mức phải lớn hơn hoặc bằng 0.')
+      return
+    }
+    if (requiredHours === 0 && requiredPoints === 0) {
+      setError('Phải cấu hình ít nhất một định mức giờ hoặc điểm lớn hơn 0.')
       return
     }
 
@@ -135,6 +141,7 @@ export function ResearchNorms({ academicYears, canEdit }: Props) {
           'PUT',
           {
             requiredHours,
+            requiredPoints,
             basis
           }
         )
@@ -170,6 +177,7 @@ export function ResearchNorms({ academicYears, canEdit }: Props) {
             lecturerId,
             academicYearId,
             requiredHours,
+            requiredPoints,
             basis
           }
         )
@@ -204,8 +212,8 @@ export function ResearchNorms({ academicYears, canEdit }: Props) {
 
       <p className="muted">
         {canEdit
-          ? 'Quản lý số giờ nghiên cứu khoa học bắt buộc theo giảng viên và năm học.'
-          : 'Tra cứu định mức giờ nghiên cứu khoa học theo năm học.'}
+          ? 'Quản lý định mức giờ và điểm nghiên cứu khoa học theo giảng viên, năm học.'
+          : 'Tra cứu định mức giờ và điểm nghiên cứu khoa học theo năm học.'}
       </p>
 
       {error && <p className="alert" role="alert">{error}</p>}
@@ -361,6 +369,19 @@ export function ResearchNorms({ academicYears, canEdit }: Props) {
               </label>
 
               <label>
+                Số điểm định mức
+                <input
+                  name="requiredPoints"
+                  type="number"
+                  min="0"
+                  step="any"
+                  defaultValue={editing?.requiredPoints ?? 100}
+                  required
+                />
+                <small className="muted">Dùng để tính tỷ lệ xếp loại khi sản phẩm được quy đổi theo điểm.</small>
+              </label>
+
+              <label>
                 Căn cứ xác định định mức
                 <textarea
                   name="basis"
@@ -396,13 +417,14 @@ export function ResearchNorms({ academicYears, canEdit }: Props) {
             Chưa có định mức nghiên cứu khoa học.
           </p>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-wrap">
             <table>
               <thead>
                 <tr>
                   <th>Giảng viên</th>
                   <th>Năm học</th>
                   <th>Số giờ định mức</th>
+                  <th>Số điểm định mức</th>
                   <th>Căn cứ</th>
                   {canEdit && <th>Thao tác</th>}
                 </tr>
@@ -424,6 +446,8 @@ export function ResearchNorms({ academicYears, canEdit }: Props) {
                     </td>
 
                     <td>{norm.requiredHours}</td>
+
+                    <td>{norm.requiredPoints}</td>
 
                     <td>{norm.basis || 'Chưa có'}</td>
 

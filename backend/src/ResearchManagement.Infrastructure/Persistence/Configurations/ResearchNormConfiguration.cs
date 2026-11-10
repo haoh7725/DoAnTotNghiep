@@ -29,6 +29,12 @@ public sealed class ResearchNormConfiguration
             .HasPrecision(12, 4)
             .IsRequired();
 
+        builder.Property(x => x.RequiredPoints)
+            .HasColumnName("so_diem_dinh_muc")
+            .HasPrecision(12, 4)
+            .HasDefaultValue(100m)
+            .IsRequired();
+
         builder.Property(x => x.Basis)
             .HasColumnName("can_cu");
 

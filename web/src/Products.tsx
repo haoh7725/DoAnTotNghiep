@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { api, apiForm } from './api'
 import type { Profile } from './api'
@@ -50,9 +50,9 @@ const canManagerReview = (user: Profile | null, p: Product) => {
     return fromStatus === p.status
   })
 }
-// PHONG_QLKH duyệt bước cuối (PHONG_QLKH_DUYET → DA_DUYET) cần nhập điểm
+// Phòng QLKH thẩm định và công nhận trong một bước; vẫn hỗ trợ trạng thái cũ.
 const needsScore = (user: Profile | null, p: Product) =>
-  p.status === 'PHONG_QLKH_DUYET' &&
+  ['TRUONG_KHOA_DUYET', 'PHONG_QLKH_DUYET'].includes(p.status) &&
   user?.roles.some(r => r.role === 'PHONG_QLKH' || r.role === 'QUAN_TRI')
 
 
@@ -70,6 +70,11 @@ export function ProductReviewWorkspace({ user, initialProductId }: { user: Profi
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [revision, setRevision] = useState(0)
+  const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [departmentFilter, setDepartmentFilter] = useState('')
+  const [page, setPage] = useState(1)
+  const pageSize = 10
 
   useEffect(() => {
     let active = true
@@ -86,11 +91,36 @@ export function ProductReviewWorkspace({ user, initialProductId }: { user: Profi
     return () => { active = false }
   }, [revision])
 
+  const departments = useMemo(
+    () => [...new Set(items.map(item => item.departmentName))].sort((a, b) => a.localeCompare(b, 'vi')),
+    [items]
+  )
+  const statuses = useMemo(
+    () => [...new Set(items.map(item => item.status))],
+    [items]
+  )
+  const filteredItems = useMemo(() => {
+    const keyword = query.trim().toLocaleLowerCase('vi')
+    return items.filter(item => {
+      const matchesKeyword = !keyword || [item.title, item.lecturerName, item.departmentName]
+        .some(value => value.toLocaleLowerCase('vi').includes(keyword))
+      return matchesKeyword
+        && (!statusFilter || item.status === statusFilter)
+        && (!departmentFilter || item.departmentName === departmentFilter)
+    })
+  }, [departmentFilter, items, query, statusFilter])
+  const pageCount = Math.max(1, Math.ceil(filteredItems.length / pageSize))
+  const visibleItems = filteredItems.slice((page - 1) * pageSize, page * pageSize)
+
+  useEffect(() => { setPage(1) }, [query, statusFilter, departmentFilter])
+  useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
+
   if (selected !== null) {
     return <ProductDetail
       key={selected}
       id={selected}
       user={user}
+      allowProgressUpdate={false}
       onBack={() => {
         setSelected(null)
         setRevision(value => value + 1)
@@ -99,18 +129,43 @@ export function ProductReviewWorkspace({ user, initialProductId }: { user: Profi
   }
 
   return <>
+    <p className="eyebrow">XÉT DUYỆT SẢN PHẨM</p>
     <h1>Sản phẩm chờ duyệt</h1>
     <p className="muted">
-      Hồ sơ chờ xét duyệt trong phạm vi được phân quyền.
+      Tìm và xử lý hồ sơ trong phạm vi được phân quyền. Danh sách được chia trang để dễ theo dõi khi dữ liệu lớn.
     </p>
 
     <section className="panel">
-      <button
-        disabled={loading}
-        onClick={() => setRevision(value => value + 1)}
-      >
-        Làm mới
-      </button>
+      <div className="section-top review-list-heading">
+        <div>
+          <h2>Danh sách cần xử lý</h2>
+          <p className="muted">{loading ? 'Đang tải dữ liệu…' : `${filteredItems.length}/${items.length} hồ sơ phù hợp`}</p>
+        </div>
+        <button disabled={loading} onClick={() => setRevision(value => value + 1)}>Làm mới</button>
+      </div>
+
+      <div className="table-toolbar" aria-label="Bộ lọc sản phẩm chờ duyệt">
+        <label className="table-search">Tìm kiếm
+          <input
+            type="search"
+            value={query}
+            onChange={event => setQuery(event.target.value)}
+            placeholder="Tên sản phẩm hoặc giảng viên"
+          />
+        </label>
+        <label>Trạng thái
+          <select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
+            <option value="">Tất cả trạng thái</option>
+            {statuses.map(status => <option value={status} key={status}>{workflow[status] ?? status}</option>)}
+          </select>
+        </label>
+        <label>Bộ môn
+          <select value={departmentFilter} onChange={event => setDepartmentFilter(event.target.value)}>
+            <option value="">Tất cả bộ môn</option>
+            {departments.map(department => <option value={department} key={department}>{department}</option>)}
+          </select>
+        </label>
+      </div>
 
       {error && <p className="alert" role="alert">{error}</p>}
 
@@ -127,13 +182,13 @@ export function ProductReviewWorkspace({ user, initialProductId }: { user: Profi
               </tr>
             </thead>
             <tbody>
-              {items.map(item => <tr key={item.id}>
+              {visibleItems.map(item => <tr key={item.id}>
                 <td>{item.title}</td>
                 <td>{item.lecturerName}</td>
                 <td>{item.departmentName}</td>
-                <td>{workflow[item.status] ?? item.status}</td>
+                <td><span className={`status-chip status-chip--${item.status.toLowerCase()}`}>{workflow[item.status] ?? item.status}</span></td>
                 <td>
-                  <button onClick={() => setSelected(item.id)}>
+                  <button className="review-action" onClick={() => setSelected(item.id)}>
                     Xem và xét duyệt
                   </button>
                 </td>
@@ -142,8 +197,15 @@ export function ProductReviewWorkspace({ user, initialProductId }: { user: Profi
           </table>
         </div>
 
-        {items.length === 0 &&
-          <p>Không có sản phẩm đang chờ bạn xét duyệt.</p>}
+        {filteredItems.length > pageSize && <nav className="table-pagination" aria-label="Phân trang sản phẩm chờ duyệt">
+          <button disabled={page === 1} onClick={() => setPage(value => value - 1)}>← Trang trước</button>
+          <span>Trang <strong>{page}</strong> / {pageCount}</span>
+          <button disabled={page === pageCount} onClick={() => setPage(value => value + 1)}>Trang sau →</button>
+        </nav>}
+
+        {items.length === 0
+          ? <p className="empty">Không có sản phẩm đang chờ bạn xét duyệt.</p>
+          : filteredItems.length === 0 && <p className="empty">Không tìm thấy hồ sơ phù hợp với bộ lọc.</p>}
       </>}
     </section>
   </>
@@ -174,7 +236,7 @@ export function ProductWorkspace({ user, initialProductId }: { user?: Profile | 
   }, [revision])
 
   if (selected !== null)
-    return <ProductDetail id={selected} user={user ?? null} onBack={() => { setSelected(null); setRevision(x => x + 1) }} />
+    return <ProductDetail id={selected} user={user ?? null} allowProgressUpdate onBack={() => { setSelected(null); setRevision(x => x + 1) }} />
 
   return <>
     <p className="eyebrow">SẢN PHẨM KHOA HỌC</p>
@@ -249,11 +311,12 @@ function CreateProduct({ onCreated }: { onCreated: (id: number) => void }) {
 }
 
 // ── ProductDetail ──────────────────────────────────────────────────────────────
-function ProductDetail({ id, user, onBack }: { id: number; user: Profile | null; onBack: () => void }) {
+function ProductDetail({ id, user, allowProgressUpdate = false, onBack }: { id: number; user: Profile | null; allowProgressUpdate?: boolean; onBack: () => void }) {
   const [p, setP] = useState<Product | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [editingProgress, setEditingProgress] = useState(false)
   const [revision, setRevision] = useState(0)
   const [linkTargets, setLinkTargets] = useState<AvailableTarget[]>([])
   const [planItems, setPlanItems] = useState<PlanItem[]>([])
@@ -294,6 +357,27 @@ function ProductDetail({ id, user, onBack }: { id: number; user: Profile | null;
     setBusy(true); setError('')
     try { setP(await api<Product>(`/products/${id}/submit`, 'POST')) }
     catch (x) { setError((x as Error).message) }
+    finally { setBusy(false) }
+  }
+
+  async function saveProgress(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = new FormData(e.currentTarget)
+    const articleStatus = String(form.get('articleStatus') ?? '')
+    const publishedDate = String(form.get('publishedDate') ?? '') || null
+    if (articleStatus === 'DA_XUAT_BAN' && !publishedDate) {
+      setError('Bài viết đã xuất bản phải có ngày công bố.')
+      return
+    }
+    setBusy(true); setError('')
+    try {
+      setP(await api<Product>(`/products/${id}/article-progress`, 'PATCH', {
+        articleStatus,
+        publishedDate,
+        publicationInfo: String(form.get('publicationInfo') ?? '').trim() || null,
+      }))
+      setEditingProgress(false)
+    } catch (x) { setError((x as Error).message) }
     finally { setBusy(false) }
   }
 
@@ -348,11 +432,25 @@ function ProductDetail({ id, user, onBack }: { id: number; user: Profile | null;
           : <section className="panel">
             <div className="section-top">
               <h2>Thông tin</h2>
-              {editable(p) && <div className="actions">
-                <button onClick={() => setEditing(true)}>Chỉnh sửa</button>
-                <button className="primary" disabled={busy} onClick={submitProduct}>Gửi duyệt</button>
-              </div>}
+              <div className="actions">
+                {allowProgressUpdate && p.status !== 'DA_DUYET' &&
+                  <button onClick={() => setEditingProgress(x => !x)}>Cập nhật tiến độ bài viết</button>}
+                {editable(p) && <>
+                  <button onClick={() => setEditing(true)}>Chỉnh sửa nội dung</button>
+                  <button className="primary" disabled={busy} onClick={submitProduct}>Gửi duyệt</button>
+                </>}
+              </div>
             </div>
+            {editingProgress && <form className="product-progress-form" onSubmit={saveProgress}>
+              <h3>Tiến độ xuất bản</h3>
+              <label>Trạng thái bài viết<select name="articleStatus" required defaultValue={p.articleStatus ?? 'DANG_VIET'}>
+                <option value="DANG_VIET">Đang viết</option><option value="DANG_PHAN_BIEN">Đang phản biện</option>
+                <option value="DA_NHAN_XET">Đã nhận xét</option><option value="DA_XUAT_BAN">Đã xuất bản</option>
+              </select></label>
+              <label>Ngày công bố<input name="publishedDate" type="date" max={new Date().toISOString().slice(0, 10)} defaultValue={p.publishedDate ?? ''} /></label>
+              <label>Nơi công bố<input name="publicationInfo" maxLength={500} defaultValue={p.publicationInfo ?? ''} /></label>
+              <div className="actions"><button className="primary" disabled={busy}>Lưu tiến độ</button><button type="button" onClick={() => setEditingProgress(false)}>Hủy</button></div>
+            </form>}
             {p.status === 'TRA_LAI' && (
               <p className="alert review-alert" role="alert">
                 ⚠️ Sản phẩm được yêu cầu bổ sung. Vui lòng chỉnh sửa và gửi duyệt lại.

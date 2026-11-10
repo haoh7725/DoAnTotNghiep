@@ -29,11 +29,13 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
                           where personal.LecturerId == lecturer.Id && target.Status == "DA_KHOA"
                           orderby year.StartDate descending
                           select new { personal.Id, TargetId = target.Id, year.Code, personal.AllocatedArticleCount,
-                              ApprovedArticles = db.Products.Count(x => x.ResearchTargetId == target.Id && x.SubmittedByLecturerId == lecturer.Id &&
+                              ApprovedArticles = db.Products.Count(x => x.ResearchTargetId == target.Id &&
+                                  (x.SubmittedByLecturerId == lecturer.Id || db.ProductCoAuthors.Any(a => a.ProductId == x.Id && a.LecturerId == lecturer.Id)) &&
                                   x.Status == "DA_DUYET" && x.ArticleStatus == "DA_XUAT_BAN" &&
                                   db.ResearchPlanItems.Any(item => item.Id == x.ResearchPlanItemId &&
                                       db.ProductTypes.Any(type => type.Id == item.ProductTypeId && type.Code == "BAI_BAO"))),
-                              LinkedProducts = db.Products.Where(x => x.ResearchTargetId == target.Id && x.SubmittedByLecturerId == lecturer.Id)
+                              LinkedProducts = db.Products.Where(x => x.ResearchTargetId == target.Id &&
+                                  (x.SubmittedByLecturerId == lecturer.Id || db.ProductCoAuthors.Any(a => a.ProductId == x.Id && a.LecturerId == lecturer.Id)))
                                   .OrderByDescending(x => x.UpdatedAt)
                                   .Select(x => new { x.Id, x.Title, x.Status, x.ArticleStatus }).ToList(),
                               personal.AllocationDate, target.Deadline, target.Status }).ToListAsync(ct);

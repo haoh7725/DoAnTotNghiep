@@ -152,6 +152,24 @@ public sealed class ResearchPlanService(
         return ToResponse(plan);
     }
 
+    public async Task<ResearchPlanResponse> ReopenAsync(
+        long id,
+        CancellationToken cancellationToken)
+    {
+        var plan = await researchPlans.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy kế hoạch NCKH.");
+        try
+        {
+            plan.Reopen();
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new BusinessRuleException(ex.Message);
+        }
+        await researchPlans.SaveChangesAsync(cancellationToken);
+        return ToResponse(plan);
+    }
+
     private async Task EnsureCanAccessLecturerAsync(
         long lecturerId,
         CancellationToken cancellationToken)

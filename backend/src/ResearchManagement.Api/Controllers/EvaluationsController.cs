@@ -110,7 +110,9 @@ public sealed class EvaluationsController(
                     .Where(x => x.ConversionRuleId == rule.Id).ToListAsync(ct);
                 var coefficient = coefficients.Count == 0 ? 1m :
                     coefficients.FirstOrDefault(x => x.AuthorRole.ToUpper() == role)?.Coefficient;
-                if (!coefficient.HasValue) continue;
+                if (!coefficient.HasValue)
+                    throw new BusinessRuleException(
+                        $"Quy định {rule.Code} chưa cấu hình hệ số cho vai trò tác giả '{role}' của sản phẩm '{product.Product.Title}'.");
                 db.EvaluationConversionDetails.Add(new EvaluationConversionDetail(evaluation.Id, lecturer.Id,
                     request.AcademicYearId, product.Product.Id, product.ProductTypeId, rule.Id, rule.ConversionValue,
                     coefficient.Value, rule.Unit,
@@ -202,13 +204,20 @@ public sealed class EvaluationsController(
 
     private async Task<(string Name, string Basis)> CalculateClassificationAsync(Evaluation evaluation, CancellationToken ct)
     {
-        var requiredHours = await db.ResearchNorms.AsNoTracking()
+        var norm = await db.ResearchNorms.AsNoTracking()
             .Where(x => x.LecturerId == evaluation.LecturerId && x.AcademicYearId == evaluation.AcademicYearId)
-            .Select(x => (decimal?)x.RequiredHours).SingleOrDefaultAsync(ct);
-        if (!requiredHours.HasValue || requiredHours.Value <= 0)
-            throw new BusinessRuleException("Chưa có định mức NCKH hợp lệ để hệ thống tự xếp loại.");
+            .Select(x => new { x.RequiredHours, x.RequiredPoints }).SingleOrDefaultAsync(ct);
+        if (norm is null || (norm.RequiredHours <= 0 && norm.RequiredPoints <= 0))
+            throw new BusinessRuleException("Chưa có định mức giờ hoặc điểm NCKH hợp lệ để hệ thống tự xếp loại.");
         var totals = await Totals(evaluation.Id, ct);
-        var percent = decimal.Round(totals.Hours * 100m / requiredHours.Value, 2);
+        decimal? hourPercent = norm.RequiredHours > 0
+            ? decimal.Round(totals.Hours * 100m / norm.RequiredHours, 2)
+            : null;
+        decimal? pointPercent = norm.RequiredPoints > 0
+            ? decimal.Round(totals.Points * 100m / norm.RequiredPoints, 2)
+            : null;
+        var usePoints = pointPercent.HasValue && (!hourPercent.HasValue || pointPercent.Value > hourPercent.Value);
+        var percent = usePoints ? pointPercent!.Value : hourPercent!.Value;
         var rules = await db.EmulationClassificationRules.AsNoTracking()
             .Where(x => x.AcademicYearId == evaluation.AcademicYearId)
             .OrderByDescending(x => x.MinimumPercent).ThenBy(x => x.SortOrder).ToListAsync(ct);
@@ -219,7 +228,10 @@ public sealed class EvaluationsController(
         var basis = rule is null
             ? "Không đạt ngưỡng thấp nhất của quy chế xếp loại."
             : $"Đạt ngưỡng {rule.Name} từ {rule.MinimumPercent:0.##}% theo quy chế năm học.";
-        return (name, $"Tự động theo tỷ lệ giờ NCKH: {totals.Hours:0.####}/{requiredHours.Value:0.####} giờ ({percent:0.##}%). {basis}");
+        var calculation = usePoints
+            ? $"điểm NCKH: {totals.Points:0.####}/{norm.RequiredPoints:0.####} điểm"
+            : $"giờ NCKH: {totals.Hours:0.####}/{norm.RequiredHours:0.####} giờ";
+        return (name, $"Tự động theo tỷ lệ đạt cao hơn giữa giờ và điểm; căn cứ {calculation} ({percent:0.##}%). {basis}");
     }
 
     private async Task<EvaluationSummaryResponse> ToSummary(Evaluation e, CancellationToken ct)

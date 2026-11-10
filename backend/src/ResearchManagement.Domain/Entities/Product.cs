@@ -94,6 +94,24 @@ public sealed class Product : BaseEntity
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
+    /// <summary>
+    /// Cập nhật riêng tiến độ xuất bản sau khi sản phẩm đã gửi duyệt.
+    /// Không thay đổi tiêu đề, tác giả, minh chứng hoặc các thông tin học thuật khác.
+    /// </summary>
+    public void UpdateArticleProgress(
+        string articleStatus,
+        DateOnly? publishedDate,
+        string? publicationInfo)
+    {
+        if (Status == ProductStatuses.Approved)
+            throw new InvalidOperationException("Sản phẩm đã được duyệt hoàn tất nên không thể cập nhật tiến độ bài viết.");
+
+        ArticleStatus = Normalize(articleStatus);
+        PublishedDate = publishedDate;
+        PublicationInfo = Normalize(publicationInfo);
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
     /// <summary>Giảng viên nộp sản phẩm để xét duyệt.</summary>
     public void Submit()
     {

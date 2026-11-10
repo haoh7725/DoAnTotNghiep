@@ -11,7 +11,8 @@ public sealed class ResearchNorm : BaseEntity
         long lecturerId,
         long academicYearId,
         decimal requiredHours,
-        string? basis)
+        string? basis,
+        decimal requiredPoints = 100m)
     {
         if (requiredHours < 0)
         {
@@ -19,10 +20,13 @@ public sealed class ResearchNorm : BaseEntity
                 nameof(requiredHours),
                 "Số giờ định mức không được âm.");
         }
+        if (requiredPoints < 0)
+            throw new ArgumentOutOfRangeException(nameof(requiredPoints), "Điểm định mức không được âm.");
 
         LecturerId = lecturerId;
         AcademicYearId = academicYearId;
         RequiredHours = requiredHours;
+        RequiredPoints = requiredPoints;
         Basis = basis;
     }
 
@@ -32,11 +36,14 @@ public sealed class ResearchNorm : BaseEntity
 
     public decimal RequiredHours { get; private set; }
 
+    public decimal RequiredPoints { get; private set; }
+
     public string? Basis { get; private set; }
 
     public void Update(
         decimal requiredHours,
-        string? basis)
+        string? basis,
+        decimal requiredPoints = 100m)
     {
         if (requiredHours < 0)
         {
@@ -44,8 +51,11 @@ public sealed class ResearchNorm : BaseEntity
                 nameof(requiredHours),
                 "Số giờ định mức không được âm.");
         }
+        if (requiredPoints < 0)
+            throw new ArgumentOutOfRangeException(nameof(requiredPoints), "Điểm định mức không được âm.");
 
         RequiredHours = requiredHours;
+        RequiredPoints = requiredPoints;
         Basis = basis;
     }
 }

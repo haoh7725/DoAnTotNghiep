@@ -312,8 +312,10 @@ CREATE TABLE nckh.dinh_muc_nckh (
     giang_vien_id bigint NOT NULL,
     nam_hoc_id bigint NOT NULL,
     so_gio_dinh_muc numeric(12,4) NOT NULL,
+    so_diem_dinh_muc numeric(12,4) DEFAULT 100 NOT NULL,
     can_cu text,
-    CONSTRAINT ck_dinh_muc_so_gio CHECK ((so_gio_dinh_muc >= (0)::numeric))
+    CONSTRAINT ck_dinh_muc_so_gio CHECK ((so_gio_dinh_muc >= (0)::numeric)),
+    CONSTRAINT ck_dinh_muc_so_diem CHECK ((so_diem_dinh_muc >= (0)::numeric))
 );
 
 

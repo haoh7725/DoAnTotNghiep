@@ -5,6 +5,8 @@ using ResearchManagement.Application.ResearchPlans.Models;
 using ResearchManagement.Application.Common;
 using ResearchManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using ResearchManagement.Api.Infrastructure;
+using ResearchManagement.Api.Authorization;
 
 namespace ResearchManagement.Api.Controllers;
 
@@ -13,7 +15,8 @@ namespace ResearchManagement.Api.Controllers;
 [Authorize]
 public sealed class ResearchPlansController(
     ResearchPlanService researchPlanService,
-    ApplicationDbContext db) : ControllerBase
+    ApplicationDbContext db,
+    WorkflowNotificationDispatcher workflowNotifications) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<ResearchPlanResponse>> GetByLecturerAndAcademicYear(
@@ -104,6 +107,28 @@ public sealed class ResearchPlansController(
             id,
             cancellationToken);
 
+        return Ok(result);
+    }
+
+    [HttpPost("{id:long}/reopen")]
+    [Authorize(Policy = Policies.ResearchOffice)]
+    public async Task<ActionResult<ResearchPlanResponse>> Reopen(
+        long id,
+        CancellationToken cancellationToken)
+    {
+        var result = await researchPlanService.ReopenAsync(id, cancellationToken);
+        var ownerAccountId = await db.Lecturers.AsNoTracking()
+            .Where(x => x.Id == result.LecturerId)
+            .Select(x => x.AccountId)
+            .SingleAsync(cancellationToken);
+        await workflowNotifications.QueueForAccountAsync(
+            ownerAccountId,
+            "Phòng QLKH đã mở lại kế hoạch NCKH để bạn điều chỉnh. Vui lòng cập nhật và đăng ký lại.",
+            $"RESEARCH_PLAN_REOPENED:{result.Id}:{Guid.NewGuid():N}",
+            "research-plans",
+            null,
+            cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
         return Ok(result);
     }
 }

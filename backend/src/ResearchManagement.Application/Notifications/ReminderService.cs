@@ -24,7 +24,9 @@ public sealed class ReminderService(
                 ? "QUA_HAN"
                 : "NHAC_HAN";
 
-            var deduplicationKey = $"{type}:{item.DeduplicationKey}";
+            // Gắn ngày hạn vào khóa để sau khi gia hạn, hệ thống có thể nhắc lại
+            // cho mốc mới mà vẫn không gửi trùng trong cùng một mốc hạn.
+            var deduplicationKey = $"{type}:{item.DeduplicationKey}:{item.Deadline:yyyyMMdd}";
 
             var exists = await notifications.ExistsAsync(
                 item.RecipientAccountId,

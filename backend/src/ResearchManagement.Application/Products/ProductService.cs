@@ -34,7 +34,9 @@ public sealed class ProductService(
     {
         [ProductStatuses.Submitted]               = ProductStatuses.DepartmentHeadApproved,
         [ProductStatuses.DepartmentHeadApproved]  = ProductStatuses.FacultyDeanApproved,
-        [ProductStatuses.FacultyDeanApproved]     = ProductStatuses.ResearchOfficeApproved,
+        // Phòng QLKH thẩm định và công nhận trong một bước.
+        [ProductStatuses.FacultyDeanApproved]     = ProductStatuses.Approved,
+        // Giữ tương thích với dữ liệu cũ đang dừng ở bước QLKH đã thẩm định.
         [ProductStatuses.ResearchOfficeApproved]  = ProductStatuses.Approved,
     };
 
@@ -240,6 +242,40 @@ public sealed class ProductService(
         return await ToResponseAsync(product, coAuthorList, evidenceList, cancellationToken);
     }
 
+    public async Task<ProductResponse> UpdateArticleProgressAsync(
+        long id,
+        UpdateArticleProgressRequest request,
+        CancellationToken cancellationToken)
+    {
+        var product = await products.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
+
+        await EnsureOwnerOrAdminAsync(product, cancellationToken);
+        if (product.Status == ProductStatuses.Approved)
+            throw new BusinessRuleException("Sản phẩm đã được duyệt hoàn tất nên không thể cập nhật tiến độ bài viết.");
+
+        var status = ToStoredArticleStatus(request.ArticleStatus)
+            ?? throw new BusinessRuleException("Trạng thái bài viết không hợp lệ.");
+        if (status == "DA_XUAT_BAN" && !request.PublishedDate.HasValue)
+            throw new BusinessRuleException("Bài viết đã xuất bản phải có ngày công bố.");
+        if (request.PublishedDate.HasValue && request.PublishedDate.Value > DateOnly.FromDateTime(DateTime.UtcNow))
+            throw new BusinessRuleException("Ngày công bố không được nằm trong tương lai.");
+
+        try
+        {
+            product.UpdateArticleProgress(status, request.PublishedDate, request.PublicationInfo);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new BusinessRuleException(ex.Message);
+        }
+        await products.SaveChangesAsync(cancellationToken);
+
+        var coAuthorList = await coAuthors.GetByProductIdAsync(id, cancellationToken);
+        var evidenceList = await evidences.GetByProductIdAsync(id, cancellationToken);
+        return await ToResponseAsync(product, coAuthorList, evidenceList, cancellationToken);
+    }
+
     public async Task<ProductResponse> SubmitAsync(
         long id,
         CancellationToken cancellationToken)
@@ -294,11 +330,22 @@ public sealed class ProductService(
             throw new ForbiddenException("Bạn không có quyền xét duyệt sản phẩm ngoài đơn vị được phân công.");
 
         if (request.ScoreEquivalent.HasValue &&
-            product.Status != ProductStatuses.ResearchOfficeApproved &&
+            product.Status is not (ProductStatuses.FacultyDeanApproved or ProductStatuses.ResearchOfficeApproved) &&
             !currentUser.IsInRole(Roles.Admin))
             throw new BusinessRuleException("Chỉ Phòng QLKH được nhập điểm quy đổi ở bước duyệt cuối.");
 
         var actorId = GetCurrentAccountId();
+        var owner = await lecturers.GetByIdAsync(product.SubmittedByLecturerId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy giảng viên nộp sản phẩm.");
+        var authorAccountIds = new HashSet<long> { owner.AccountId };
+        foreach (var coAuthor in await coAuthors.GetByProductIdAsync(product.Id, cancellationToken))
+        {
+            var lecturer = await lecturers.GetByIdAsync(coAuthor.LecturerId, cancellationToken);
+            if (lecturer is not null) authorAccountIds.Add(lecturer.AccountId);
+        }
+        if (authorAccountIds.Contains(actorId))
+            throw new ForbiddenException("Bạn không được tự xét duyệt sản phẩm mà mình là tác giả hoặc đồng tác giả.");
+
         var fromStatus = product.Status;
 
         if (action == "APPROVE")
@@ -320,15 +367,13 @@ public sealed class ProductService(
         }
         else // REJECT
         {
+            if (string.IsNullOrWhiteSpace(request.Comment))
+                throw new BusinessRuleException("Phải nhập lý do khi trả lại sản phẩm.");
             product.Return();
             var history = new ReviewHistory(product.Id, actorId, fromStatus, ProductStatuses.Returned, request.Comment);
             await reviewHistories.AddAsync(history, cancellationToken);
 
-            var owner = await lecturers.GetByIdAsync(product.SubmittedByLecturerId, cancellationToken)
-                ?? throw new NotFoundException("Không tìm thấy giảng viên nộp sản phẩm.");
-            var reason = string.IsNullOrWhiteSpace(request.Comment)
-                ? "Sản phẩm đã được trả lại để bổ sung."
-                : $"Sản phẩm đã được trả lại: {request.Comment.Trim()}";
+            var reason = $"Sản phẩm đã được trả lại: {request.Comment.Trim()}";
             var notification = new Notification(
                 owner.AccountId,
                 "PHAN_HOI",

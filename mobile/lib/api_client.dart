@@ -31,6 +31,8 @@ class ApiClient {
       _request('POST', path, body);
   Future<dynamic> put(String path, [Object? body]) =>
       _request('PUT', path, body);
+  Future<dynamic> patch(String path, [Object? body]) =>
+      _request('PATCH', path, body);
 
   static Future<T> _withClient<T>(Future<T> Function(HttpClient) action) async {
     final client = HttpClient();
@@ -185,6 +187,9 @@ class ApiClient {
 
   Future<dynamic> updateProduct(int id, Map<String, dynamic> data) =>
       put('/products/$id', data);
+
+  Future<dynamic> updateArticleProgress(int id, Map<String, dynamic> data) =>
+      patch('/products/$id/article-progress', data);
 
   Future<dynamic> submitProduct(int id) => post('/products/$id/submit');
 

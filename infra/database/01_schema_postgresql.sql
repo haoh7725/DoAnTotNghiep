@@ -165,9 +165,11 @@ CREATE TABLE dinh_muc_nckh (
     giang_vien_id BIGINT NOT NULL REFERENCES giang_vien(id),
     nam_hoc_id BIGINT NOT NULL REFERENCES nam_hoc(id),
     so_gio_dinh_muc NUMERIC(12,4) NOT NULL,
+    so_diem_dinh_muc NUMERIC(12,4) NOT NULL DEFAULT 100,
     can_cu TEXT,
     UNIQUE (giang_vien_id, nam_hoc_id),
-    CONSTRAINT ck_dinh_muc_so_gio CHECK (so_gio_dinh_muc >= 0)
+    CONSTRAINT ck_dinh_muc_so_gio CHECK (so_gio_dinh_muc >= 0),
+    CONSTRAINT ck_dinh_muc_so_diem CHECK (so_diem_dinh_muc >= 0)
 );
 
 CREATE TABLE san_pham_khoa_hoc (

@@ -229,6 +229,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   List<String> _currentUserRoles = [];
   bool _loading = true;
   String? _error;
+  String? _accessContextError;
 
   @override
   void initState() {
@@ -240,8 +241,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _accessContextError = null;
     });
     String? snapshotsError;
+    final accessErrors = <String>[];
 
     try {
       final results = await Future.wait([
@@ -259,7 +262,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       try {
         final lec = await widget.client.getLecturerMe();
         if (lec is Map) _currentLecturerId = lec['id'] as int?;
-      } catch (_) {}
+      } catch (e) {
+        accessErrors.add('Không xác định được hồ sơ giảng viên: $e');
+      }
 
       try {
         final me = await widget.client.getMe();
@@ -268,7 +273,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               .map((r) => (r is Map ? r['role'] : r).toString())
               .toList();
         }
-      } catch (_) {}
+      } catch (e) {
+        accessErrors.add('Không xác định được quyền tài khoản: $e');
+      }
 
       if (mounted) {
         setState(() {
@@ -276,6 +283,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           _history = results[1] as List<dynamic>;
           _snapshots = results[2] as List<dynamic>;
           _snapshotsError = snapshotsError;
+          _accessContextError = accessErrors.isEmpty
+              ? null
+              : accessErrors.join('\n');
         });
       }
     } catch (e) {
@@ -327,6 +337,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return isOwner || isAdmin;
   }
 
+  bool _canUpdateArticleProgress() {
+    if (_product == null || _product!['status'] == 'DA_DUYET') return false;
+    final submittedByLecturerId = _product!['submittedByLecturerId'];
+    final isOwner =
+        _currentLecturerId != null &&
+        _currentLecturerId == submittedByLecturerId;
+    return isOwner || _currentUserRoles.contains('QUAN_TRI');
+  }
+
   String _getEditDisabledReason() {
     if (_product == null) return '';
     final status = _product!['status'] as String? ?? '';
@@ -348,7 +367,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   // ──── Cập nhật trạng thái bài viết & thông tin ────────────────────────────
   Future<void> _showUpdateArticleStatusDialog() async {
-    if (!_canEdit() || _product == null) return;
+    if (!_canUpdateArticleProgress() || _product == null) return;
 
     final p = _product!;
     String? currentArticleStatus = p['articleStatus'] as String?;
@@ -557,22 +576,27 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                         ? '${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}'
                                         : null;
 
+                                    if (selectedStatus == null) {
+                                      throw const FormatException(
+                                        'Vui lòng chọn trạng thái bài viết.',
+                                      );
+                                    }
+                                    if (selectedStatus == 'DA_XUAT_BAN' &&
+                                        selectedDate == null) {
+                                      throw const FormatException(
+                                        'Bài viết đã xuất bản phải có ngày công bố.',
+                                      );
+                                    }
                                     final payload = <String, dynamic>{
-                                      'title': p['title'],
-                                      'description': p['description'],
                                       'publicationInfo':
                                           pubInfoController.text.trim().isEmpty
                                           ? null
                                           : pubInfoController.text.trim(),
                                       'publishedDate': dateStr,
                                       'articleStatus': selectedStatus,
-                                      'journalIndex': p['journalIndex'],
-                                      'journalClassification':
-                                          p['journalClassification'],
-                                      'projectLevel': p['projectLevel'],
                                     };
 
-                                    await widget.client.updateProduct(
+                                    await widget.client.updateArticleProgress(
                                       widget.productId,
                                       payload,
                                     );
@@ -737,13 +761,35 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final p = _product!;
     final coAuthors = p['coAuthors'] as List<dynamic>? ?? [];
     final evidences = p['evidences'] as List<dynamic>? ?? [];
-    final canEdit = _canEdit();
+    final canUpdateProgress = _canUpdateArticleProgress();
     final disabledReason = _getEditDisabledReason();
     final articleStatus = p['articleStatus'] as String?;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (_accessContextError != null) ...[
+          Card(
+            color: Theme.of(context).colorScheme.errorContainer,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.warning_amber_rounded),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Không kiểm tra được đầy đủ quyền thao tác. '
+                      'Các nút cập nhật có thể tạm ẩn.\n$_accessContextError',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         // ── Card trạng thái tổng quan ──
         Card(
           color: const Color(0xFF173F32),
@@ -838,7 +884,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 const SizedBox(height: 12),
 
                 // Hành động chỉnh sửa hoặc thông báo khóa quyền
-                if (canEdit) ...[
+                if (canUpdateProgress) ...[
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
@@ -856,7 +902,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       onPressed: _showUpdateArticleStatusDialog,
                       icon: const Icon(Icons.edit_outlined, size: 20),
                       label: const Text(
-                        'Cập nhật trạng thái',
+                        'Cập nhật tiến độ bài viết',
                         textAlign: TextAlign.center,
                       ),
                     ),
