@@ -5,6 +5,7 @@ import type { Lookups, Profile } from './api'
 import './Lecturers.css'
 import { ProfileSection } from './ScientificProfile'
 import type { ScientificProfile } from './ScientificProfile'
+import { useAutoReveal } from './useAutoReveal'
 
 /* ===== Kiểu dữ liệu khớp với LecturerModels.cs ===== */
 export type Lecturer = {
@@ -14,7 +15,10 @@ export type Lecturer = {
   departmentId: number; departmentName: string; facultyId: number; facultyName: string
 }
 type Paged<T> = { items: T[]; page: number; pageSize: number; totalCount: number; totalPages: number }
-type LecturerAccountOption = { id: number; username: string; fullName: string; email: string | null; roles: string[] }
+type LecturerAccountOption = {
+  id: number; username: string; fullName: string; email: string | null; roles: string[]
+  facultyId: number | null; departmentId: number | null
+}
 
 const genderNames: Record<string, string> = { NAM: 'Nam', NU: 'Nữ', KHAC: 'Khác' }
 
@@ -99,9 +103,11 @@ function CreateLecturerForm({ lookups, onCreated, onCancel }: {
 }) {
   const [accounts, setAccounts] = useState<LecturerAccountOption[]>([])
   const [accountId, setAccountId] = useState('')
+  const [departmentId, setDepartmentId] = useState('')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const createFormRef = useAutoReveal<HTMLFormElement>(true)
 
   useEffect(() => {
     let active = true
@@ -114,6 +120,12 @@ function CreateLecturerForm({ lookups, onCreated, onCancel }: {
   }, [])
 
   const selectedAccount = accounts.find(account => account.id === Number(accountId))
+  const availableDepartments = (lookups?.departments ?? []).filter(department =>
+    !selectedAccount?.facultyId || department.facultyId === selectedAccount.facultyId)
+
+  useEffect(() => {
+    setDepartmentId(selectedAccount?.departmentId ? String(selectedAccount.departmentId) : '')
+  }, [accountId, selectedAccount?.departmentId])
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -122,12 +134,12 @@ function CreateLecturerForm({ lookups, onCreated, onCancel }: {
     try {
       const lecturer = await api<Lecturer>('/lecturers', 'POST', {
         accountId: Number(form.get('accountId')),
-        departmentId: Number(form.get('departmentId')),
+        departmentId: Number(departmentId),
         code: String(form.get('code') ?? '').trim(),
-        fullName: String(form.get('fullName') ?? '').trim(),
+        fullName: selectedAccount?.fullName.trim() ?? '',
         birthDate: form.get('birthDate') || null,
         gender: form.get('gender') || null,
-        email: String(form.get('email') ?? '').trim() || null,
+        email: selectedAccount?.email?.trim() || null,
         phone: String(form.get('phone') ?? '').trim() || null,
         academicRank: String(form.get('academicRank') ?? '').trim() || null,
         degree: String(form.get('degree') ?? '').trim() || null,
@@ -138,24 +150,48 @@ function CreateLecturerForm({ lookups, onCreated, onCancel }: {
     finally { setBusy(false) }
   }
 
-  return <form className="panel lec-create-form" onSubmit={submit}>
-    <div className="section-top"><div><h2>Thêm hồ sơ và liên kết tài khoản</h2><p className="muted lec-sub">Chỉ các tài khoản đang hoạt động, có vai trò Giảng viên/Trưởng bộ môn/Trưởng khoa và chưa liên kết mới xuất hiện.</p></div><button type="button" onClick={onCancel} disabled={busy}>Hủy</button></div>
+  return <form ref={createFormRef} className="panel lec-create-form auto-reveal-target" onSubmit={submit}>
+    <div className="section-top"><div><h2>Liên kết tài khoản với hồ sơ giảng viên</h2><p className="muted lec-sub">Chọn tài khoản, nhập mã giảng viên và xác nhận bộ môn. Họ tên, email và phạm vi đơn vị được lấy tự động từ tài khoản.</p></div><button type="button" onClick={onCancel} disabled={busy}>Hủy</button></div>
     {error && <p className="alert" role="alert">{error}</p>}
     {loading ? <p role="status">Đang tải tài khoản có thể liên kết…</p> : accounts.length === 0 ? <p className="empty">Không có tài khoản phù hợp. Hãy tạo tài khoản và phân quyền trước trong Quản trị dữ liệu nền.</p> : <>
       <label>Tài khoản liên kết *<select name="accountId" required value={accountId} onChange={e => setAccountId(e.target.value)}><option value="">— Chọn tài khoản chưa liên kết —</option>{accounts.map(account => <option value={account.id} key={account.id}>{account.fullName} (@{account.username}) · {account.roles.map(role => roleNames[role] ?? role).join(', ')}</option>)}</select></label>
-      <div className="form-grid">
-        <label>Mã giảng viên *<input name="code" required maxLength={30} placeholder="Ví dụ: CNTT009" /></label>
-        <label>Bộ môn *<select name="departmentId" required defaultValue=""><option value="">— Chọn bộ môn —</option>{lookups?.departments.map(department => <option value={department.id} key={department.id}>{department.name} · {lookups.faculties.find(faculty => faculty.id === department.facultyId)?.name}</option>)}</select></label>
-        <label>Họ tên *<input key={`name-${accountId}`} name="fullName" required maxLength={200} defaultValue={selectedAccount?.fullName ?? ''} /></label>
-        <label>Email<input key={`email-${accountId}`} type="email" name="email" maxLength={254} defaultValue={selectedAccount?.email ?? ''} /></label>
-        <label>Ngày sinh<input type="date" name="birthDate" min="1900-01-01" max={new Date().toISOString().slice(0, 10)} /></label>
-        <label>Giới tính<select name="gender" defaultValue=""><option value="">— Chưa chọn —</option><option value="NAM">Nam</option><option value="NU">Nữ</option><option value="KHAC">Khác</option></select></label>
-        <label>Điện thoại<input name="phone" maxLength={30} pattern="\+?[0-9 .()\-]{8,30}" title="Số điện thoại 8–30 ký tự, gồm chữ số và + . ( ) -" /></label>
-        <label>Học hàm<input name="academicRank" maxLength={100} placeholder="Ví dụ: PGS" /></label>
-        <label>Học vị<input name="degree" maxLength={100} placeholder="Ví dụ: Tiến sĩ" /></label>
-        <label>Chức vụ<input name="position" maxLength={100} /></label>
+
+      {selectedAccount && <div className="lec-account-summary">
+        <div><span>Họ tên từ tài khoản</span><strong>{selectedAccount.fullName}</strong></div>
+        <div><span>Email từ tài khoản</span><strong>{selectedAccount.email || 'Chưa có email'}</strong></div>
+        <div><span>Vai trò</span><strong>{selectedAccount.roles.map(role => roleNames[role] ?? role).join(', ')}</strong></div>
+      </div>}
+
+      <div className="lec-link-required">
+        <div className="section-top"><div><h3>Thông tin bắt buộc</h3><p className="muted lec-sub">Dùng để nhận diện giảng viên và xác định phạm vi dữ liệu.</p></div><span className="lec-step-badge">Bước 2/2</span></div>
+        <div className="form-grid">
+          <label>Mã giảng viên *<input name="code" required maxLength={30} placeholder="Ví dụ: CNTT009" /></label>
+          <label>Bộ môn *
+            <select required value={departmentId} onChange={e => setDepartmentId(e.target.value)} disabled={!!selectedAccount?.departmentId}>
+              <option value="">— Chọn bộ môn —</option>
+              {availableDepartments.map(department => <option value={department.id} key={department.id}>{department.name} · {lookups?.faculties.find(faculty => faculty.id === department.facultyId)?.name}</option>)}
+            </select>
+            {selectedAccount?.departmentId
+              ? <span className="lec-field-note">Đã tự động chọn theo phạm vi Trưởng bộ môn.</span>
+              : selectedAccount?.facultyId && <span className="lec-field-note">Chỉ hiển thị các bộ môn thuộc khoa được phân quyền.</span>}
+          </label>
+        </div>
       </div>
-      <div className="actions"><button className="primary" disabled={busy || !accountId}>{busy ? 'Đang tạo…' : 'Tạo và liên kết hồ sơ'}</button><button type="button" onClick={onCancel} disabled={busy}>Hủy</button></div>
+
+      <details className="lec-optional-fields">
+        <summary>Bổ sung thông tin chuyên môn ngay bây giờ <span>Không bắt buộc</span></summary>
+        <p className="muted lec-sub">Có thể bỏ qua và cập nhật sau trong hồ sơ giảng viên.</p>
+        <div className="form-grid">
+          <label>Ngày sinh<input type="date" name="birthDate" min="1900-01-01" max={new Date().toISOString().slice(0, 10)} /></label>
+          <label>Giới tính<select name="gender" defaultValue=""><option value="">— Chưa chọn —</option><option value="NAM">Nam</option><option value="NU">Nữ</option><option value="KHAC">Khác</option></select></label>
+          <label>Điện thoại<input name="phone" maxLength={30} pattern="\+?[0-9 .()\-]{8,30}" title="Số điện thoại 8–30 ký tự, gồm chữ số và + . ( ) -" /></label>
+          <label>Học hàm<input name="academicRank" maxLength={100} placeholder="Ví dụ: PGS" /></label>
+          <label>Học vị<input name="degree" maxLength={100} placeholder="Ví dụ: Tiến sĩ" /></label>
+          <label>Chức vụ<input name="position" maxLength={100} /></label>
+        </div>
+      </details>
+
+      <div className="actions"><button className="primary" disabled={busy || !accountId || !departmentId}>{busy ? 'Đang liên kết…' : 'Tạo hồ sơ và liên kết'}</button><button type="button" onClick={onCancel} disabled={busy}>Hủy</button></div>
     </>}
   </form>
 }
@@ -218,6 +254,7 @@ function PersonalSection({ lecturer, perm, lookups, onSaved }: {
 }) {
   const [editing, setEditing] = useState(false); const [busy, setBusy] = useState(false)
   const [error, setError] = useState(''); const [saved, setSaved] = useState(false)
+  const editFormRef = useAutoReveal<HTMLFormElement>(editing, lecturer.id)
   const departments = lookups?.departments ?? []
 
   async function save(e: FormEvent<HTMLFormElement>) {
@@ -246,7 +283,7 @@ function PersonalSection({ lecturer, perm, lookups, onSaved }: {
       {perm.editPersonal && !editing && <button className="primary" onClick={() => { setEditing(true); setSaved(false); setError('') }}>Chỉnh sửa</button>}</div>
     {saved && <p className="lec-ok" role="status">Đã lưu thông tin hồ sơ.</p>}
     {!editing ? <dl className="lec-dl">{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl> :
-      <form onSubmit={save}>
+      <form ref={editFormRef} className="auto-reveal-target" onSubmit={save}>
         {error && <p className="alert" role="alert">{error}</p>}
         <div className="form-grid">
           <label>Họ tên *<input name="fullName" required maxLength={200} defaultValue={lecturer.fullName} /></label>

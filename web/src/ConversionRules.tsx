@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { api } from './api'
+import { useAutoReveal } from './useAutoReveal'
 import './ConversionRules.css'
 
 type ProductType = { id: number; name: string }
@@ -14,12 +15,13 @@ const isText = (field: string) => ['CHI_SO_TAP_CHI', 'PHAN_LOAI_TAP_CHI', 'CAP_D
 export function ConversionRules() {
   const [rules, setRules] = useState<Rule[]>([]); const [types, setTypes] = useState<ProductType[]>([]); const [edit, setEdit] = useState<Rule | null>(null)
   const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [revision, setRevision] = useState(0)
+  const formRef = useAutoReveal<HTMLFormElement>(edit !== null, edit?.id ?? 'new')
   useEffect(() => { let active = true; setLoading(true); Promise.all([api<Rule[]>('/admin/conversion-rules'), api<ProductType[]>('/product-types')]).then(([r, t]) => { if (active) { setRules(r); setTypes(t) } }).catch(e => { if (active) setError(e.message) }).finally(() => { if (active) setLoading(false) }); return () => { active = false } }, [revision])
   const change = (patch: Partial<Rule>) => setEdit(value => value ? { ...value, ...patch } : null)
   async function save(e: FormEvent) { e.preventDefault(); if (!edit) return; setBusy(true); setError(''); try { await api(`/admin/conversion-rules${edit.id ? `/${edit.id}` : ''}`, edit.id ? 'PUT' : 'POST', edit); setEdit(null); setRevision(x => x + 1) } catch (e) { setError((e as Error).message) } finally { setBusy(false) } }
   async function remove(rule: Rule) { if (!window.confirm(`Xóa ${rule.code} phiên bản ${rule.version}?`)) return; setBusy(true); try { await api(`/admin/conversion-rules/${rule.id}`, 'DELETE'); setRevision(x => x + 1) } catch (e) { setError((e as Error).message) } finally { setBusy(false) } }
   return <><p className="eyebrow">QUY ĐỔI VÀ ĐÁNH GIÁ</p><h1>Quy định quy đổi</h1><p className="muted">Quản lý phiên bản, thời gian hiệu lực, tiêu chí và hệ số tác giả.</p>{error && <p className="alert">{error}</p>}
-    {edit && <form className="panel" onSubmit={save}><div className="section-top"><h2>{edit.id ? 'Cập nhật' : 'Thêm'} quy định</h2><button type="button" onClick={() => setEdit(null)}>Đóng</button></div><div className="form-grid">
+    {edit && <form ref={formRef} className="panel auto-reveal-target" onSubmit={save}><div className="section-top"><h2>{edit.id ? 'Cập nhật' : 'Thêm'} quy định</h2><button type="button" onClick={() => setEdit(null)}>Đóng</button></div><div className="form-grid">
       <label>Loại sản phẩm<select required value={edit.productTypeId || ''} onChange={e => change({ productTypeId: Number(e.target.value) })}><option value="">Chọn loại</option>{types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label><label>Mã<input required maxLength={50} value={edit.code} onChange={e => change({ code: e.target.value })} /></label>
       <label>Phiên bản<input type="number" min="1" required value={edit.version} onChange={e => change({ version: Number(e.target.value) })} /></label><label>Tên quy định<input required maxLength={300} value={edit.name} onChange={e => change({ name: e.target.value })} /></label>
       <label>Mức quy đổi<input type="number" min="0" step="0.0001" required value={edit.conversionValue} onChange={e => change({ conversionValue: Number(e.target.value) })} /></label><label>Đơn vị<select value={edit.unit} onChange={e => change({ unit: e.target.value })}><option value="GIO">Giờ</option><option value="DIEM">Điểm</option></select></label><label>Độ ưu tiên<input type="number" min="0" step="1" required value={edit.priority} onChange={e => change({ priority: Number(e.target.value) })} /><small className="muted">Số lớn hơn được chọn trước.</small></label>

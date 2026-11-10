@@ -9,6 +9,19 @@ input:disabled, select:disabled { background: #eef2ec; color: #6d7d70; cursor: n
 .lec-create-form { border-color: #b8d9d2; background: #fbfefd; }
 .lec-create-form > label { margin-bottom: 8px; }
 .lec-create-form .empty { background: #f5f8fa; border-radius: 9px; }
+.lec-account-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 16px 0 20px; }
+.lec-account-summary > div { display: grid; gap: 6px; padding: 14px 15px; border: 1px solid #dce8e3; border-radius: 10px; background: #f3f9f6; }
+.lec-account-summary span { color: #687d73; font-size: .72rem; }
+.lec-account-summary strong { color: #183b31; font-size: .86rem; overflow-wrap: anywhere; }
+.lec-link-required { margin: 20px 0 16px; padding: 18px 18px 4px; border: 1px solid #dfe8ed; border-radius: 11px; background: #fff; }
+.lec-link-required h3 { margin: 0 0 4px; color: #17324d; font-size: .92rem; }
+.lec-step-badge { padding: 5px 9px; border-radius: 999px; background: #e4f3f1; color: #176b64; font-size: .7rem; font-weight: 700; }
+.lec-field-note { color: #287566; font-size: .73rem; font-weight: 500; line-height: 1.45; }
+.lec-optional-fields { margin: 16px 0 20px; border: 1px solid #dfe7ed; border-radius: 11px; background: #f8fafb; }
+.lec-optional-fields summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 15px 17px; color: #28465b; font-size: .84rem; font-weight: 700; cursor: pointer; }
+.lec-optional-fields summary span { padding: 4px 8px; border-radius: 999px; background: #e9eef2; color: #687b89; font-size: .67rem; }
+.lec-optional-fields[open] { padding: 0 17px 5px; }
+.lec-optional-fields[open] summary { margin: 0 -17px; border-bottom: 1px solid #e1e8ec; }
 
 .lec-back { margin-bottom: 8px; }
 .lec-badge { margin-left: 8px; padding: 2px 8px; border-radius: 20px; background: #d6eadc; color: #165d44; font-size: .68rem; font-weight: 700; vertical-align: middle; }
@@ -36,5 +49,5 @@ input:disabled, select:disabled { background: #eef2ec; color: #6d7d70; cursor: n
 .lec-hint { font-weight: 400; font-size: .78rem; color: #6d7d70; margin-top: -4px; }
 .lec-count { align-self: flex-end; font-size: .72rem; font-weight: 400; color: #6d7d70; }
 
-@media (max-width: 900px) { .lec-filter { grid-template-columns: 1fr 1fr; } .lec-filter .primary { grid-column: 1 / -1; } }
-@media (max-width: 650px) { .lec-filter { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .lec-filter { grid-template-columns: 1fr 1fr; } .lec-filter .primary { grid-column: 1 / -1; } .lec-account-summary { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 650px) { .lec-filter { grid-template-columns: 1fr; } .lec-account-summary { grid-template-columns: 1fr; } }

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { api } from './api'
 import type { AcademicYear } from './api'
+import { useAutoReveal } from './useAutoReveal'
 
 type Lecturer = {
     id: number
@@ -54,6 +55,15 @@ const progressLabels: Record<string, string> = {
     DA_THUC_HIEN: 'Đã thực hiện',
 }
 
+const formatPlanDate = (value: string | null) => {
+    if (!value) return 'Chưa thiết lập'
+    return new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString('vi-VN')
+}
+
+const progressTone = (status: string) => status === 'DA_THUC_HIEN'
+    ? 'done'
+    : status === 'DANG_THUC_HIEN' ? 'in-progress' : 'not-started'
+
 
 type Props = {
     academicYears: AcademicYear[]
@@ -81,6 +91,8 @@ export function ResearchPlans({ academicYears }: Props) {
     const [progressStatus, setProgressStatus] = useState('CHUA_THUC_HIEN')
     const [progressResult, setProgressResult] = useState('')
     const [progressDifficulty, setProgressDifficulty] = useState('')
+    const itemEditRef = useAutoReveal<HTMLFormElement>(editingItem !== null, editingItem?.id)
+    const planEditRef = useAutoReveal<HTMLFormElement>(editingPlan, plan?.id)
 
     useEffect(() => {
         let active = true
@@ -453,8 +465,11 @@ export function ResearchPlans({ academicYears }: Props) {
             {error && <p className="alert" role="alert">{error}</p>}
             {message && <p role="status">{message}</p>}
 
-            <section className="panel">
-                <h2>Chọn năm học</h2>
+            <section className="panel plan-year-filter">
+                <div>
+                    <h2>Năm học đang xem</h2>
+                    <p className="muted">Chọn năm học để xem cam kết và tiến độ tương ứng.</p>
+                </div>
                 <label>
                     Năm học
                     <select
@@ -603,59 +618,93 @@ export function ResearchPlans({ academicYears }: Props) {
                             <p className="muted">Kế hoạch chưa có nội dung nghiên cứu.</p>
                         ) : (
                             <div className="plan-items">
-                                {items.map(item => (
-                                    <article key={item.id} className="plan-item">
-                                        <h3>{item.name}</h3>
+                                {items.map(item => {
+                                    const percent = item.committedQuantity > 0
+                                        ? Math.min(100, Math.round(item.completedProductCount * 100 / item.committedQuantity))
+                                        : 0
+                                    const overdue = !!item.deadline &&
+                                        item.status !== 'DA_THUC_HIEN' &&
+                                        new Date(`${item.deadline.slice(0, 10)}T23:59:59`) < new Date()
+                                    const typeName = productTypes.find(type => type.id === item.productTypeId)?.name ?? 'Nội dung NCKH'
 
-                                        <p className="muted">
-                                            Loại sản phẩm: {productTypes.find(type => type.id === item.productTypeId)?.name ?? 'Nội dung NCKH'}
-                                        </p>
+                                    return (
+                                        <article key={item.id} className={`plan-item ${progressTone(item.status)}`}>
+                                            <div className="plan-item-head">
+                                                <div>
+                                                    <span className="plan-type-badge">{typeName}</span>
+                                                    <h3>{item.name}</h3>
+                                                </div>
+                                                <span className={`plan-progress-badge ${progressTone(item.status)}`}>
+                                                    {progressLabels[item.status] ?? item.status}
+                                                </span>
+                                            </div>
 
-                                        <p>
-                                            <strong>Tiến độ hiện tại:</strong>{' '}
-                                            {progressLabels[item.status] ?? item.status}
-                                        </p>
-
-                                        <p>
-                                            <strong>Số lượng cam kết đầu năm:</strong>{' '}
-                                            {item.committedQuantity}
-                                        </p>
-
-                                        <p>
-                                            <strong>Sản phẩm thực tế:</strong>{' '}
-                                            {item.actualProductCount} · <strong>Đã hoàn thành:</strong>{' '}
-                                            {item.completedProductCount}/{item.committedQuantity}
-                                        </p>
-
-                                        <p>
-                                            <strong>Hạn hoàn thành:</strong>{' '}
-                                            {item.deadline ?? 'Chưa thiết lập'}
-                                        </p>
-
-                                        {plan.status === 'NHAP' && (
-                                            <button
-                                                type="button"
-                                                onClick={() => startEditItem(item)}
-                                                disabled={itemBusy}
+                                            <div className="plan-progress-heading">
+                                                <span>Mức hoàn thành cam kết</span>
+                                                <strong>{item.completedProductCount}/{item.committedQuantity} · {percent}%</strong>
+                                            </div>
+                                            <div
+                                                className="plan-progress-bar"
+                                                role="progressbar"
+                                                aria-label={`Hoàn thành ${percent}%`}
+                                                aria-valuenow={percent}
+                                                aria-valuemin={0}
+                                                aria-valuemax={100}
                                             >
-                                                Chỉnh sửa
-                                            </button>
-                                        )}
+                                                <span style={{ width: `${percent}%` }} />
+                                            </div>
 
-                                        <button
-                                            type="button"
-                                            onClick={() => openProgress(item)}
-                                            disabled={itemBusy}
-                                        >
-                                            Báo cáo tiến độ / Xem lịch sử
-                                        </button>
-                                    </article>
-                                ))}
+                                            <div className="plan-item-metrics">
+                                                <div><span>Cam kết</span><strong>{item.committedQuantity}</strong><small>sản phẩm</small></div>
+                                                <div><span>Đã khai báo</span><strong>{item.actualProductCount}</strong><small>sản phẩm</small></div>
+                                                <div><span>Đã hoàn thành</span><strong>{item.completedProductCount}</strong><small>sản phẩm</small></div>
+                                            </div>
+
+                                            <div className={`plan-deadline ${overdue ? 'overdue' : ''}`}>
+                                                <span aria-hidden="true">{overdue ? '!' : '◷'}</span>
+                                                <div>
+                                                    <small>{overdue ? 'Đã quá hạn' : 'Hạn hoàn thành'}</small>
+                                                    <strong>{formatPlanDate(item.deadline)}</strong>
+                                                </div>
+                                            </div>
+
+                                            {(item.result || item.difficultyProposal) && (
+                                                <div className="plan-latest-note">
+                                                    {item.result && <p><strong>Kết quả gần nhất:</strong> {item.result}</p>}
+                                                    {item.difficultyProposal && <p><strong>Khó khăn/đề xuất:</strong> {item.difficultyProposal}</p>}
+                                                </div>
+                                            )}
+
+                                            <div className="plan-item-actions">
+                                                {plan.status === 'NHAP' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => startEditItem(item)}
+                                                        disabled={itemBusy}
+                                                    >
+                                                        Chỉnh sửa nội dung
+                                                    </button>
+                                                )}
+
+                                                <button
+                                                    className="primary"
+                                                    type="button"
+                                                    onClick={() => openProgress(item)}
+                                                    disabled={itemBusy}
+                                                >
+                                                    {item.status === 'DA_THUC_HIEN' ? 'Xem tiến độ & lịch sử' : 'Cập nhật báo cáo tiến độ'}
+                                                </button>
+                                            </div>
+                                        </article>
+                                    )
+                                })}
                             </div>
                         )}
 
                         {plan.status === 'NHAP' && editingItem && (
                             <form
+                                ref={itemEditRef}
+                                className="auto-reveal-target"
                                 key={editingItem.id}
                                 onSubmit={saveEditItem}
                             >
@@ -786,27 +835,23 @@ export function ResearchPlans({ academicYears }: Props) {
                     )}
 
 
-                    <section className="panel">
-                        <h2>Thông tin kế hoạch</h2>
+                    <section className="panel plan-overview">
+                        <div className="section-top">
+                            <div>
+                                <h2>Tổng quan kế hoạch</h2>
+                                <p className="muted">Thông tin đăng ký chung của năm học đang chọn.</p>
+                            </div>
+                            <span className={`plan-status-badge ${plan.status === 'NHAP' ? 'draft' : 'registered'}`}>
+                                {plan.status === 'NHAP' ? 'Bản nháp' : 'Đã đăng ký'}
+                            </span>
+                        </div>
 
-                        <p>
-                            <strong>Trạng thái:</strong>{' '}
-                            {plan.status === 'NHAP' ? 'Bản nháp' : 'Đã đăng ký'}
-                        </p>
-
-                        <p>
-                            <strong>Số sản phẩm cam kết:</strong>{' '}
-                            {plan.committedProductCount}
-                        </p>
-
-                        <p>
-                            <strong>Ngày lập:</strong> {plan.planDate}
-                        </p>
-
-                        <p>
-                            <strong>Hạn hoàn thành:</strong>{' '}
-                            {plan.deadline ?? 'Chưa thiết lập'}
-                        </p>
+                        <div className="plan-overview-grid">
+                            <div><span>Sản phẩm cam kết</span><strong>{plan.committedProductCount}</strong></div>
+                            <div><span>Nội dung nghiên cứu</span><strong>{items.length}</strong></div>
+                            <div><span>Ngày lập</span><strong>{formatPlanDate(plan.planDate)}</strong></div>
+                            <div><span>Hạn hoàn thành</span><strong>{formatPlanDate(plan.deadline)}</strong></div>
+                        </div>
 
                         {plan.status === 'NHAP' && (
                             <>
@@ -819,7 +864,7 @@ export function ResearchPlans({ academicYears }: Props) {
                                         Chỉnh sửa kế hoạch
                                     </button>
                                 ) : (
-                                    <form onSubmit={saveEditPlan}>
+                                    <form ref={planEditRef} className="auto-reveal-target" onSubmit={saveEditPlan}>
                                         <h3>Chỉnh sửa thông tin kế hoạch</h3>
 
                                         <label>

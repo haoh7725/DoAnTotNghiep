@@ -79,6 +79,11 @@ public sealed class LecturerRepository(ApplicationDbContext db) : ILecturerRepos
     public Task<bool> DepartmentExistsAsync(long departmentId, CancellationToken cancellationToken) =>
         db.Departments.AnyAsync(x => x.Id == departmentId, cancellationToken);
 
+    public Task<long?> GetDepartmentFacultyIdAsync(long departmentId, CancellationToken cancellationToken) =>
+        db.Departments.Where(x => x.Id == departmentId)
+            .Select(x => (long?)x.FacultyId)
+            .SingleOrDefaultAsync(cancellationToken);
+
     public Task<bool> ExistsByCodeAsync(string code, long? excludeId, CancellationToken cancellationToken) =>
         db.Lecturers.AnyAsync(x => x.Code == code && (excludeId == null || x.Id != excludeId), cancellationToken);
 

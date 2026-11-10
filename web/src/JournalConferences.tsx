@@ -1,5 +1,6 @@
 
 import { useCallback, useEffect, useState } from 'react'
+import { useAutoReveal } from './useAutoReveal'
 
 type CatalogType = 'TAP_CHI' | 'HOI_NGHI'
 
@@ -79,6 +80,7 @@ export default function JournalConferences({ canEdit }: Props) {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState<CatalogForm>(emptyForm)
+  const formRef = useAutoReveal<HTMLDivElement>(showForm, editingId ?? 'new')
 
   const loadItems = useCallback(async () => {
     setLoading(true)
@@ -270,7 +272,7 @@ export default function JournalConferences({ canEdit }: Props) {
       </div>
 
       {canEdit && showForm && (
-        <div className="card" style={{ marginTop: 20 }}>
+        <div ref={formRef} className="card auto-reveal-target" style={{ marginTop: 20 }}>
           <h3>
             {editingId === null ? 'Thêm danh mục mới' : 'Sửa danh mục'}
           </h3>

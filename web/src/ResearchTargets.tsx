@@ -4,6 +4,7 @@ import type { FormEvent } from 'react'
 import { api } from './api'
 import type { Lookups } from './api'
 import { Toast } from './Toast'
+import { useAutoReveal } from './useAutoReveal'
 
 type Target = {
   id: number
@@ -62,6 +63,8 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
   const [selectedLecturerId, setSelectedLecturerId] = useState<number | null>(null)
   const [progress, setProgress] = useState<TargetProgress | null>(null)
   const [targetPanel, setTargetPanel] = useState<'overview' | 'allocations' | 'lecturers'>('overview')
+  const targetFormRef = useAutoReveal<HTMLElement>(targetFormOpen, editingTarget?.id ?? 'new')
+  const allocationFormRef = useAutoReveal<HTMLElement>(allocationFormOpen, editingAllocation?.id ?? 'new')
 
   const selectedTarget = targets.find(t => t.id === selectedId)
   const isResearchOffice = roles.includes('PHONG_QLKH')
@@ -467,7 +470,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
       </section>
 
       {canEdit && targetFormOpen && (
-        <section className="panel">
+        <section ref={targetFormRef} className="panel auto-reveal-target">
           <h2>{editingTarget ? 'Sửa chỉ tiêu' : 'Thêm chỉ tiêu'}</h2>
           <form key={editingTarget?.id ?? 'new'} onSubmit={saveTarget}>
             {!editingTarget && (
@@ -716,7 +719,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
       </section>}
 
       {canEditAllocations && allocationFormOpen && selectedTarget?.status === 'CONG_BO' && (
-        <section className="panel">
+        <section ref={allocationFormRef} className="panel auto-reveal-target">
           <h2>
             {editingAllocation ? 'Sửa phân bổ' : 'Thêm phân bổ'}
           </h2>

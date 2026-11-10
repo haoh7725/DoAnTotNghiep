@@ -32,6 +32,8 @@ public sealed record LecturerAccountOptionResponse(
     string Username,
     string FullName,
     string? Email,
-    IReadOnlyList<string> Roles);
+    IReadOnlyList<string> Roles,
+    long? FacultyId = null,
+    long? DepartmentId = null);
 
 public sealed record AccessToken(string Value, DateTimeOffset ExpiresAt);

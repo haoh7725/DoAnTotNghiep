@@ -1,9 +1,11 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ResearchManagement.Application.Auth.Abstractions;
+using ResearchManagement.Application.Lecturers.Models;
 using ResearchManagement.Application.Products.Abstractions;
 using ResearchManagement.Domain.Constants;
 using ResearchManagement.Domain.Entities;
@@ -46,10 +48,12 @@ public static class DemoDataSeeder
         if (existingMarker is not null)
         {
             await using var supplementTransaction = await db.Database.BeginTransactionAsync(cancellationToken);
+            await EnsureNguyenMinhAnhProfileAsync(db, cancellationToken);
             await EnsureExtendedDemoDataAsync(db, existingMarker.Id, cancellationToken);
             await EnsureLargeSampleDataAsync(db, passwordService, cancellationToken);
             await EnsureUnitManagersAsync(db, passwordService, cancellationToken);
             await EnsureLargeReportEvaluationsAsync(db, existingMarker.Id, cancellationToken);
+            await EnsureOperationalDemoDataAsync(db, existingMarker.Id, cancellationToken);
             await supplementTransaction.CommitAsync(cancellationToken);
             logger.LogInformation("Đã kiểm tra và bổ sung dữ liệu mẫu còn thiếu.");
             return;
@@ -144,9 +148,17 @@ public static class DemoDataSeeder
             db.Lecturers.AddRange(lecturers);
             await db.SaveChangesAsync(cancellationToken);
 
+            var nguyenMinhAnhProfile = new ScientificProfile(
+                lecturers[0].Id,
+                "Kỹ thuật phần mềm; học máy ứng dụng; phân tích dữ liệu giáo dục",
+                "Trí tuệ nhân tạo, khai phá dữ liệu và công nghệ giáo dục",
+                "Mô hình dự báo nguy cơ học vụ; phân tích học tập; hệ thống hỗ trợ ra quyết định trong giáo dục",
+                "Giảng viên chính, chủ nhiệm và thành viên nhiều đề tài về trí tuệ nhân tạo trong giáo dục; có công bố trong nước và quốc tế.",
+                DateTimeOffset.UtcNow);
+            ApplyNguyenMinhAnhProfileDetails(nguyenMinhAnhProfile);
+
             db.ScientificProfiles.AddRange(
-                new ScientificProfile(lecturers[0].Id, "Kỹ thuật phần mềm", "Trí tuệ nhân tạo",
-                    "Ứng dụng học máy trong giáo dục", "Chủ nhiệm 2 đề tài và công bố 8 bài báo.", DateTimeOffset.UtcNow),
+                nguyenMinhAnhProfile,
                 new ScientificProfile(lecturers[1].Id, "Kiểm thử phần mềm", "Đảm bảo chất lượng",
                     "Tự động hóa kiểm thử", "Tham gia nhóm nghiên cứu SE Lab.", DateTimeOffset.UtcNow),
                 new ScientificProfile(lecturers[2].Id, "Hệ thống thông tin", "Khoa học dữ liệu",
@@ -215,14 +227,14 @@ public static class DemoDataSeeder
                 new ResearchPlanItem(plans[6].Id, productTypes["BAI_BAO"].Id, "Nhận diện hành vi học tập từ dữ liệu lớp học", 1, new DateOnly(2027, 3, 15)),
                 new ResearchPlanItem(plans[7].Id, productTypes["CHUNG_NHAN"].Id, "Chứng nhận giải pháp bảo mật hệ thống", 1, new DateOnly(2027, 6, 15))
             };
-            items[0].UpdateProgress("DANG_THUC_HIEN", "Đã hoàn thành bản thảo", null);
+            items[0].UpdateProgress("DA_THUC_HIEN", "Đã công bố và hoàn tất minh chứng", null);
             items[2].UpdateProgress("DANG_THUC_HIEN", "Đã có kết quả thử nghiệm", "Cần bổ sung bộ dữ liệu kiểm thử");
             items[4].UpdateProgress("DA_THUC_HIEN", "Đã công bố", null);
             db.ResearchPlanItems.AddRange(items);
             await db.SaveChangesAsync(cancellationToken);
 
             db.ProgressHistories.AddRange(
-                new ProgressHistory(items[0].Id, lecturer1.Id, "DANG_THUC_HIEN", "Đã hoàn thành bản thảo", null),
+                new ProgressHistory(items[0].Id, lecturer1.Id, "DA_THUC_HIEN", "Đã công bố và hoàn tất minh chứng", null),
                 new ProgressHistory(items[2].Id, lecturer2.Id, "DANG_THUC_HIEN", "Đã có kết quả thử nghiệm", "Cần bổ sung bộ dữ liệu kiểm thử"),
                 new ProgressHistory(items[4].Id, lecturer3.Id, "DA_THUC_HIEN", "Đã công bố", null));
 
@@ -241,7 +253,12 @@ public static class DemoDataSeeder
                 NewProject(items[10], lecturers[7], "Giải pháp giám sát an toàn hạ tầng số", "CẤP_TRƯỜNG")
             };
 
-            // NHAP, NOP, TRUONG_BO_MON_DUYET, DA_DUYET và TRA_LAI.
+            // Phân bố đủ các trạng thái để kiểm thử quy trình xét duyệt và dashboard.
+            products[0].Submit();
+            products[0].Approve(ProductStatuses.DepartmentHeadApproved);
+            products[0].Approve(ProductStatuses.FacultyDeanApproved);
+            products[0].Approve(ProductStatuses.ResearchOfficeApproved);
+            products[0].Approve(ProductStatuses.Approved, 100m);
             products[1].Submit();
             products[2].Submit();
             products[2].Approve(ProductStatuses.DepartmentHeadApproved);
@@ -279,6 +296,11 @@ public static class DemoDataSeeder
                 await UploadDemoEvidenceAsync(products[3].Id, lecturer3.Id,
                     "gritnet-student-performance.pdf", "Bài báo khoa học công khai từ arXiv"));
             db.ReviewHistories.AddRange(
+                new ReviewHistory(products[0].Id, lecturer1.Id, ProductStatuses.Draft, ProductStatuses.Submitted, "Nộp bài báo và minh chứng công bố"),
+                new ReviewHistory(products[0].Id, head.Id, ProductStatuses.Submitted, ProductStatuses.DepartmentHeadApproved, "Bộ môn xác nhận nội dung và tác giả"),
+                new ReviewHistory(products[0].Id, dean.Id, ProductStatuses.DepartmentHeadApproved, ProductStatuses.FacultyDeanApproved, "Khoa đề nghị công nhận kết quả"),
+                new ReviewHistory(products[0].Id, researchOffice.Id, ProductStatuses.FacultyDeanApproved, ProductStatuses.ResearchOfficeApproved, "Minh chứng công bố hợp lệ"),
+                new ReviewHistory(products[0].Id, researchOffice.Id, ProductStatuses.ResearchOfficeApproved, ProductStatuses.Approved, "Công nhận sản phẩm và quy đổi"),
                 new ReviewHistory(products[1].Id, lecturer1.Id, ProductStatuses.Draft, ProductStatuses.Submitted, "Nộp xét duyệt"),
                 new ReviewHistory(products[2].Id, lecturer2.Id, ProductStatuses.Draft, ProductStatuses.Submitted, "Nộp xét duyệt"),
                 new ReviewHistory(products[2].Id, head.Id, ProductStatuses.Submitted, ProductStatuses.DepartmentHeadApproved, "Nội dung đạt yêu cầu bộ môn"),
@@ -302,6 +324,7 @@ public static class DemoDataSeeder
             await EnsureLargeSampleDataAsync(db, passwordService, cancellationToken);
             await EnsureUnitManagersAsync(db, passwordService, cancellationToken);
             await EnsureLargeReportEvaluationsAsync(db, researchOffice.Id, cancellationToken);
+            await EnsureOperationalDemoDataAsync(db, researchOffice.Id, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             logger.LogInformation("Đã tạo dữ liệu mẫu nghiệp vụ thành công.");
         }
@@ -405,8 +428,8 @@ public static class DemoDataSeeder
             if (rule is null)
             {
                 rule = new ConversionRule(productTypes[spec.Type].Id, spec.Code, 1, spec.Name,
-                    "Áp dụng cho sản phẩm đã được phê duyệt trong năm học 2026-2027.", spec.Value, spec.Unit, 100,
-                    "Tác giả chính hưởng 100%, đồng tác giả hưởng 50%.", new DateOnly(2026, 1, 1),
+                    "Áp dụng cho sản phẩm đã được phê duyệt từ năm học 2024-2025.", spec.Value, spec.Unit, 100,
+                    "Tác giả chính hưởng 100%, đồng tác giả hưởng 50%.", new DateOnly(2024, 1, 1),
                     new DateOnly(2027, 12, 31), "Quy định minh họa phục vụ đồ án");
                 db.ConversionRules.Add(rule);
                 await db.SaveChangesAsync(cancellationToken);
@@ -424,7 +447,7 @@ public static class DemoDataSeeder
                     x => x.ConversionRuleId == rule.Id, cancellationToken))
             {
                 db.ConversionCriteria.Add(new ConversionCriterion(
-                    rule.Id, "NAM_CONG_BO", "TU", null, 2026m));
+                    rule.Id, "NAM_CONG_BO", "TU", null, 2024m));
             }
         }
         await db.SaveChangesAsync(cancellationToken);
@@ -490,12 +513,19 @@ public static class DemoDataSeeder
                     await db.SaveChangesAsync(cancellationToken);
                 }
 
-                if (!await db.EvaluationConversionDetails.AnyAsync(
-                        x => x.EvaluationId == evaluation.Id && x.ProductId == approved.Product.Id,
-                        cancellationToken))
+                var applicableRules = await db.ConversionRules
+                    .Where(x => x.ProductTypeId == approved.ProductTypeId && x.Code.StartsWith("QD_"))
+                    .OrderByDescending(x => x.Priority)
+                    .ToListAsync(cancellationToken);
+                foreach (var rule in applicableRules)
                 {
-                    var rule = await db.ConversionRules.SingleAsync(
-                        x => x.ProductTypeId == approved.ProductTypeId && x.Code.StartsWith("QD_"), cancellationToken);
+                    if (await db.EvaluationConversionDetails.AnyAsync(
+                            x => x.EvaluationId == evaluation.Id &&
+                                 x.ProductId == approved.Product.Id &&
+                                 x.Unit == rule.Unit,
+                            cancellationToken))
+                        continue;
+
                     var coefficient = await db.AuthorConversionCoefficients
                         .Where(x => x.ConversionRuleId == rule.Id && x.AuthorRole == author.Role)
                         .Select(x => x.Coefficient).SingleAsync(cancellationToken);
@@ -514,7 +544,7 @@ public static class DemoDataSeeder
 
     /// <summary>
     /// Tạo tập dữ liệu đủ lớn để biểu diễn một hệ thống đang vận hành: 2 khoa,
-    /// 6 bộ môn, 32 giảng viên, 3 năm học, 72 kế hoạch và 144 sản phẩm.
+    /// 8 bộ môn, 32 giảng viên, 3 năm học, 80 kế hoạch và hơn 150 sản phẩm.
     /// Các bản ghi được đánh dấu bằng tên đăng nhập seed.gv* để có thể chạy lặp lại.
     /// </summary>
     private static async Task EnsureLargeSampleDataAsync(
@@ -683,13 +713,411 @@ public static class DemoDataSeeder
         if (accounts.Count > 0) { db.Accounts.AddRange(accounts); await db.SaveChangesAsync(ct); }
     }
 
+    /// <summary>
+    /// Nối dữ liệu quy mô lớn thành các luồng vận hành hoàn chỉnh: định mức, chỉ tiêu khoa,
+    /// phân bổ bộ môn/cá nhân, bài báo gắn chỉ tiêu, trạng thái công bố, hồ sơ và thông báo.
+    /// </summary>
+    private static async Task EnsureOperationalDemoDataAsync(
+        ApplicationDbContext db,
+        long researchOfficeAccountId,
+        CancellationToken cancellationToken)
+    {
+        var years = await db.AcademicYears.OrderBy(x => x.StartDate).ToListAsync(cancellationToken);
+        var faculties = await db.Faculties.OrderBy(x => x.Id).ToListAsync(cancellationToken);
+        var departments = await db.Departments.OrderBy(x => x.Id).ToListAsync(cancellationToken);
+        var lecturers = await db.Lecturers.OrderBy(x => x.Id).ToListAsync(cancellationToken);
+        var plans = await db.ResearchPlans.ToListAsync(cancellationToken);
+        var latestYearId = years.OrderByDescending(x => x.StartDate).First().Id;
+
+        var existingNorms = await db.ResearchNorms
+            .Select(x => new { x.LecturerId, x.AcademicYearId })
+            .ToListAsync(cancellationToken);
+        foreach (var plan in plans)
+        {
+            if (existingNorms.Any(x => x.LecturerId == plan.LecturerId && x.AcademicYearId == plan.AcademicYearId))
+                continue;
+            var lecturer = lecturers.Single(x => x.Id == plan.LecturerId);
+            var requiredHours = lecturer.AcademicRank == "PGS" ? 320m : lecturer.Degree == "TIẾN SĨ" ? 280m : 200m;
+            db.ResearchNorms.Add(new ResearchNorm(
+                lecturer.Id, plan.AcademicYearId, requiredHours,
+                "Định mức NCKH theo học hàm, học vị và năm học."));
+        }
+
+        var classificationNames = new[]
+        {
+            (Name: "Xuất sắc", Minimum: 120m, Priority: 1),
+            (Name: "Tốt", Minimum: 100m, Priority: 2),
+            (Name: "Khá", Minimum: 80m, Priority: 3),
+            (Name: "Đạt", Minimum: 50m, Priority: 4)
+        };
+        foreach (var year in years)
+        {
+            var existing = await db.EmulationClassificationRules
+                .Where(x => x.AcademicYearId == year.Id)
+                .Select(x => x.Name)
+                .ToListAsync(cancellationToken);
+            foreach (var rule in classificationNames.Where(x => !existing.Contains(x.Name)))
+                db.EmulationClassificationRules.Add(new EmulationClassificationRule(
+                    year.Id, rule.Name, rule.Minimum, rule.Priority));
+        }
+        await db.SaveChangesAsync(cancellationToken);
+
+        var catalogs = await db.JournalConferences.OrderBy(x => x.Id).ToListAsync(cancellationToken);
+        var internationalCatalog = catalogs.FirstOrDefault(x => x.Index == "SCOPUS");
+        var domesticCatalog = catalogs.FirstOrDefault(x => x.Index == "TRONG_NUOC");
+        var articleTypeId = await db.ProductTypes
+            .Where(x => x.Code == "BAI_BAO")
+            .Select(x => x.Id)
+            .SingleAsync(cancellationToken);
+
+        foreach (var year in years)
+        foreach (var faculty in faculties)
+        {
+            var facultyDepartmentIds = departments
+                .Where(x => x.FacultyId == faculty.Id)
+                .Select(x => x.Id)
+                .ToHashSet();
+            var facultyPlans = plans
+                .Where(x => x.AcademicYearId == year.Id &&
+                            facultyDepartmentIds.Contains(lecturers.Single(l => l.Id == x.LecturerId).DepartmentId))
+                .ToList();
+            if (facultyPlans.Count == 0) continue;
+
+            var target = await db.ResearchTargets.FirstOrDefaultAsync(
+                x => x.FacultyId == faculty.Id && x.AcademicYearId == year.Id,
+                cancellationToken);
+            if (target is null)
+            {
+                target = new ResearchTarget(faculty.Id, year.Id, facultyPlans.Count, year.EndDate.AddDays(-30));
+                target.MarkAssigned(researchOfficeAccountId);
+                target.Accept(researchOfficeAccountId, new DateTimeOffset(year.StartDate.ToDateTime(new TimeOnly(8, 0)), TimeSpan.Zero));
+                target.Publish(new DateTimeOffset(year.StartDate.AddDays(14).ToDateTime(new TimeOnly(8, 0)), TimeSpan.Zero));
+                db.ResearchTargets.Add(target);
+                await db.SaveChangesAsync(cancellationToken);
+            }
+
+            var targetAllocations = await db.ResearchTargetAllocations
+                .Where(x => x.ResearchTargetId == target.Id)
+                .ToListAsync(cancellationToken);
+            var existingPersonalAllocations = await (from personal in db.LecturerTargetAllocations
+                                                     join allocation in db.ResearchTargetAllocations
+                                                         on personal.DepartmentAllocationId equals allocation.Id
+                                                     where allocation.ResearchTargetId == target.Id
+                                                     select personal).ToListAsync(cancellationToken);
+            var plannedFacultyTotal = facultyPlans.Sum(plan =>
+            {
+                var existing = existingPersonalAllocations
+                    .Where(x => x.LecturerId == plan.LecturerId)
+                    .Sum(x => x.AllocatedArticleCount);
+                return existing > 0 ? existing : 1;
+            });
+            target.Update(plannedFacultyTotal, year.EndDate.AddDays(-30));
+            await db.SaveChangesAsync(cancellationToken);
+
+            foreach (var department in departments.Where(x => x.FacultyId == faculty.Id))
+            {
+                var departmentLecturerIds = lecturers
+                    .Where(x => x.DepartmentId == department.Id &&
+                                facultyPlans.Any(p => p.LecturerId == x.Id))
+                    .Select(x => x.Id)
+                    .ToList();
+                if (departmentLecturerIds.Count == 0) continue;
+
+                var allocation = targetAllocations.FirstOrDefault(x => x.DepartmentId == department.Id);
+                if (allocation is null)
+                {
+                    allocation = new ResearchTargetAllocation(
+                        target.Id, faculty.Id, department.Id, departmentLecturerIds.Count,
+                        year.StartDate.AddDays(21));
+                    db.ResearchTargetAllocations.Add(allocation);
+                    targetAllocations.Add(allocation);
+                    await db.SaveChangesAsync(cancellationToken);
+                }
+
+                var personalAllocations = await db.LecturerTargetAllocations
+                    .Where(x => x.DepartmentAllocationId == allocation.Id)
+                    .ToListAsync(cancellationToken);
+                var missingLecturerIds = departmentLecturerIds
+                    .Where(id => personalAllocations.All(x => x.LecturerId != id))
+                    .ToList();
+                var plannedDepartmentTotal = personalAllocations.Sum(x => x.AllocatedArticleCount) +
+                                             missingLecturerIds.Count;
+                allocation.Update(plannedDepartmentTotal, year.StartDate.AddDays(21));
+                await db.SaveChangesAsync(cancellationToken);
+
+                foreach (var lecturerId in missingLecturerIds)
+                {
+                    var personal = new LecturerTargetAllocation(
+                        allocation.Id, lecturerId, 1, year.StartDate.AddDays(24));
+                    db.LecturerTargetAllocations.Add(personal);
+                    personalAllocations.Add(personal);
+                }
+                await db.SaveChangesAsync(cancellationToken);
+            }
+
+            target.Update(targetAllocations.Sum(x => x.AllocatedArticleCount), year.EndDate.AddDays(-30));
+            if (target.Status == "CHO_TIEP_NHAN")
+                target.Accept(researchOfficeAccountId, DateTimeOffset.UtcNow);
+            if (target.Status == "DA_TIEP_NHAN")
+                target.Publish(DateTimeOffset.UtcNow);
+            if (target.Status == "CONG_BO")
+                target.Lock(new DateTimeOffset(year.StartDate.AddDays(30).ToDateTime(new TimeOnly(8, 0)), TimeSpan.Zero));
+            await db.SaveChangesAsync(cancellationToken);
+
+            var articleProducts = await (from product in db.Products
+                                         join item in db.ResearchPlanItems on product.ResearchPlanItemId equals item.Id
+                                         join plan in db.ResearchPlans on item.ResearchPlanId equals plan.Id
+                                         join lecturer in db.Lecturers on plan.LecturerId equals lecturer.Id
+                                         where plan.AcademicYearId == year.Id &&
+                                               facultyDepartmentIds.Contains(lecturer.DepartmentId) &&
+                                               item.ProductTypeId == articleTypeId
+                                         select product).ToListAsync(cancellationToken);
+            foreach (var product in articleProducts)
+            {
+                var catalog = product.JournalIndex == "SCOPUS" ? internationalCatalog : domesticCatalog;
+                if (!product.ResearchTargetId.HasValue)
+                    product.LinkTarget(target.Id, catalog?.Id);
+
+                var articleStatus = product.Status switch
+                {
+                    ProductStatuses.Approved => "DA_XUAT_BAN",
+                    ProductStatuses.ResearchOfficeApproved or ProductStatuses.FacultyDeanApproved => "DA_NHAN_DANG",
+                    ProductStatuses.DepartmentHeadApproved or ProductStatuses.Submitted => "DANG_PHAN_BIEN",
+                    _ => "DANG_VIET"
+                };
+                DateOnly? publishedDate = articleStatus == "DA_XUAT_BAN"
+                    ? product.PublishedDate is { } existingDate &&
+                      existingDate >= year.StartDate && existingDate <= year.EndDate
+                        ? existingDate
+                        : year.EndDate.AddDays(-120)
+                    : null;
+                product.Update(product.Title, product.Description, product.PublicationInfo,
+                    publishedDate, articleStatus, product.JournalIndex, product.JournalClassification, product.ProjectLevel);
+            }
+
+            foreach (var plan in facultyPlans.Where(x => x.AcademicYearId == latestYearId))
+            {
+                var lecturer = lecturers.Single(x => x.Id == plan.LecturerId);
+                var key = $"seed:assigned-target:{target.Id}:lecturer:{lecturer.Id}";
+                if (!await db.Notifications.AnyAsync(x => x.DeduplicationKey == key, cancellationToken))
+                    db.Notifications.Add(Sent(new Notification(
+                        lecturer.AccountId, "HE_THONG",
+                        $"Bạn đã được giao chỉ tiêu bài báo năm học {year.Code}. Hãy liên kết sản phẩm trong kế hoạch để theo dõi tiến độ.",
+                        key, researchPlanId: plan.Id)));
+            }
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        var profiles = await db.ScientificProfiles.ToListAsync(cancellationToken);
+        foreach (var profile in profiles.Where(x => string.IsNullOrWhiteSpace(x.DetailsJson) || x.DetailsJson == "{}"))
+        {
+            var lecturer = lecturers.Single(x => x.Id == profile.LecturerId);
+            var degreeLevel = lecturer.Degree == "TIẾN SĨ" ? "TIEN_SI" : "THAC_SI";
+            var graduationYear = lecturer.Degree == "TIẾN SĨ" ? 2018 : 2016;
+            var details = new ScientificProfileDetails
+            {
+                BirthPlace = "Thành phố Hồ Chí Minh",
+                Hometown = "Việt Nam",
+                Ethnicity = "Kinh",
+                HighestDegreeYear = graduationYear,
+                HighestDegreeCountry = "Việt Nam",
+                WorkUnit = "Trường Đại học Công Thương Thành phố Hồ Chí Minh",
+                ContactAddress = "140 Lê Trọng Tấn, phường Tây Thạnh, Thành phố Hồ Chí Minh",
+                Education =
+                [
+                    new EducationEntry
+                    {
+                        Level = "DAI_HOC", TrainingMode = "Chính quy",
+                        Institution = "Trường đại học công lập tại Việt Nam",
+                        Specialization = "Công nghệ thông tin", Country = "Việt Nam", GraduationYear = 2008
+                    },
+                    new EducationEntry
+                    {
+                        Level = degreeLevel, TrainingMode = "Chính quy",
+                        Institution = "Đại học Quốc gia Thành phố Hồ Chí Minh",
+                        Specialization = "Khoa học máy tính", Country = "Việt Nam", GraduationYear = graduationYear,
+                        ThesisTitle = "Nghiên cứu ứng dụng dữ liệu và chuyển đổi số trong giáo dục"
+                    }
+                ],
+                Languages =
+                [
+                    new LanguageEntry { Name = "Tiếng Anh", Proficiency = "Đáp ứng chuẩn ngoại ngữ giảng viên đại học" }
+                ],
+                Employment =
+                [
+                    new EmploymentEntry
+                    {
+                        FromDate = new DateOnly(2012, 9, 1), ToDate = new DateOnly(2026, 11, 10),
+                        Organization = "Trường Đại học Công Thương Thành phố Hồ Chí Minh",
+                        Position = lecturer.Position ?? "Giảng viên"
+                    }
+                ],
+                ResearchProjects =
+                [
+                    new ResearchProjectEntry
+                    {
+                        Title = $"Ứng dụng chuyển đổi số trong lĩnh vực chuyên môn của {lecturer.FullName}",
+                        StartYear = 2024, EndYear = 2026, Level = "Cấp trường", Responsibility = "Thành viên"
+                    }
+                ],
+                Publications =
+                [
+                    new PublicationEntry
+                    {
+                        Title = "Giải pháp dữ liệu hỗ trợ quản trị và đào tạo đại học",
+                        Year = 2025, Journal = "Tạp chí Khoa học và Công nghệ"
+                    }
+                ],
+                DeclarationPlace = "Thành phố Hồ Chí Minh",
+                DeclarationDate = new DateOnly(2026, 11, 10)
+            };
+            profile.UpdateDetails(JsonSerializer.Serialize(details, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        }
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private static async Task EnsureNguyenMinhAnhProfileAsync(
+        ApplicationDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var lecturerId = await (from lecturer in db.Lecturers
+                                join account in db.Accounts on lecturer.AccountId equals account.Id
+                                where account.Username == "gv.nguyenminhanh"
+                                select (long?)lecturer.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (!lecturerId.HasValue) return;
+
+        var profile = await db.ScientificProfiles
+            .SingleOrDefaultAsync(x => x.LecturerId == lecturerId.Value, cancellationToken);
+        if (profile is null)
+        {
+            profile = new ScientificProfile(
+                lecturerId.Value,
+                "Kỹ thuật phần mềm; học máy ứng dụng; phân tích dữ liệu giáo dục",
+                "Trí tuệ nhân tạo, khai phá dữ liệu và công nghệ giáo dục",
+                "Mô hình dự báo nguy cơ học vụ; phân tích học tập; hệ thống hỗ trợ ra quyết định trong giáo dục",
+                "Giảng viên chính, chủ nhiệm và thành viên nhiều đề tài về trí tuệ nhân tạo trong giáo dục; có công bố trong nước và quốc tế.",
+                DateTimeOffset.UtcNow);
+            db.ScientificProfiles.Add(profile);
+        }
+        else
+        {
+            profile.Update(
+                "Kỹ thuật phần mềm; học máy ứng dụng; phân tích dữ liệu giáo dục",
+                "Trí tuệ nhân tạo, khai phá dữ liệu và công nghệ giáo dục",
+                "Mô hình dự báo nguy cơ học vụ; phân tích học tập; hệ thống hỗ trợ ra quyết định trong giáo dục",
+                "Giảng viên chính, chủ nhiệm và thành viên nhiều đề tài về trí tuệ nhân tạo trong giáo dục; có công bố trong nước và quốc tế.",
+                DateTimeOffset.UtcNow);
+        }
+
+        ApplyNguyenMinhAnhProfileDetails(profile);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private static void ApplyNguyenMinhAnhProfileDetails(ScientificProfile profile)
+    {
+        var details = new ScientificProfileDetails
+        {
+            BirthPlace = "Thành phố Hồ Chí Minh",
+            Hometown = "Tỉnh Bến Tre",
+            Ethnicity = "Kinh",
+            HighestDegreeYear = 2018,
+            HighestDegreeCountry = "Việt Nam",
+            WorkUnit = "Khoa Công nghệ Thông tin, Trường Đại học Công Thương Thành phố Hồ Chí Minh",
+            ContactAddress = "140 Lê Trọng Tấn, phường Tây Thạnh, Thành phố Hồ Chí Minh",
+            OfficePhone = "028 3816 3319",
+            IdentityNumber = "079085000001",
+            IdentityIssuedDate = new DateOnly(2021, 4, 15),
+            IdentityIssuedPlace = "Cục Cảnh sát quản lý hành chính về trật tự xã hội",
+            Education =
+            [
+                new EducationEntry
+                {
+                    Level = "DAI_HOC", TrainingMode = "Chính quy",
+                    Institution = "Trường Đại học Khoa học Tự nhiên, ĐHQG TP.HCM",
+                    Specialization = "Công nghệ thông tin", Country = "Việt Nam", GraduationYear = 2007
+                },
+                new EducationEntry
+                {
+                    Level = "THAC_SI", TrainingMode = "Chính quy",
+                    Institution = "Trường Đại học Khoa học Tự nhiên, ĐHQG TP.HCM",
+                    Specialization = "Khoa học máy tính", Country = "Việt Nam", GraduationYear = 2011,
+                    ThesisTitle = "Khai phá dữ liệu hỗ trợ dự báo kết quả học tập"
+                },
+                new EducationEntry
+                {
+                    Level = "TIEN_SI", TrainingMode = "Chính quy",
+                    Institution = "Trường Đại học Bách khoa, ĐHQG TP.HCM",
+                    Specialization = "Khoa học máy tính", Country = "Việt Nam", GraduationYear = 2018,
+                    ThesisTitle = "Mô hình học máy thích nghi trong phân tích dữ liệu giáo dục"
+                }
+            ],
+            Languages =
+            [
+                new LanguageEntry { Name = "Tiếng Anh", Proficiency = "Bậc 5/6 theo Khung năng lực ngoại ngữ Việt Nam" }
+            ],
+            Employment =
+            [
+                new EmploymentEntry
+                {
+                    FromDate = new DateOnly(2008, 9, 1), ToDate = new DateOnly(2014, 8, 31),
+                    Organization = "Khoa Công nghệ Thông tin, Trường Đại học Công nghiệp Thực phẩm TP.HCM",
+                    Position = "Giảng viên"
+                },
+                new EmploymentEntry
+                {
+                    FromDate = new DateOnly(2014, 9, 1), ToDate = new DateOnly(2026, 11, 10),
+                    Organization = "Khoa Công nghệ Thông tin, Trường Đại học Công Thương Thành phố Hồ Chí Minh",
+                    Position = "Giảng viên chính; phụ trách nhóm nghiên cứu phân tích dữ liệu giáo dục"
+                }
+            ],
+            ResearchProjects =
+            [
+                new ResearchProjectEntry
+                {
+                    Title = "Mô hình dự báo nguy cơ học vụ dựa trên dữ liệu học tập",
+                    StartYear = 2022, EndYear = 2023, Level = "Cấp trường", Responsibility = "Chủ nhiệm đề tài"
+                },
+                new ResearchProjectEntry
+                {
+                    Title = "Nền tảng phân tích học tập hỗ trợ cố vấn học tập trong giáo dục đại học",
+                    StartYear = 2024, EndYear = 2026, Level = "Cấp bộ", Responsibility = "Thành viên chính"
+                }
+            ],
+            Publications =
+            [
+                new PublicationEntry
+                {
+                    Title = "A Learning Analytics Model for Early Identification of At-Risk Students",
+                    Year = 2024, Journal = "International Journal of Educational Data Science"
+                },
+                new PublicationEntry
+                {
+                    Title = "Ứng dụng học máy trong dự báo kết quả học tập của sinh viên đại học",
+                    Year = 2023, Journal = "Tạp chí Khoa học và Công nghệ"
+                },
+                new PublicationEntry
+                {
+                    Title = "Learning Analytics Dashboard for Higher Education",
+                    Year = 2026, Journal = "Journal of Educational Data"
+                }
+            ],
+            DeclarationPlace = "Thành phố Hồ Chí Minh",
+            DeclarationDate = new DateOnly(2026, 11, 10)
+        };
+
+        profile.UpdateDetails(JsonSerializer.Serialize(
+            details,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+    }
+
     /// <summary>Tạo kết quả chốt cho năm hiện hành để dashboard/báo cáo có quy mô tương xứng.</summary>
     private static async Task EnsureLargeReportEvaluationsAsync(
         ApplicationDbContext db,
         long researchOfficeAccountId,
         CancellationToken cancellationToken)
     {
-        var academicYear = await db.AcademicYears.SingleAsync(x => x.Code == "2026-2027", cancellationToken);
+        var academicYears = await db.AcademicYears.OrderBy(x => x.StartDate).ToListAsync(cancellationToken);
         var seedAccountIds = await db.Accounts.Where(x => x.Username.StartsWith("seed.gv"))
             .Select(x => x.Id).ToListAsync(cancellationToken);
         var seedLecturers = await db.Lecturers.Where(x => seedAccountIds.Contains(x.AccountId))
@@ -702,8 +1130,17 @@ public static class DemoDataSeeder
             .Where(x => x.ProductTypeId == articleTypeId && x.Code == "QD_DIEM_BAI_BAO")
             .SingleAsync(cancellationToken);
 
-        foreach (var lecturer in seedLecturers)
+        foreach (var academicYear in academicYears)
+        foreach (var (lecturer, lecturerIndex) in seedLecturers.Select((value, index) => (value, index)))
         {
+            var approvedLimit = academicYear.Code switch
+            {
+                "2024-2025" => 22,
+                "2025-2026" => 18,
+                _ => 10
+            };
+            if (lecturerIndex >= approvedLimit) continue;
+
             var product = await (from item in db.ResearchPlanItems
                                  join plan in db.ResearchPlans on item.ResearchPlanId equals plan.Id
                                  join candidate in db.Products on item.Id equals candidate.ResearchPlanItemId
@@ -739,17 +1176,17 @@ public static class DemoDataSeeder
         // Các kết quả nền đã có từ trước cũng được bổ sung cột điểm theo cùng quy chế,
         // để báo cáo không hiển thị lẫn lộn "có giờ nhưng điểm 0" trong dữ liệu mẫu.
         var existingArticleHours = await db.EvaluationConversionDetails
-            .Where(x => x.AcademicYearId == academicYear.Id && x.ProductTypeId == articleTypeId && x.Unit == "GIO")
+            .Where(x => x.ProductTypeId == articleTypeId && x.Unit == "GIO")
             .ToListAsync(cancellationToken);
         var existingPointKeys = await db.EvaluationConversionDetails
-            .Where(x => x.AcademicYearId == academicYear.Id && x.ProductTypeId == articleTypeId && x.Unit == "DIEM")
+            .Where(x => x.ProductTypeId == articleTypeId && x.Unit == "DIEM")
             .Select(x => new { x.EvaluationId, x.ProductId })
             .ToListAsync(cancellationToken);
         foreach (var hourDetail in existingArticleHours.Where(hour => !existingPointKeys.Any(point =>
                      point.EvaluationId == hour.EvaluationId && point.ProductId == hour.ProductId)))
         {
             db.EvaluationConversionDetails.Add(new EvaluationConversionDetail(
-                hourDetail.EvaluationId, hourDetail.LecturerId, academicYear.Id, hourDetail.ProductId,
+                hourDetail.EvaluationId, hourDetail.LecturerId, hourDetail.AcademicYearId, hourDetail.ProductId,
                 articleTypeId, pointRule.Id, pointRule.ConversionValue, hourDetail.AuthorCoefficient,
                 pointRule.Unit, $"Quy định {pointRule.Code} phiên bản {pointRule.Version}; bổ sung từ kết quả giờ NCKH."));
         }
