@@ -5,6 +5,16 @@ import 'session_storage.dart';
 
 void main() => runApp(const ResearchManagementApp());
 
+const _mobileRoles = {'GIANG_VIEN', 'TRUONG_BO_MON', 'TRUONG_KHOA'};
+
+bool canUseMobileProfile(dynamic profile) {
+  if (profile is! Map || profile['roles'] is! List) return false;
+  return (profile['roles'] as List).any((entry) {
+    final role = entry is Map ? entry['role']?.toString() : entry.toString();
+    return role != null && _mobileRoles.contains(role);
+  });
+}
+
 class ResearchManagementApp extends StatefulWidget {
   const ResearchManagementApp({super.key});
   @override
@@ -42,6 +52,31 @@ class _AppState extends State<ResearchManagementApp> {
     return client;
   }
 
+  Future<void> _validateMobileAccess(String accessToken) async {
+    final client = ApiClient(accessToken);
+    final profile = await client.getMe();
+    if (!canUseMobileProfile(profile)) {
+      throw ApiException(
+        403,
+        'Ứng dụng mobile dành cho Giảng viên, Trưởng bộ môn và Trưởng khoa. '
+        'Vui lòng dùng phiên bản web cho vai trò hiện tại.',
+      );
+    }
+
+    try {
+      await client.getLecturerMe();
+    } on ApiException catch (e) {
+      if (e.status == 403 || e.status == 404) {
+        throw ApiException(
+          403,
+          'Tài khoản chưa được liên kết với hồ sơ giảng viên. '
+          'Vui lòng liên hệ quản trị hệ thống.',
+        );
+      }
+      rethrow;
+    }
+  }
+
   Future<void> restoreSession() async {
     setState(() {
       checkingSession = true;
@@ -57,8 +92,7 @@ class _AppState extends State<ResearchManagementApp> {
         return;
       }
 
-      // Chỉ kiểm tra token ở bước khôi phục.
-      await ApiClient(savedToken).getMe();
+      await _validateMobileAccess(savedToken);
 
       if (!mounted) return;
       setState(() {
@@ -66,9 +100,11 @@ class _AppState extends State<ResearchManagementApp> {
         _loginMessage = null;
       });
     } on ApiException catch (e) {
-      if (e.status == 401) {
+      if (e.status == 401 || e.status == 403) {
         await _endSession(
-          message: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+          message: e.status == 401
+              ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+              : e.message,
         );
       } else {
         // Lỗi mạng hoặc lỗi máy chủ: giữ token để thử lại.
@@ -89,6 +125,7 @@ class _AppState extends State<ResearchManagementApp> {
   }
 
   Future<void> handleLogin(String newToken) async {
+    await _validateMobileAccess(newToken);
     await SessionStorage.saveToken(newToken);
 
     if (!mounted) return;

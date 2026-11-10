@@ -229,6 +229,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   List<String> _currentUserRoles = [];
   bool _loading = true;
   String? _error;
+  String? _accessContextError;
 
   @override
   void initState() {
@@ -240,8 +241,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _accessContextError = null;
     });
     String? snapshotsError;
+    final accessErrors = <String>[];
 
     try {
       final results = await Future.wait([
@@ -259,7 +262,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       try {
         final lec = await widget.client.getLecturerMe();
         if (lec is Map) _currentLecturerId = lec['id'] as int?;
-      } catch (_) {}
+      } catch (e) {
+        accessErrors.add('Không xác định được hồ sơ giảng viên: $e');
+      }
 
       try {
         final me = await widget.client.getMe();
@@ -268,7 +273,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               .map((r) => (r is Map ? r['role'] : r).toString())
               .toList();
         }
-      } catch (_) {}
+      } catch (e) {
+        accessErrors.add('Không xác định được quyền tài khoản: $e');
+      }
 
       if (mounted) {
         setState(() {
@@ -276,6 +283,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           _history = results[1] as List<dynamic>;
           _snapshots = results[2] as List<dynamic>;
           _snapshotsError = snapshotsError;
+          _accessContextError = accessErrors.isEmpty
+              ? null
+              : accessErrors.join('\n');
         });
       }
     } catch (e) {
@@ -330,7 +340,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   bool _canUpdateArticleProgress() {
     if (_product == null || _product!['status'] == 'DA_DUYET') return false;
     final submittedByLecturerId = _product!['submittedByLecturerId'];
-    final isOwner = _currentLecturerId != null &&
+    final isOwner =
+        _currentLecturerId != null &&
         _currentLecturerId == submittedByLecturerId;
     return isOwner || _currentUserRoles.contains('QUAN_TRI');
   }
@@ -757,6 +768,28 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (_accessContextError != null) ...[
+          Card(
+            color: Theme.of(context).colorScheme.errorContainer,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.warning_amber_rounded),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Không kiểm tra được đầy đủ quyền thao tác. '
+                      'Các nút cập nhật có thể tạm ẩn.\n$_accessContextError',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         // ── Card trạng thái tổng quan ──
         Card(
           color: const Color(0xFF173F32),

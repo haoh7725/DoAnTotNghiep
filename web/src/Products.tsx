@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { api, apiForm } from './api'
 import type { Profile } from './api'
@@ -70,6 +70,11 @@ export function ProductReviewWorkspace({ user, initialProductId }: { user: Profi
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [revision, setRevision] = useState(0)
+  const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [departmentFilter, setDepartmentFilter] = useState('')
+  const [page, setPage] = useState(1)
+  const pageSize = 10
 
   useEffect(() => {
     let active = true
@@ -86,6 +91,30 @@ export function ProductReviewWorkspace({ user, initialProductId }: { user: Profi
     return () => { active = false }
   }, [revision])
 
+  const departments = useMemo(
+    () => [...new Set(items.map(item => item.departmentName))].sort((a, b) => a.localeCompare(b, 'vi')),
+    [items]
+  )
+  const statuses = useMemo(
+    () => [...new Set(items.map(item => item.status))],
+    [items]
+  )
+  const filteredItems = useMemo(() => {
+    const keyword = query.trim().toLocaleLowerCase('vi')
+    return items.filter(item => {
+      const matchesKeyword = !keyword || [item.title, item.lecturerName, item.departmentName]
+        .some(value => value.toLocaleLowerCase('vi').includes(keyword))
+      return matchesKeyword
+        && (!statusFilter || item.status === statusFilter)
+        && (!departmentFilter || item.departmentName === departmentFilter)
+    })
+  }, [departmentFilter, items, query, statusFilter])
+  const pageCount = Math.max(1, Math.ceil(filteredItems.length / pageSize))
+  const visibleItems = filteredItems.slice((page - 1) * pageSize, page * pageSize)
+
+  useEffect(() => { setPage(1) }, [query, statusFilter, departmentFilter])
+  useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
+
   if (selected !== null) {
     return <ProductDetail
       key={selected}
@@ -100,18 +129,43 @@ export function ProductReviewWorkspace({ user, initialProductId }: { user: Profi
   }
 
   return <>
+    <p className="eyebrow">XÉT DUYỆT SẢN PHẨM</p>
     <h1>Sản phẩm chờ duyệt</h1>
     <p className="muted">
-      Hồ sơ chờ xét duyệt trong phạm vi được phân quyền.
+      Tìm và xử lý hồ sơ trong phạm vi được phân quyền. Danh sách được chia trang để dễ theo dõi khi dữ liệu lớn.
     </p>
 
     <section className="panel">
-      <button
-        disabled={loading}
-        onClick={() => setRevision(value => value + 1)}
-      >
-        Làm mới
-      </button>
+      <div className="section-top review-list-heading">
+        <div>
+          <h2>Danh sách cần xử lý</h2>
+          <p className="muted">{loading ? 'Đang tải dữ liệu…' : `${filteredItems.length}/${items.length} hồ sơ phù hợp`}</p>
+        </div>
+        <button disabled={loading} onClick={() => setRevision(value => value + 1)}>Làm mới</button>
+      </div>
+
+      <div className="table-toolbar" aria-label="Bộ lọc sản phẩm chờ duyệt">
+        <label className="table-search">Tìm kiếm
+          <input
+            type="search"
+            value={query}
+            onChange={event => setQuery(event.target.value)}
+            placeholder="Tên sản phẩm hoặc giảng viên"
+          />
+        </label>
+        <label>Trạng thái
+          <select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
+            <option value="">Tất cả trạng thái</option>
+            {statuses.map(status => <option value={status} key={status}>{workflow[status] ?? status}</option>)}
+          </select>
+        </label>
+        <label>Bộ môn
+          <select value={departmentFilter} onChange={event => setDepartmentFilter(event.target.value)}>
+            <option value="">Tất cả bộ môn</option>
+            {departments.map(department => <option value={department} key={department}>{department}</option>)}
+          </select>
+        </label>
+      </div>
 
       {error && <p className="alert" role="alert">{error}</p>}
 
@@ -128,13 +182,13 @@ export function ProductReviewWorkspace({ user, initialProductId }: { user: Profi
               </tr>
             </thead>
             <tbody>
-              {items.map(item => <tr key={item.id}>
+              {visibleItems.map(item => <tr key={item.id}>
                 <td>{item.title}</td>
                 <td>{item.lecturerName}</td>
                 <td>{item.departmentName}</td>
-                <td>{workflow[item.status] ?? item.status}</td>
+                <td><span className={`status-chip status-chip--${item.status.toLowerCase()}`}>{workflow[item.status] ?? item.status}</span></td>
                 <td>
-                  <button onClick={() => setSelected(item.id)}>
+                  <button className="review-action" onClick={() => setSelected(item.id)}>
                     Xem và xét duyệt
                   </button>
                 </td>
@@ -143,8 +197,15 @@ export function ProductReviewWorkspace({ user, initialProductId }: { user: Profi
           </table>
         </div>
 
-        {items.length === 0 &&
-          <p>Không có sản phẩm đang chờ bạn xét duyệt.</p>}
+        {filteredItems.length > pageSize && <nav className="table-pagination" aria-label="Phân trang sản phẩm chờ duyệt">
+          <button disabled={page === 1} onClick={() => setPage(value => value - 1)}>← Trang trước</button>
+          <span>Trang <strong>{page}</strong> / {pageCount}</span>
+          <button disabled={page === pageCount} onClick={() => setPage(value => value + 1)}>Trang sau →</button>
+        </nav>}
+
+        {items.length === 0
+          ? <p className="empty">Không có sản phẩm đang chờ bạn xét duyệt.</p>
+          : filteredItems.length === 0 && <p className="empty">Không tìm thấy hồ sơ phù hợp với bộ lọc.</p>}
       </>}
     </section>
   </>

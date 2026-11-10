@@ -10,7 +10,15 @@ flutter pub get
 flutter run --dart-define=API_URL=http://10.0.2.2:8081/api
 ```
 
-Khi chạy trên thiết bị thật, thay `10.0.2.2` bằng địa chỉ IP của máy chạy backend.
+`10.0.2.2` chỉ dùng cho Android Emulator. Khi chạy trên thiết bị Android thật,
+điện thoại và máy tính phải cùng mạng Wi-Fi, sau đó dùng địa chỉ IPv4 của máy tính:
+
+```powershell
+flutter run --dart-define=API_URL=http://IP_MAY_TINH:8081/api
+```
+
+Ví dụ: `http://192.168.1.15:8081/api`. Bản demo Android đã cho phép kết nối HTTP
+trong mạng nội bộ; khi triển khai thật nên dùng HTTPS.
 
 ## Cơ chế thông báo
 

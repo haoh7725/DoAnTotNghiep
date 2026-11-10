@@ -234,7 +234,7 @@ export default function JournalConferences({ canEdit }: Props) {
         ) : items.length === 0 ? (
           <p>Không tìm thấy tạp chí hoặc hội nghị phù hợp.</p>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-wrap">
             <table style={{ width: '100%' }}>
               <thead>
                 <tr>

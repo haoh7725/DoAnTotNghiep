@@ -399,7 +399,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
       <Toast message={message} kind="success" onClose={() => setMessage('')} />
 
       <section className="panel">
-        <div className="section-heading">
+        <div className="section-top">
           <h2>Danh sách chỉ tiêu</h2>
           {canEdit && (
             <button
@@ -418,7 +418,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
         ) : targets.length === 0 ? (
           <p className="muted">Chưa có chỉ tiêu NCKH.</p>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-wrap">
             <table>
               <thead>
                 <tr>
@@ -555,7 +555,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
       )}
 
       <section className="panel">
-        <div className="section-heading">
+        <div className="section-top">
           <h2>Quy trình thực hiện chỉ tiêu</h2>
           {targetPanel === 'allocations' && canEditAllocations && selectedTarget?.status === 'CONG_BO' && (
             <button
@@ -619,7 +619,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
               <h3>Dashboard tiến độ chỉ tiêu</h3>
               <p><strong>Toàn khoa:</strong> {progress.approvedArticles}/{progress.assignedArticleCount} bài · {progress.completionPercent}% {progress.isCompleted ? '· Đã hoàn thành' : ''}</p>
               <div style={{ height: 12, background: '#e5e7eb', borderRadius: 99, overflow: 'hidden', marginBottom: 14 }}><div style={{ height: '100%', width: `${Math.min(progress.completionPercent, 100)}%`, background: progress.isCompleted ? '#15803d' : '#0f766e' }} /></div>
-              <div style={{ overflowX: 'auto' }}><table><thead><tr><th>Bộ môn</th><th>Đã duyệt / chỉ tiêu</th><th>Tỷ lệ</th><th>Biểu đồ</th></tr></thead><tbody>{progress.units.map(unit => <tr key={unit.departmentId}><td>{unit.departmentName}</td><td>{unit.approvedArticles}/{unit.allocatedArticles}</td><td>{unit.completionPercent}% {unit.isCompleted ? '✓' : ''}</td><td style={{ minWidth: 150 }}><div style={{ height: 10, background: '#e5e7eb', borderRadius: 99, overflow: 'hidden' }}><div style={{ height: '100%', width: `${Math.min(unit.completionPercent, 100)}%`, background: unit.isCompleted ? '#15803d' : '#0f766e' }} /></div></td></tr>)}</tbody></table></div>
+              <div className="table-wrap"><table><thead><tr><th>Bộ môn</th><th>Đã duyệt / chỉ tiêu</th><th>Tỷ lệ</th><th>Biểu đồ</th></tr></thead><tbody>{progress.units.map(unit => <tr key={unit.departmentId}><td>{unit.departmentName}</td><td>{unit.approvedArticles}/{unit.allocatedArticles}</td><td>{unit.completionPercent}% {unit.isCompleted ? '✓' : ''}</td><td style={{ minWidth: 150 }}><div style={{ height: 10, background: '#e5e7eb', borderRadius: 99, overflow: 'hidden' }}><div style={{ height: '100%', width: `${Math.min(unit.completionPercent, 100)}%`, background: unit.isCompleted ? '#15803d' : '#0f766e' }} /></div></td></tr>)}</tbody></table></div>
             </section>}
             {(canEdit || canReceiveAndDistribute) && <div className="actions">
               {selectedTarget.status === 'CHO_TIEP_NHAN' && canReceiveAndDistribute && <button className="primary" onClick={() => void transition('accept')} disabled={busy}>Tiếp nhận chỉ tiêu</button>}
@@ -634,7 +634,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
             {allocations.length === 0 ? (
               <p className="muted">Chưa có phân bổ cho chỉ tiêu này.</p>
             ) : (
-              <div style={{ overflowX: 'auto' }}>
+              <div className="table-wrap">
                 <table>
                   <thead>
                     <tr>
@@ -677,10 +677,10 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
       </section>
 
       {targetPanel === 'lecturers' && isAllocationLocked && canViewLecturerAssignments && selectedAllocation && <section className="panel">
-        <div className="section-heading"><h2>Phân công cho giảng viên — {departmentName(selectedAllocation.departmentId)}</h2>
+        <div className="section-top"><h2>Phân công cho giảng viên — {departmentName(selectedAllocation.departmentId)}</h2>
           <button onClick={() => { setSelectedAllocation(null); setTargetPanel('allocations') }}>Quay lại phân bổ bộ môn</button></div>
         <p><strong>Chỉ tiêu bộ môn:</strong> {selectedAllocation.allocatedArticleCount} bài · <strong>Đã giao cá nhân:</strong> {lecturerAssignments.reduce((s, x) => s + x.allocatedArticleCount, 0)} bài</p>
-        {lecturerAssignments.length > 0 && <div style={{ overflowX: 'auto' }}><table><thead><tr><th>Giảng viên</th><th>Số bài</th><th>Ngày giao</th><th></th></tr></thead><tbody>
+        {lecturerAssignments.length > 0 && <div className="table-wrap"><table><thead><tr><th>Giảng viên</th><th>Số bài</th><th>Ngày giao</th><th></th></tr></thead><tbody>
           {lecturerAssignments.map(x => <tr key={x.id}><td>{x.lecturerCode} — {x.lecturerName}</td><td>{x.allocatedArticleCount}</td><td>{x.allocationDate}</td><td><button className="danger" disabled={busy} onClick={() => void deleteLecturerAssignment(x.id)}>Hủy</button></td></tr>)}
         </tbody></table></div>}
 
@@ -690,7 +690,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
             Có thể giao thêm = max(0, cam kết bài báo − đã giao).
             Chỉ tính cam kết bài báo trong kế hoạch đã đăng ký của năm học này.
           </p>
-          {lecturerOptions.length === 0 ? <p className="muted">Bộ môn chưa có giảng viên để phân công.</p> : <div style={{ overflowX: 'auto' }}>
+          {lecturerOptions.length === 0 ? <p className="muted">Bộ môn chưa có giảng viên để phân công.</p> : <div className="table-wrap">
             <table>
               <thead><tr><th>Giảng viên</th><th>Cam kết bài báo</th><th>Đã giao</th><th>Có thể giao thêm</th></tr></thead>
               <tbody>{lecturerOptions.map(x => <tr key={x.id}>

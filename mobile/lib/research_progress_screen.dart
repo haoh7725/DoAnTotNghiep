@@ -56,22 +56,34 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
     }
   }
 
-  void _refreshProgress() {
+  Future<void> _refreshProgress() async {
     final yearId = _yearId;
     if (yearId == null) return;
 
+    late List<Future<dynamic>> requests;
     setState(() {
-      _setProgressFutures(yearId);
+      requests = _setProgressFutures(yearId);
     });
+    try {
+      await Future.wait(requests);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không làm mới được tiến độ: $e')),
+        );
+      }
+    }
   }
 
-  void _setProgressFutures(int yearId) {
-    _progressFuture = widget.client.getMyResearchProgress(yearId);
+  List<Future<dynamic>> _setProgressFutures(int yearId) {
+    final progress = widget.client.getMyResearchProgress(yearId);
     final target = widget.client.getMyProductTargetProgress(yearId);
     final department = widget.client.getMyDepartmentTargetProgress(yearId);
+    _progressFuture = progress;
     _targetFuture = target;
     _departmentFuture = department;
     _comparisonFuture = Future.wait([target, department]);
+    return [progress, target, department];
   }
 
   Widget _buildComparisonChart() {
@@ -385,148 +397,152 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
             )
           : _years.isEmpty
           ? const Center(child: Text('Chưa có năm học.'))
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                DropdownButton<int>(
-                  value: _yearId,
-                  isExpanded: true,
-                  items: _years.map((year) {
-                    return DropdownMenuItem<int>(
-                      value: (year['id'] as num).toInt(),
-                      child: Text(year['code'].toString()),
-                    );
-                  }).toList(),
-                  onChanged: (id) {
-                    if (id == null || id == _yearId) return;
-
-                    setState(() {
-                      _yearId = id;
-                      _setProgressFutures(id);
-                    });
-                  },
-                ),
-                const SizedBox(height: 16),
-                _buildComparisonChart(),
-                const SizedBox(height: 16),
-                _buildTargetProgress(),
-                const SizedBox(height: 16),
-                _buildDepartmentProgress(),
-                const SizedBox(height: 16),
-                FutureBuilder<dynamic>(
-                  future: _progressFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState != ConnectionState.done) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-
-                    if (snapshot.hasError) {
-                      return Column(
-                        children: [
-                          Text(
-                            'Không tải được tiến độ: '
-                            '${snapshot.error}',
-                          ),
-                          TextButton(
-                            onPressed: _refreshProgress,
-                            child: const Text('Thử lại'),
-                          ),
-                        ],
+          : RefreshIndicator(
+              onRefresh: _refreshProgress,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                children: [
+                  DropdownButton<int>(
+                    value: _yearId,
+                    isExpanded: true,
+                    items: _years.map((year) {
+                      return DropdownMenuItem<int>(
+                        value: (year['id'] as num).toInt(),
+                        child: Text(year['code'].toString()),
                       );
-                    }
+                    }).toList(),
+                    onChanged: (id) {
+                      if (id == null || id == _yearId) return;
 
-                    final data = Map<String, dynamic>.from(
-                      snapshot.data as Map,
-                    );
+                      setState(() {
+                        _yearId = id;
+                        _setProgressFutures(id);
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  _buildComparisonChart(),
+                  const SizedBox(height: 16),
+                  _buildTargetProgress(),
+                  const SizedBox(height: 16),
+                  _buildDepartmentProgress(),
+                  const SizedBox(height: 16),
+                  FutureBuilder<dynamic>(
+                    future: _progressFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState != ConnectionState.done) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
 
-                    final hasEvaluation =
-                        data['hasFinalizedEvaluation'] == true;
-                    final requiredHours = (data['requiredHours'] as num?)
-                        ?.toDouble();
-                    final percent = (data['completionPercent'] as num?)
-                        ?.toDouble();
-
-                    return Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      if (snapshot.hasError) {
+                        return Column(
                           children: [
                             Text(
-                              data['lecturerName'].toString(),
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
+                              'Không tải được tiến độ: '
+                              '${snapshot.error}',
                             ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Mức hoàn thành định mức giờ NCKH '
-                              'theo kết quả đã chốt',
+                            TextButton(
+                              onPressed: _refreshProgress,
+                              child: const Text('Thử lại'),
                             ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Định mức: '
-                              '${_number(requiredHours)} giờ',
-                            ),
-                            if (!hasEvaluation)
-                              const Padding(
-                                padding: EdgeInsets.only(top: 12),
-                                child: Text(
-                                  'Chưa có đánh giá đã chốt '
-                                  'trong năm học này. '
-                                  'Chưa xác định tỷ lệ hoàn thành.',
+                          ],
+                        );
+                      }
+
+                      final data = Map<String, dynamic>.from(
+                        snapshot.data as Map,
+                      );
+
+                      final hasEvaluation =
+                          data['hasFinalizedEvaluation'] == true;
+                      final requiredHours = (data['requiredHours'] as num?)
+                          ?.toDouble();
+                      final percent = (data['completionPercent'] as num?)
+                          ?.toDouble();
+
+                      return Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                data['lecturerName'].toString(),
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
                                 ),
-                              )
-                            else ...[
-                              Text(
-                                'Giờ đã ghi nhận: '
-                                '${_number(data['confirmedHours'])}',
                               ),
-                              Text(
-                                'Điểm đã ghi nhận: '
-                                '${_number(data['confirmedPoints'])}',
-                              ),
-                              Text(
-                                'Sản phẩm được quy đổi: '
-                                '${_number(data['confirmedProductCount'])}',
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Mức hoàn thành định mức giờ NCKH '
+                                'theo kết quả đã chốt',
                               ),
                               const SizedBox(height: 16),
-                              if (percent != null) ...[
-                                Text(
-                                  'Hoàn thành: '
-                                  '${percent.toStringAsFixed(1)}%',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
+                              Text(
+                                'Định mức: '
+                                '${_number(requiredHours)} giờ',
+                              ),
+                              if (!hasEvaluation)
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 12),
+                                  child: Text(
+                                    'Chưa có đánh giá đã chốt '
+                                    'trong năm học này. '
+                                    'Chưa xác định tỷ lệ hoàn thành.',
                                   ),
-                                ),
-                                const SizedBox(height: 8),
-                                LinearProgressIndicator(
-                                  value: (percent / 100)
-                                      .clamp(0.0, 1.0)
-                                      .toDouble(),
-                                  minHeight: 12,
-                                ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'Tỷ lệ = giờ đã ghi nhận / '
-                                  'định mức giờ × 100%.',
-                                ),
-                              ] else
+                                )
+                              else ...[
                                 Text(
-                                  requiredHours == null
-                                      ? 'Chưa được giao định mức giờ.'
-                                      : 'Định mức bằng 0; '
-                                            'không tính phần trăm.',
+                                  'Giờ đã ghi nhận: '
+                                  '${_number(data['confirmedHours'])}',
                                 ),
+                                Text(
+                                  'Điểm đã ghi nhận: '
+                                  '${_number(data['confirmedPoints'])}',
+                                ),
+                                Text(
+                                  'Sản phẩm được quy đổi: '
+                                  '${_number(data['confirmedProductCount'])}',
+                                ),
+                                const SizedBox(height: 16),
+                                if (percent != null) ...[
+                                  Text(
+                                    'Hoàn thành: '
+                                    '${percent.toStringAsFixed(1)}%',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  LinearProgressIndicator(
+                                    value: (percent / 100)
+                                        .clamp(0.0, 1.0)
+                                        .toDouble(),
+                                    minHeight: 12,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Tỷ lệ = giờ đã ghi nhận / '
+                                    'định mức giờ × 100%.',
+                                  ),
+                                ] else
+                                  Text(
+                                    requiredHours == null
+                                        ? 'Chưa được giao định mức giờ.'
+                                        : 'Định mức bằng 0; '
+                                              'không tính phần trăm.',
+                                  ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                ),
-              ],
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
     );
   }

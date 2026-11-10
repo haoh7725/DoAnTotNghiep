@@ -15,6 +15,7 @@ import JournalConferences from './JournalConferences'
 import Notifications from './Notifications'
 import { Evaluations } from './Evaluations'
 import { EmulationClassificationRules } from './EmulationClassificationRules'
+import { ManagementProgressDashboard } from './ManagementProgressDashboard'
 import './App.css'
 
 export default function App() {
@@ -63,6 +64,7 @@ export default function App() {
   const canManageConversionRules = user?.roles.some(p =>
     p.role === 'PHONG_QLKH' || p.role === 'QUAN_TRI'
   ) ?? false
+  const targetProgressManager = user?.roles.some(p => ['TRUONG_BO_MON', 'TRUONG_KHOA'].includes(p.role)) ?? false
   useEffect(() => {
     let active = true
     api<Profile>('/auth/me', 'GET', undefined, false)
@@ -269,10 +271,10 @@ export default function App() {
             Danh mục tạp chí/hội nghị
           </button>
         )}
+        {manager && !executive && <button className={tab === 'reports' ? 'active' : ''} onClick={() => setTab('reports')}>Thống kê kết quả</button>}
         {(administrator || canManageConversionRules) && <p className="nav-section">CẤU HÌNH HỆ THỐNG</p>}
         {administrator && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>Quản trị dữ liệu nền</button>}
         {canManageConversionRules && <button className={tab === 'conversion-rules' ? 'active' : ''} onClick={() => setTab('conversion-rules')}>Quy định quy đổi</button>}
-        {manager && !executive && <button className={tab === 'reports' ? 'active' : ''} onClick={() => setTab('reports')}>Thống kê kết quả</button>}
         <button className={tab === 'password' ? 'active' : ''} onClick={() => setTab('password')}>Đổi mật khẩu</button></nav>
       <div className="sidebar-bottom"><strong>{user.fullName}</strong><span>@{user.username}</span><button onClick={logout} disabled={busy}>Đăng xuất</button></div>
     </aside>
@@ -303,6 +305,7 @@ export default function App() {
       {error && <p className="alert" role="alert">{error}</p>}
       {tab === 'overview' && executive && <ResearchReports lookups={lookups} executive />}
       {tab === 'overview' && !executive && <><p className="eyebrow">TỔNG QUAN</p><h1>Xin chào, {user.fullName}</h1><p className="muted">Thông tin tài khoản và phạm vi truy cập của bạn.</p>
+        {targetProgressManager && <ManagementProgressDashboard lookups={lookups} onOpenTargets={() => setTab('research-targets')} />}
         <section className="panel"><h2>Quyền truy cập</h2>{user.roles.length ? <div className="permission-grid">{user.roles.map((p, i) => <article key={i} className="permission"><strong>{roleNames[p.role] ?? p.role}</strong><span>{scopeNames[p.scope] ?? p.scope}</span>{p.facultyId && <small>{lookups?.faculties.find(f => f.id === p.facultyId)?.name ?? `Khoa #${p.facultyId}`}</small>}{p.departmentId && <small>{lookups?.departments.find(d => d.id === p.departmentId)?.name ?? `Bộ môn #${p.departmentId}`}</small>}</article>)}</div> : <p>Tài khoản chưa được gán quyền. Vui lòng liên hệ quản trị viên.</p>}</section>
         <section className="panel"><h2>Đơn vị và năm học</h2>{lookupError ? <><p className="alert" role="alert">{lookupError}</p><button onClick={() => setRetry(x => x + 1)}>Thử lại</button></> : !lookups ? <p role="status">Đang tải dữ liệu…</p> : <div className="summary-grid"><div><h3>Khoa</h3>{lookups.faculties.map(f => <p key={f.id}>{f.name}</p>)}{!lookups.faculties.length && <p className="muted">Chưa có đơn vị được liên kết.</p>}</div><div><h3>Bộ môn</h3>{lookups.departments.map(d => <p key={d.id}>{d.name}</p>)}{!lookups.departments.length && <p className="muted">Chưa có bộ môn được liên kết.</p>}</div><div><h3>Năm học</h3>{lookups.academicYears.map(y => <p key={y.id}>{y.code}</p>)}{!lookups.academicYears.length && <p className="muted">Chưa có năm học.</p>}</div></div>}</section>
       </>}

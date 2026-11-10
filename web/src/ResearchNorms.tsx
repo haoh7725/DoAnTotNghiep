@@ -417,7 +417,7 @@ export function ResearchNorms({ academicYears, canEdit }: Props) {
             Chưa có định mức nghiên cứu khoa học.
           </p>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-wrap">
             <table>
               <thead>
                 <tr>
