@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'api_client.dart';
 import 'products_screen.dart';
@@ -21,6 +22,60 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  int _unreadCount = 0;
+  Timer? _notificationTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshUnreadCount();
+    _notificationTimer = Timer.periodic(
+      const Duration(seconds: 60),
+      (_) => _refreshUnreadCount(),
+    );
+  }
+
+  Future<void> _refreshUnreadCount() async {
+    try {
+      final count = await widget.client.getUnreadNotificationCount();
+      if (mounted) setState(() => _unreadCount = count);
+    } catch (_) {
+      // Giữ số gần nhất khi mạng tạm thời gián đoạn.
+    }
+  }
+
+  Widget _notificationIcon(IconData icon) => Stack(
+    clipBehavior: Clip.none,
+    children: [
+      Icon(icon),
+      if (_unreadCount > 0)
+        Positioned(
+          right: -8,
+          top: -6,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: Colors.red.shade700,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              _unreadCount > 99 ? '99+' : '$_unreadCount',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+    ],
+  );
+
+  @override
+  void dispose() {
+    _notificationTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,29 +96,32 @@ class _HomeScreenState extends State<HomeScreen> {
         currentIndex: _currentIndex,
         selectedItemColor: const Color(0xFF177158),
         unselectedItemColor: Colors.grey,
-        onTap: (i) => setState(() => _currentIndex = i),
-        items: const [
-          BottomNavigationBarItem(
+        onTap: (i) {
+          setState(() => _currentIndex = i);
+          if (i == 2) _refreshUnreadCount();
+        },
+        items: [
+          const BottomNavigationBarItem(
             icon: Icon(Icons.emoji_events_outlined),
             activeIcon: Icon(Icons.emoji_events),
             label: 'Thi đua',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.article_outlined),
             activeIcon: Icon(Icons.article),
             label: 'Sản phẩm',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.notifications_none),
-            activeIcon: Icon(Icons.notifications),
+            icon: _notificationIcon(Icons.notifications_none),
+            activeIcon: _notificationIcon(Icons.notifications),
             label: 'Thông báo',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.bar_chart_outlined),
             activeIcon: Icon(Icons.bar_chart),
             label: 'Tiến độ',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.person_outlined),
             activeIcon: Icon(Icons.person),
             label: 'Hồ sơ',
@@ -228,7 +286,7 @@ class _EvaluationTabState extends State<_EvaluationTab> {
           children: [
             if (years.isNotEmpty)
               DropdownButtonFormField<int>(
-                value: yearId,
+                initialValue: yearId,
                 isExpanded: true,
                 decoration: InputDecoration(
                   labelText: 'Năm học',
@@ -361,7 +419,7 @@ class _EmptyEvaluationWidget extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF177158).withOpacity(0.08),
+                color: const Color(0xFF177158).withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -574,7 +632,7 @@ class _EvaluationView extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.18),
+                      color: Colors.black.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -677,7 +735,7 @@ class _EvaluationView extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: const Color(0xFF177158).withOpacity(0.1),
+                color: const Color(0xFF177158).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -735,7 +793,9 @@ class _EvaluationView extends StatelessWidget {
                             ),
                             margin: const EdgeInsets.only(right: 8),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF177158).withOpacity(0.08),
+                              color: const Color(
+                                0xFF177158,
+                              ).withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(

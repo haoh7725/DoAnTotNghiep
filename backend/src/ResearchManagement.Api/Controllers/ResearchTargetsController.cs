@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -25,12 +26,14 @@ public sealed class ResearchTargetsController(
         CancellationToken cancellationToken)
     {
         var result = await researchTargetService.GetAllAsync(cancellationToken);
-        var visible = new List<ResearchTargetResponse>();
-        foreach (var item in result)
-        {
-            if (await CanReadTargetAsync(item.Id, item.FacultyId, cancellationToken))
-                visible.Add(item);
-        }
+        var allocatedUnits = await (from allocation in db.ResearchTargetAllocations.AsNoTracking()
+                                    join target in db.ResearchTargets.AsNoTracking() on allocation.ResearchTargetId equals target.Id
+                                    join department in db.Departments.AsNoTracking() on allocation.DepartmentId equals department.Id
+                                    where target.Status == "DA_KHOA"
+                                    select new { TargetId = target.Id, department.FacultyId, DepartmentId = department.Id })
+            .ToListAsync(cancellationToken);
+        var visible = result.Where(item => currentUser.CanAccess(item.FacultyId, null) ||
+            allocatedUnits.Any(x => x.TargetId == item.Id && currentUser.CanAccess(x.FacultyId, x.DepartmentId))).ToList();
         return Ok(visible);
     }
 
@@ -139,6 +142,7 @@ public sealed class ResearchTargetsController(
     [Authorize(Roles = "TRUONG_KHOA,QUAN_TRI")]
     public async Task<IActionResult> Lock(long id, CancellationToken cancellationToken)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var target = await GetManageableTarget(id, cancellationToken);
         var allocated = await db.ResearchTargetAllocations.Where(x => x.ResearchTargetId == id)
             .SumAsync(x => x.AllocatedArticleCount, cancellationToken);
@@ -148,6 +152,7 @@ public sealed class ResearchTargetsController(
         catch (InvalidOperationException e) { throw new BusinessRuleException(e.Message); }
         await NotifyDepartmentHeadsAsync(id, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return Ok(await researchTargetService.GetByIdAsync(id, cancellationToken));
     }
 
@@ -192,24 +197,20 @@ public sealed class ResearchTargetsController(
 
     private async Task NotifyDepartmentHeadsAsync(long targetId, CancellationToken ct)
     {
-        var allocations = await (from allocation in db.ResearchTargetAllocations.AsNoTracking()
-                                 join department in db.Departments.AsNoTracking() on allocation.DepartmentId equals department.Id
-                                 where allocation.ResearchTargetId == targetId
-                                 select new { allocation.Id, allocation.DepartmentId, allocation.AllocatedArticleCount, department.Name })
+        var deliveries = await (from allocation in db.ResearchTargetAllocations.AsNoTracking()
+                                join department in db.Departments.AsNoTracking() on allocation.DepartmentId equals department.Id
+                                join role in db.RoleAssignments.AsNoTracking() on allocation.DepartmentId equals role.DepartmentId
+                                where allocation.ResearchTargetId == targetId && role.Role == "TRUONG_BO_MON"
+                                select new { allocation.Id, allocation.AllocatedArticleCount, department.Name, role.AccountId })
+            .Distinct()
             .ToListAsync(ct);
-        foreach (var allocation in allocations)
+        foreach (var delivery in deliveries)
         {
-            var recipients = await db.RoleAssignments.AsNoTracking()
-                .Where(x => x.Role == "TRUONG_BO_MON" && x.DepartmentId == allocation.DepartmentId)
-                .Select(x => x.AccountId).Distinct().ToListAsync(ct);
-            foreach (var accountId in recipients)
-            {
-                var notification = new ResearchManagement.Domain.Entities.Notification(accountId, "HE_THONG",
-                    $"Phân bổ chỉ tiêu NCKH cho {allocation.Name} đã được khóa: {allocation.AllocatedArticleCount} bài. Bạn có thể phân công cho giảng viên.",
-                    $"PHAN_BO_DA_KHOA:{targetId}:{allocation.Id}");
-                notification.MarkAsSent();
-                db.Notifications.Add(notification);
-            }
+            var notification = new ResearchManagement.Domain.Entities.Notification(delivery.AccountId, "HE_THONG",
+                $"Phân bổ chỉ tiêu NCKH cho {delivery.Name} đã được khóa: {delivery.AllocatedArticleCount} bài. Bạn có thể phân công cho giảng viên.",
+                $"PHAN_BO_DA_KHOA:{targetId}:{delivery.Id}");
+            notification.MarkAsSent();
+            db.Notifications.Add(notification);
         }
     }
 

@@ -20,17 +20,26 @@ public sealed class ResearchProgressController(
     {
         var target = await db.ResearchTargets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == targetId, ct)
             ?? throw new NotFoundException("Không tìm thấy chỉ tiêu NCKH.");
-        if (!currentUser.CanAccess(target.FacultyId, null))
-            throw new ForbiddenException("Không có quyền xem tiến độ chỉ tiêu này.");
+        var canViewWholeFaculty = currentUser.CanAccess(target.FacultyId, null);
+        if (!canViewWholeFaculty && target.Status != "DA_KHOA")
+            throw new ForbiddenException("Tiến độ bộ môn chỉ được xem sau khi Trưởng khoa khóa phân bổ.");
         var allocations = await (from allocation in db.ResearchTargetAllocations.AsNoTracking()
                                  join department in db.Departments.AsNoTracking() on allocation.DepartmentId equals department.Id
                                  where allocation.ResearchTargetId == targetId
                                  orderby department.Name
                                  select new { allocation.DepartmentId, DepartmentName = department.Name, allocation.AllocatedArticleCount }).ToListAsync(ct);
+        if (!canViewWholeFaculty)
+            allocations = allocations.Where(x => currentUser.CanAccess(target.FacultyId, x.DepartmentId)).ToList();
+        if (allocations.Count == 0)
+            throw new ForbiddenException("Không có quyền xem tiến độ chỉ tiêu này.");
         var approved = await (from product in db.Products.AsNoTracking()
-                              join lecturer in db.Lecturers.AsNoTracking() on product.SubmittedByLecturerId equals lecturer.Id
-                              where product.ResearchTargetId == targetId && product.Status == "DA_DUYET" && product.ArticleStatus == "DA_XUAT_BAN"
-                              group product by lecturer.DepartmentId into grouped
+                              join item in db.ResearchPlanItems.AsNoTracking() on product.ResearchPlanItemId equals item.Id
+                              join type in db.ProductTypes.AsNoTracking() on item.ProductTypeId equals type.Id
+                              join personal in db.LecturerTargetAllocations.AsNoTracking() on product.SubmittedByLecturerId equals personal.LecturerId
+                              join allocation in db.ResearchTargetAllocations.AsNoTracking() on personal.DepartmentAllocationId equals allocation.Id
+                              where allocation.ResearchTargetId == targetId && product.ResearchTargetId == targetId && type.Code == "BAI_BAO"
+                                  && product.Status == "DA_DUYET" && product.ArticleStatus == "DA_XUAT_BAN"
+                              group product by allocation.DepartmentId into grouped
                               select new { DepartmentId = grouped.Key, Count = grouped.Select(x => x.Id).Distinct().Count() })
             .ToDictionaryAsync(x => x.DepartmentId, x => x.Count, ct);
         var units = allocations.Select(x => new { x.DepartmentId, x.DepartmentName,
@@ -38,9 +47,10 @@ public sealed class ResearchProgressController(
             CompletionPercent = x.AllocatedArticleCount == 0 ? 0m : Math.Round(approved.GetValueOrDefault(x.DepartmentId) * 100m / x.AllocatedArticleCount, 2),
             IsCompleted = approved.GetValueOrDefault(x.DepartmentId) >= x.AllocatedArticleCount }).ToList();
         var totalApproved = units.Sum(x => x.ApprovedArticles);
-        return Ok(new { target.Id, target.AssignedArticleCount, target.Status, ApprovedArticles = totalApproved,
-            CompletionPercent = target.AssignedArticleCount == 0 ? 0m : Math.Round(totalApproved * 100m / target.AssignedArticleCount, 2),
-            IsCompleted = totalApproved >= target.AssignedArticleCount, Units = units });
+        var visibleTarget = canViewWholeFaculty ? target.AssignedArticleCount : units.Sum(x => x.AllocatedArticles);
+        return Ok(new { target.Id, AssignedArticleCount = visibleTarget, target.Status, ApprovedArticles = totalApproved,
+            CompletionPercent = visibleTarget == 0 ? 0m : Math.Round(totalApproved * 100m / visibleTarget, 2),
+            IsCompleted = totalApproved >= visibleTarget, Units = units });
     }
 
     [HttpGet("targets/my-department")]
@@ -83,6 +93,7 @@ public sealed class ResearchProgressController(
                 && allocation.FacultyId == department.FacultyId
                 && target.FacultyId == department.FacultyId
                 && target.AcademicYearId == academicYearId
+                && target.Status == "DA_KHOA"
             select allocation.AllocatedArticleCount
         ).ToListAsync(ct);
 
@@ -111,10 +122,11 @@ public sealed class ResearchProgressController(
                 && product.Status == "DA_DUYET"
                 && product.ArticleStatus == "DA_XUAT_BAN"
                 && product.ResearchTargetId.HasValue
-                && db.ResearchTargetAllocations.Any(a =>
-                    a.ResearchTargetId == product.ResearchTargetId &&
-                    a.DepartmentId == department.Id &&
-                    a.FacultyId == department.FacultyId)
+                && db.LecturerTargetAllocations.Any(personal =>
+                    personal.LecturerId == author.Id &&
+                    db.ResearchTargetAllocations.Any(a => a.Id == personal.DepartmentAllocationId &&
+                        a.ResearchTargetId == product.ResearchTargetId && a.DepartmentId == department.Id &&
+                        a.FacultyId == department.FacultyId))
             select product.Id;
 
         var approvedArticles = await approvedArticleIds

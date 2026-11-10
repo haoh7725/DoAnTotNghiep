@@ -38,10 +38,12 @@ public sealed class ReminderRepository(ApplicationDbContext db)
                 on assignment.LecturerId equals lecturer.Id
             where target.Deadline.HasValue
                 && target.Deadline.Value <= reminderLimit
-                && (target.Status == "CONG_BO" || target.Status == "DA_KHOA")
+                && target.Status == "DA_KHOA"
                 && db.Products.Count(product =>
                     product.ResearchTargetId == target.Id
                     && product.SubmittedByLecturerId == lecturer.Id
+                    && db.ResearchPlanItems.Any(item => item.Id == product.ResearchPlanItemId
+                        && db.ProductTypes.Any(type => type.Id == item.ProductTypeId && type.Code == "BAI_BAO"))
                     && product.Status == "DA_DUYET"
                     && product.ArticleStatus == "DA_XUAT_BAN") < assignment.AllocatedArticleCount
             select new ReminderCandidate(

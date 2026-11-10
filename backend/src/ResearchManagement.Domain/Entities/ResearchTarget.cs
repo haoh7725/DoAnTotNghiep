@@ -14,11 +14,11 @@ public sealed class ResearchTarget : BaseEntity
         DateOnly? deadline,
         long? journalConferenceId = null)
     {
-        if (assignedArticleCount < 0)
+        if (assignedArticleCount <= 0)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(assignedArticleCount),
-                "Số bài được giao không được âm.");
+                "Số bài được giao phải lớn hơn 0.");
         }
 
         FacultyId = facultyId;
@@ -49,11 +49,11 @@ public sealed class ResearchTarget : BaseEntity
         DateOnly? deadline,
         long? journalConferenceId = null)
     {
-        if (assignedArticleCount < 0)
+        if (assignedArticleCount <= 0)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(assignedArticleCount),
-                "Số bài được giao không được âm.");
+                "Số bài được giao phải lớn hơn 0.");
         }
 
         AssignedArticleCount = assignedArticleCount;

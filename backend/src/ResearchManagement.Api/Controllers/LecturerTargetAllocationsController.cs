@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -24,13 +25,16 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
                           join departmentAllocation in db.ResearchTargetAllocations.AsNoTracking() on personal.DepartmentAllocationId equals departmentAllocation.Id
                           join target in db.ResearchTargets.AsNoTracking() on departmentAllocation.ResearchTargetId equals target.Id
                           join year in db.AcademicYears.AsNoTracking() on target.AcademicYearId equals year.Id
-                          where personal.LecturerId == lecturer.Id
+                          where personal.LecturerId == lecturer.Id && target.Status == "DA_KHOA"
                           orderby year.StartDate descending
                           select new { personal.Id, TargetId = target.Id, year.Code, personal.AllocatedArticleCount,
-                              ApprovedArticles = db.Products.Count(x => x.ResearchTargetId == target.Id && x.SubmittedByLecturerId == lecturer.Id && x.Status == "DA_DUYET" && x.ArticleStatus == "DA_XUAT_BAN"),
+                              ApprovedArticles = db.Products.Count(x => x.ResearchTargetId == target.Id && x.SubmittedByLecturerId == lecturer.Id &&
+                                  x.Status == "DA_DUYET" && x.ArticleStatus == "DA_XUAT_BAN" &&
+                                  db.ResearchPlanItems.Any(item => item.Id == x.ResearchPlanItemId &&
+                                      db.ProductTypes.Any(type => type.Id == item.ProductTypeId && type.Code == "BAI_BAO"))),
                               personal.AllocationDate, target.Deadline, target.Status }).ToListAsync(ct);
         return Ok(rows.Select(x => new { x.Id, x.TargetId, AcademicYearCode = x.Code, x.AllocatedArticleCount, x.ApprovedArticles,
-            CompletionPercent = Math.Round(x.ApprovedArticles * 100m / x.AllocatedArticleCount, 2),
+            CompletionPercent = x.AllocatedArticleCount <= 0 ? 0m : Math.Round(x.ApprovedArticles * 100m / x.AllocatedArticleCount, 2),
             IsCompleted = x.ApprovedArticles >= x.AllocatedArticleCount, x.AllocationDate, x.Deadline, x.Status }));
     }
 
@@ -63,6 +67,7 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
     [Authorize(Roles = "TRUONG_BO_MON,QUAN_TRI")]
     public async Task<IActionResult> Create(SaveRequest request, CancellationToken ct)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var allocation = await GetAllocation(request.DepartmentAllocationId, ct);
         EnsureCanAssign(allocation);
         var lecturer = await db.Lecturers.SingleOrDefaultAsync(x => x.Id == request.LecturerId, ct)
@@ -78,6 +83,7 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
             $"PHAN_CONG_GV:{allocation.Id}:{lecturer.Id}:{request.AllocatedArticleCount}");
         notification.MarkAsSent(); db.Notifications.Add(notification);
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return Created($"api/lecturer-target-allocations/{item.Id}", new { item.Id });
     }
 
@@ -85,11 +91,12 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
     [Authorize(Roles = "TRUONG_BO_MON,QUAN_TRI")]
     public async Task<IActionResult> Update(long id, SaveRequest request, CancellationToken ct)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var item = await db.LecturerTargetAllocations.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new NotFoundException("Không tìm thấy phân công.");
         var allocation = await GetAllocation(item.DepartmentAllocationId, ct); EnsureCanAssign(allocation);
         if (await HasProducts(allocation.ResearchTargetId, item.LecturerId, ct)) throw new BusinessRuleException("Không thể sửa vì giảng viên đã phát sinh sản phẩm.");
         await EnsureTotal(allocation, request.AllocatedArticleCount, id, ct);
-        item.Update(request.AllocatedArticleCount, CurrentVietnamDate()); await db.SaveChangesAsync(ct);
+        item.Update(request.AllocatedArticleCount, CurrentVietnamDate()); await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct);
         return NoContent();
     }
 
@@ -97,10 +104,11 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
     [Authorize(Roles = "TRUONG_BO_MON,QUAN_TRI")]
     public async Task<IActionResult> Delete(long id, CancellationToken ct)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var item = await db.LecturerTargetAllocations.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new NotFoundException("Không tìm thấy phân công.");
         var allocation = await GetAllocation(item.DepartmentAllocationId, ct); EnsureCanAssign(allocation);
         if (await HasProducts(allocation.ResearchTargetId, item.LecturerId, ct)) throw new BusinessRuleException("Không thể hủy vì giảng viên đã phát sinh sản phẩm.");
-        db.LecturerTargetAllocations.Remove(item); await db.SaveChangesAsync(ct); return NoContent();
+        db.LecturerTargetAllocations.Remove(item); await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct); return NoContent();
     }
 
     private async Task<ResearchTargetAllocation> GetAllocation(long id, CancellationToken ct) =>
