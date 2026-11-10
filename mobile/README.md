@@ -1,16 +1,24 @@
-# research_management_mobile
+# ResearchHub Mobile
 
-A new Flutter project.
+Ứng dụng Flutter dành cho giảng viên, gồm tra cứu hồ sơ cá nhân, sản phẩm khoa học,
+kết quả thi đua, tiến độ chỉ tiêu và trung tâm thông báo.
 
-## Getting Started
+## Chạy ứng dụng
 
-This project is a starting point for a Flutter application.
+```powershell
+flutter pub get
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8081/api
+```
 
-A few resources to get you started if this is your first Flutter project:
+Khi chạy trên thiết bị thật, thay `10.0.2.2` bằng địa chỉ IP của máy chạy backend.
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Cơ chế thông báo
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- Backend kiểm tra nhắc hạn theo lịch và lưu thông báo của từng tài khoản.
+- Khi ứng dụng đang mở, badge thông báo được cập nhật khi vào màn hình và mỗi 60 giây.
+- Phản hồi mới từ Phòng QLKH và cảnh báo chỉ tiêu được xem trong tab **Thông báo**.
+
+Hiện phiên bản đồ án chưa tích hợp Firebase Cloud Messaging/APNs. Vì vậy ứng dụng
+không hiện push notification của hệ điều hành khi đã bị tắt hoàn toàn. Muốn triển khai
+thực tế cần cấu hình dự án Firebase/APNs, khóa ký ứng dụng và token thiết bị cho từng
+tài khoản; các thông tin này không được giả lập hoặc đưa khóa bí mật vào repository.

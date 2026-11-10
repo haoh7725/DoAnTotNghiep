@@ -26,7 +26,7 @@ const workflow: Record<string, string> = {
 }
 const article: Record<string, string> = {
   DANG_VIET: 'Đang viết', DANG_PHAN_BIEN: 'Đang phản biện',
-  DA_NHAN_DANG: 'Đã nhận xét', DA_XUAT_BAN: 'Đã xuất bản',
+  DA_NHAN_XET: 'Đã nhận xét', DA_NHAN_DANG: 'Đã nhận xét', DA_XUAT_BAN: 'Đã xuất bản',
 }
 // Map role → which status it can approve FROM
 const roleCanApproveFrom: Record<string, string> = {
@@ -648,7 +648,7 @@ function ProductForm({ product, onSubmit, busy, error, planItems, targets }: {
       {(isArticle || !planItems) && <label>Trạng thái bài viết
         <select name="articleStatus" defaultValue={product?.articleStatus ?? ''}>
           <option value="">Không áp dụng</option>
-          {Object.entries(article).map(([v, n]) => <option value={v} key={v}>{n}</option>)}
+          {Object.entries(article).filter(([v]) => v !== 'DA_NHAN_DANG').map(([v, n]) => <option value={v} key={v}>{n}</option>)}
         </select>
       </label>}
       {(isArticle || !planItems) && <label>Ngày công bố<input type="date" name="publishedDate" defaultValue={product?.publishedDate ?? ''} /></label>}

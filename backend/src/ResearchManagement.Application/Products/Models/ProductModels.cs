@@ -18,7 +18,7 @@ public sealed class CreateProductRequest
     public string? PublicationInfo { get; set; }
 
     public DateOnly? PublishedDate { get; set; }
-    [RegularExpression("^(DANG_VIET|DANG_PHAN_BIEN|DA_NHAN_DANG|DA_XUAT_BAN)$")] public string? ArticleStatus { get; set; }
+    [RegularExpression("^(DANG_VIET|DANG_PHAN_BIEN|DA_NHAN_XET|DA_NHAN_DANG|DA_XUAT_BAN)$")] public string? ArticleStatus { get; set; }
     [StringLength(100)] public string? JournalIndex { get; set; }
     [StringLength(100)] public string? JournalClassification { get; set; }
     [StringLength(100)] public string? ProjectLevel { get; set; }
@@ -37,7 +37,7 @@ public sealed class UpdateProductRequest
     public string? PublicationInfo { get; set; }
 
     public DateOnly? PublishedDate { get; set; }
-    [RegularExpression("^(DANG_VIET|DANG_PHAN_BIEN|DA_NHAN_DANG|DA_XUAT_BAN)$")] public string? ArticleStatus { get; set; }
+    [RegularExpression("^(DANG_VIET|DANG_PHAN_BIEN|DA_NHAN_XET|DA_NHAN_DANG|DA_XUAT_BAN)$")] public string? ArticleStatus { get; set; }
     [StringLength(100)] public string? JournalIndex { get; set; }
     [StringLength(100)] public string? JournalClassification { get; set; }
     [StringLength(100)] public string? ProjectLevel { get; set; }

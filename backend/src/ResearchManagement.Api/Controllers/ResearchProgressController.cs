@@ -30,7 +30,7 @@ public sealed class ResearchProgressController(
                                  select new { allocation.DepartmentId, DepartmentName = department.Name, allocation.AllocatedArticleCount }).ToListAsync(ct);
         if (!canViewWholeFaculty)
             allocations = allocations.Where(x => currentUser.CanAccess(target.FacultyId, x.DepartmentId)).ToList();
-        if (allocations.Count == 0)
+        if (!canViewWholeFaculty && allocations.Count == 0)
             throw new ForbiddenException("Không có quyền xem tiến độ chỉ tiêu này.");
         var approved = await (from product in db.Products.AsNoTracking()
                               join item in db.ResearchPlanItems.AsNoTracking() on product.ResearchPlanItemId equals item.Id
