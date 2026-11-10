@@ -49,7 +49,8 @@ String articleStatusLabel(String? s) {
       return 'Đang viết';
     case 'DANG_PHAN_BIEN':
       return 'Đang phản biện';
-    case 'DA_NHAN_DANG':
+    case 'DA_NHAN_XET':
+    case 'DA_NHAN_DANG': // dữ liệu cũ
       return 'Đã nhận xét';
     case 'DA_XUAT_BAN':
       return 'Đã xuất bản';
@@ -64,7 +65,8 @@ Color articleStatusColor(String? s) {
       return Colors.blueGrey;
     case 'DANG_PHAN_BIEN':
       return Colors.indigo;
-    case 'DA_NHAN_DANG':
+    case 'DA_NHAN_XET':
+    case 'DA_NHAN_DANG': // dữ liệu cũ
       return Colors.teal;
     case 'DA_XUAT_BAN':
       return const Color(0xFF2E7D32);
@@ -442,7 +444,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     onChanged: (v) => setDialogState(() => selectedStatus = v),
                   ),
                   _ArticleStatusOption(
-                    value: 'DA_NHAN_DANG',
+                    value: 'DA_NHAN_XET',
                     label: 'Đã nhận xét',
                     description:
                         'Bài viết đã nhận được nhận xét hoặc phản hồi chuyên môn',

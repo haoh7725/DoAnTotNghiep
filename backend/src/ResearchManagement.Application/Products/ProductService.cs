@@ -166,7 +166,7 @@ public sealed class ProductService(
             request.Description,
             request.PublicationInfo,
             request.PublishedDate,
-            request.ArticleStatus,
+            ToStoredArticleStatus(request.ArticleStatus),
             request.JournalIndex,
             request.JournalClassification,
             request.ProjectLevel,
@@ -190,7 +190,7 @@ public sealed class ProductService(
         EnsureEditable(product);
         await EnsureOwnerOrAdminAsync(product, cancellationToken);
         product.Update(request.Title, request.Description, request.PublicationInfo, request.PublishedDate,
-            request.ArticleStatus, request.JournalIndex, request.JournalClassification, request.ProjectLevel);
+            ToStoredArticleStatus(request.ArticleStatus), request.JournalIndex, request.JournalClassification, request.ProjectLevel);
 
         await products.SaveChangesAsync(cancellationToken);
 
@@ -383,7 +383,7 @@ public sealed class ProductService(
             product.Description,
             product.PublicationInfo,
             product.PublishedDate,
-            product.ArticleStatus,
+            ToPublicArticleStatus(product.ArticleStatus),
             product.JournalIndex,
             product.JournalClassification,
             product.ProjectLevel,
@@ -398,5 +398,13 @@ public sealed class ProductService(
     }
 
     private static ProductSummaryResponse ToSummary(Product p) =>
-        new(p.Id, p.ResearchPlanItemId, p.Title, p.ArticleStatus, p.Status, p.ScoreEquivalent, p.CreatedAt, p.UpdatedAt);
+        new(p.Id, p.ResearchPlanItemId, p.Title, ToPublicArticleStatus(p.ArticleStatus), p.Status, p.ScoreEquivalent, p.CreatedAt, p.UpdatedAt);
+
+    // CSDL cũ lưu DA_NHAN_DANG. API dùng DA_NHAN_XET theo đúng thuật ngữ của đề cương,
+    // đồng thời giữ tương thích với dữ liệu và ràng buộc CHECK đã triển khai.
+    private static string? ToStoredArticleStatus(string? value) =>
+        value == "DA_NHAN_XET" ? "DA_NHAN_DANG" : value;
+
+    private static string? ToPublicArticleStatus(string? value) =>
+        value == "DA_NHAN_DANG" ? "DA_NHAN_XET" : value;
 }
