@@ -18,6 +18,7 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
   Future<dynamic>? _progressFuture;
   Future<dynamic>? _targetFuture;
   Future<dynamic>? _departmentFuture;
+  Future<List<dynamic>>? _comparisonFuture;
 
   @override
   void initState() {
@@ -42,16 +43,7 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
       setState(() {
         _years = years;
         _yearId = yearId;
-        _progressFuture = yearId == null
-            ? null
-            : widget.client.getMyResearchProgress(yearId);
-        _targetFuture = yearId == null
-            ? null
-            : widget.client.getMyProductTargetProgress(yearId);
-
-        _departmentFuture = yearId == null
-            ? null
-            : widget.client.getMyDepartmentTargetProgress(yearId);
+        if (yearId != null) _setProgressFutures(yearId);
       });
     } catch (e) {
       if (mounted) {
@@ -69,10 +61,87 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
     if (yearId == null) return;
 
     setState(() {
-      _progressFuture = widget.client.getMyResearchProgress(yearId);
-      _targetFuture = widget.client.getMyProductTargetProgress(yearId);
-      _departmentFuture = widget.client.getMyDepartmentTargetProgress(yearId);
+      _setProgressFutures(yearId);
     });
+  }
+
+  void _setProgressFutures(int yearId) {
+    _progressFuture = widget.client.getMyResearchProgress(yearId);
+    final target = widget.client.getMyProductTargetProgress(yearId);
+    final department = widget.client.getMyDepartmentTargetProgress(yearId);
+    _targetFuture = target;
+    _departmentFuture = department;
+    _comparisonFuture = Future.wait([target, department]);
+  }
+
+  Widget _buildComparisonChart() {
+    return FutureBuilder<List<dynamic>>(
+      future: _comparisonFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Card(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+        if (snapshot.hasError || snapshot.data == null) {
+          return const SizedBox.shrink();
+        }
+
+        final personal = Map<String, dynamic>.from(snapshot.data![0] as Map);
+        final department = Map<String, dynamic>.from(snapshot.data![1] as Map);
+        final personalPercent = (personal['completionPercent'] as num?)
+            ?.toDouble();
+        final departmentPercent = (department['completionPercent'] as num?)
+            ?.toDouble();
+
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Biểu đồ tổng hợp tiến độ',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'So sánh tỷ lệ hoàn thành kế hoạch cá nhân và chỉ tiêu bộ môn.',
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  height: 210,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _ProgressBarColumn(
+                        label: 'Cá nhân',
+                        percent: personalPercent,
+                        color: const Color(0xFF168C8C),
+                      ),
+                      _ProgressBarColumn(
+                        label: 'Bộ môn',
+                        percent: departmentPercent,
+                        color: const Color(0xFF17324D),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Cột tối đa 100%; tỷ lệ lớn hơn 100% vẫn hiển thị số thực tế.',
+                  style: TextStyle(fontSize: 12, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildDepartmentProgress() {
@@ -333,15 +402,12 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
 
                     setState(() {
                       _yearId = id;
-                      _progressFuture = widget.client.getMyResearchProgress(id);
-                      _targetFuture = widget.client.getMyProductTargetProgress(
-                        id,
-                      );
-                      _departmentFuture = widget.client
-                          .getMyDepartmentTargetProgress(id);
+                      _setProgressFutures(id);
                     });
                   },
                 ),
+                const SizedBox(height: 16),
+                _buildComparisonChart(),
                 const SizedBox(height: 16),
                 _buildTargetProgress(),
                 const SizedBox(height: 16),
@@ -462,6 +528,58 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
                 ),
               ],
             ),
+    );
+  }
+}
+
+class _ProgressBarColumn extends StatelessWidget {
+  const _ProgressBarColumn({
+    required this.label,
+    required this.percent,
+    required this.color,
+  });
+
+  final String label;
+  final double? percent;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = ((percent ?? 0) / 100).clamp(0.0, 1.0).toDouble();
+    return SizedBox(
+      width: 104,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Text(
+            percent == null ? 'Chưa có' : '${percent!.toStringAsFixed(1)}%',
+            style: TextStyle(fontWeight: FontWeight.bold, color: color),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: Container(
+              width: 58,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              alignment: Alignment.bottomCenter,
+              child: FractionallySizedBox(
+                heightFactor: normalized,
+                widthFactor: 1,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+        ],
+      ),
     );
   }
 }
