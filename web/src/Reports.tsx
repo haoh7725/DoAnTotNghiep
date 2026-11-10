@@ -18,7 +18,7 @@ import './Reports.css'
 
 type Totals = { lecturers: number; products: number; hours: number; points: number }
 type Group = Totals & { name: string }
-type Row = { lecturerId: number; lecturerCode: string; lecturerName: string; departmentId: number; departmentName: string; academicRank: string | null; degree: string | null; classification: string | null; products: number; hours: number; points: number; evaluatedAt: string }
+type Row = { lecturerId: number; lecturerCode: string; lecturerName: string; departmentId: number; departmentName: string; academicRank: string | null; degree: string | null; classification: string | null; products: number; hours: number; points: number; evaluatedAt: string | null }
 type Report = { academicYearId: number; academicYearCode: string; totals: Totals; byAcademicRank: Group[]; byDegree: Group[]; byDepartment: Group[]; rows: Row[] }
 const CHART_COLORS = ['#168c8c', '#17324d', '#e6a45c', '#8b7fc7', '#65a886', '#d47d91']
 

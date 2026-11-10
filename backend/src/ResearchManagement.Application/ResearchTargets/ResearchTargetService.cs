@@ -34,8 +34,8 @@ public sealed class ResearchTargetService(
         CreateResearchTargetRequest request,
         CancellationToken cancellationToken)
     {
-        if (request.AssignedArticleCount < 0)
-            throw new BusinessRuleException("Số bài được giao không được âm.");
+        if (request.AssignedArticleCount <= 0)
+            throw new BusinessRuleException("Số bài được giao phải lớn hơn 0.");
 
         var existing =
             await researchTargets.GetByFacultyAndAcademicYearAsync(
@@ -73,8 +73,8 @@ public sealed class ResearchTargetService(
         if (researchTarget.Status is "DA_KHOA" or "DA_HUY")
             throw new BusinessRuleException("Chỉ tiêu đã khóa hoặc đã hủy nên không thể chỉnh sửa.");
 
-        if (request.AssignedArticleCount < 0)
-            throw new BusinessRuleException("Số bài được giao không được âm.");
+        if (request.AssignedArticleCount <= 0)
+            throw new BusinessRuleException("Số bài được giao phải lớn hơn 0.");
 
         var allocatedTotal = (await allocations.GetByResearchTargetIdAsync(id, cancellationToken))
             .Sum(x => x.AllocatedArticleCount);

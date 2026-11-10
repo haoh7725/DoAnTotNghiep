@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +26,13 @@ public sealed class ResearchTargetAllocationsController(
     {
         var result = await service.GetByIdAsync(id, cancellationToken);
         EnsureCanRead(result.FacultyId, result.DepartmentId);
+        if (!currentUser.CanAccess(result.FacultyId, null))
+        {
+            var status = await db.ResearchTargets.AsNoTracking()
+                .Where(x => x.Id == result.ResearchTargetId).Select(x => x.Status).SingleAsync(cancellationToken);
+            if (status != "DA_KHOA")
+                throw new ForbiddenException("Phân bổ bộ môn chỉ được xem sau khi Trưởng khoa khóa phân bổ.");
+        }
         return Ok(result);
     }
 
@@ -56,11 +64,13 @@ public sealed class ResearchTargetAllocationsController(
         CreateResearchTargetAllocationRequest request,
         CancellationToken cancellationToken)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var allocationDate = CurrentVietnamDate();
         request = request with { AllocationDate = allocationDate };
         await EnsureValidAllocationAsync(request.ResearchTargetId, request.FacultyId, request.DepartmentId, allocationDate, cancellationToken);
 
         var result = await service.CreateAsync(request, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return CreatedAtAction(
             nameof(GetById),
@@ -75,13 +85,9 @@ public sealed class ResearchTargetAllocationsController(
         UpdateResearchTargetAllocationRequest request,
         CancellationToken cancellationToken)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var existing = await service.GetByIdAsync(id, cancellationToken);
         EnsureCanRead(existing.FacultyId, existing.DepartmentId);
-        var personallyAllocated = await db.LecturerTargetAllocations
-            .Where(x => x.DepartmentAllocationId == id)
-            .SumAsync(x => (int?)x.AllocatedArticleCount, cancellationToken) ?? 0;
-        if (request.AllocatedArticleCount < personallyAllocated)
-            throw new BusinessRuleException("Không thể giảm chỉ tiêu bộ môn thấp hơn tổng đã phân công cho giảng viên.");
         var allocationDate = CurrentVietnamDate();
         request = request with { AllocationDate = allocationDate };
         await EnsureValidAllocationAsync(existing.ResearchTargetId, existing.FacultyId, existing.DepartmentId, allocationDate, cancellationToken);
@@ -90,6 +96,7 @@ public sealed class ResearchTargetAllocationsController(
             id,
             request,
             cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return Ok(result);
     }
@@ -117,7 +124,7 @@ public sealed class ResearchTargetAllocationsController(
         if (target.FacultyId != facultyId || department.FacultyId != facultyId)
             throw new BusinessRuleException("Khoa của chỉ tiêu và bộ môn phân bổ phải trùng khớp.");
         if (target.Status != "CONG_BO")
-            throw new BusinessRuleException("Chỉ được sửa phân bổ bộ môn khi chỉ tiêu đang ở trạng thái công bố và chưa khóa.");
+            throw new BusinessRuleException("Chỉ được tạo hoặc sửa phân bổ bộ môn khi chỉ tiêu đang ở trạng thái công bố và chưa khóa.");
         if (!currentUser.CanAccess(facultyId, departmentId))
             throw new ForbiddenException("Không có quyền phân bổ chỉ tiêu cho bộ môn này.");
         var year = await db.AcademicYears.AsNoTracking()

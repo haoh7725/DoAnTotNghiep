@@ -47,6 +47,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
   const [editingTarget, setEditingTarget] = useState<Target | null>(null)
   const [editingAllocation, setEditingAllocation] = useState<Allocation | null>(null)
   const [targetFormOpen, setTargetFormOpen] = useState(false)
+  const [targetYearId, setTargetYearId] = useState<number | null>(null)
   const [allocationFormOpen, setAllocationFormOpen] = useState(false)
   const [selectedAllocation, setSelectedAllocation] = useState<Allocation | null>(null)
   const [lecturerOptions, setLecturerOptions] = useState<LecturerOption[]>([])
@@ -133,8 +134,8 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
     const form = new FormData(e.currentTarget)
     const count = Number(form.get('assignedArticleCount'))
 
-    if (!Number.isInteger(count) || count < 0) {
-      setError('Số bài chỉ tiêu phải là số nguyên không âm.')
+    if (!Number.isInteger(count) || count <= 0) {
+      setError('Số bài chỉ tiêu phải là số nguyên lớn hơn 0.')
       return
     }
 
@@ -143,6 +144,11 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
     const academicYear = years.find(y => y.id === academicYearId)
     if (deadline && academicYear && (deadline < academicYear.startDate || deadline > academicYear.endDate)) {
       setError(`Hạn hoàn thành phải nằm trong năm học ${academicYear.code} (${academicYear.startDate} đến ${academicYear.endDate}).`)
+      return
+    }
+    const today = new Date().toLocaleDateString('en-CA')
+    if (deadline && deadline < today) {
+      setError('Hạn hoàn thành không được nằm trong quá khứ.')
       return
     }
 
@@ -278,6 +284,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
 
   function openNewTarget() {
     setEditingTarget(null)
+    setTargetYearId(null)
     setTargetFormOpen(true)
     setAllocationFormOpen(false)
     setError('')
@@ -286,6 +293,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
 
   function openEditTarget(target: Target) {
     setEditingTarget(target)
+    setTargetYearId(target.academicYearId)
     setTargetFormOpen(true)
     setAllocationFormOpen(false)
     setError('')
@@ -422,7 +430,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
                 </label>
                 <label>
                   Năm học
-                  <select name="academicYearId" required>
+                  <select name="academicYearId" required onChange={e => setTargetYearId(Number(e.target.value) || null)}>
                     <option value="">-- Chọn năm học --</option>
                     {years.map(y => (
                       <option key={y.id} value={y.id}>{y.code}</option>
@@ -455,7 +463,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
                 min="1"
                 step="1"
                 required
-                defaultValue={editingTarget?.assignedArticleCount ?? 0}
+                defaultValue={editingTarget?.assignedArticleCount ?? 1}
               />
             </label>
 
@@ -464,8 +472,12 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
               <input
                 name="deadline"
                 type="date"
-                min={years.find(y => y.id === editingTarget?.academicYearId)?.startDate}
-                max={years.find(y => y.id === editingTarget?.academicYearId)?.endDate}
+                min={(() => {
+                  const start = years.find(y => y.id === targetYearId)?.startDate
+                  const today = new Date().toLocaleDateString('en-CA')
+                  return start && start > today ? start : today
+                })()}
+                max={years.find(y => y.id === targetYearId)?.endDate}
                 defaultValue={editingTarget?.deadline ?? ''}
               />
             </label>

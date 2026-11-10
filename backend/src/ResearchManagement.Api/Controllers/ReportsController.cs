@@ -42,7 +42,8 @@ public sealed class ReportsController(ApplicationDbContext db, ICurrentUser curr
             sheet.Cell(row, 3).Value = item.DepartmentName; sheet.Cell(row, 4).Value = item.AcademicRank ?? "";
             sheet.Cell(row, 5).Value = item.Degree ?? ""; sheet.Cell(row, 6).Value = item.Classification ?? "";
             sheet.Cell(row, 7).Value = item.Products; sheet.Cell(row, 8).Value = item.Hours;
-            sheet.Cell(row, 9).Value = item.Points; sheet.Cell(row, 10).Value = item.EvaluatedAt.DateTime;
+            sheet.Cell(row, 9).Value = item.Points;
+            sheet.Cell(row, 10).Value = item.EvaluatedAt.HasValue ? item.EvaluatedAt.Value.DateTime : "";
             row++;
         }
         var table = sheet.Range(6, 1, Math.Max(6, row - 1), 10);
@@ -87,22 +88,43 @@ public sealed class ReportsController(ApplicationDbContext db, ICurrentUser curr
         var year = await db.AcademicYears.AsNoTracking().SingleOrDefaultAsync(x => x.Id == query.AcademicYearId, ct)
             ?? throw new NotFoundException("Không tìm thấy năm học.");
         var departments = await db.Departments.AsNoTracking().ToDictionaryAsync(x => x.Id, ct);
-        var evaluations = await db.Evaluations.AsNoTracking().Where(x => x.AcademicYearId == query.AcademicYearId && x.Status == "CHOT").ToListAsync(ct);
-        var latest = evaluations.GroupBy(x => x.LecturerId).Select(g => g.OrderByDescending(x => x.Attempt).First()).ToList();
-        latest = latest.Where(x => departments.TryGetValue(x.DepartmentIdSnapshot, out var d) && currentUser.CanAccess(d.FacultyId, d.Id)
+        var lecturers = await db.Lecturers.AsNoTracking().ToListAsync(ct);
+        lecturers = lecturers.Where(x => departments.TryGetValue(x.DepartmentId, out var d) && currentUser.CanAccess(d.FacultyId, d.Id)
             && (!query.FacultyId.HasValue || d.FacultyId == query.FacultyId)
             && (!query.DepartmentId.HasValue || d.Id == query.DepartmentId)
-            && (string.IsNullOrWhiteSpace(query.AcademicRank) || string.Equals(x.AcademicRankSnapshot, query.AcademicRank, StringComparison.OrdinalIgnoreCase))
-            && (string.IsNullOrWhiteSpace(query.Degree) || string.Equals(x.DegreeSnapshot, query.Degree, StringComparison.OrdinalIgnoreCase))).ToList();
-        var ids = latest.Select(x => x.Id).ToArray();
+            && (string.IsNullOrWhiteSpace(query.AcademicRank) || string.Equals(x.AcademicRank, query.AcademicRank, StringComparison.OrdinalIgnoreCase))
+            && (string.IsNullOrWhiteSpace(query.Degree) || string.Equals(x.Degree, query.Degree, StringComparison.OrdinalIgnoreCase))).ToList();
+        var evaluations = await db.Evaluations.AsNoTracking().Where(x => x.AcademicYearId == query.AcademicYearId && x.Status == "CHOT").ToListAsync(ct);
+        var latest = evaluations.GroupBy(x => x.LecturerId).ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.Attempt).First());
+        var ids = latest.Values.Select(x => x.Id).ToArray();
         var details = await db.EvaluationConversionDetails.AsNoTracking().Where(x => ids.Contains(x.EvaluationId)).ToListAsync(ct);
-        var rows = latest.Select(x =>
+        var approvedProducts = await (from product in db.Products.AsNoTracking()
+                                      join item in db.ResearchPlanItems.AsNoTracking() on product.ResearchPlanItemId equals item.Id
+                                      join plan in db.ResearchPlans.AsNoTracking() on item.ResearchPlanId equals plan.Id
+                                      where plan.AcademicYearId == query.AcademicYearId && product.Status == "DA_DUYET"
+                                      select new { product.Id, product.SubmittedByLecturerId }).ToListAsync(ct);
+        var approvedIds = approvedProducts.Select(x => x.Id).ToArray();
+        var coAuthors = await db.ProductCoAuthors.AsNoTracking().Where(x => approvedIds.Contains(x.ProductId)).ToListAsync(ct);
+        var productCounts = new Dictionary<long, HashSet<long>>();
+        foreach (var product in approvedProducts)
         {
-            var own = details.Where(d => d.EvaluationId == x.Id).ToList();
-            return new ResearchReportRow(x.LecturerId, x.LecturerCodeSnapshot, x.LecturerNameSnapshot,
-                x.DepartmentIdSnapshot, departments[x.DepartmentIdSnapshot].Name, x.AcademicRankSnapshot, x.DegreeSnapshot,
-                x.Classification, own.Select(d => d.ProductId).Distinct().Count(), own.Where(d => d.Unit == "GIO").Sum(d => d.ConvertedValue),
-                own.Where(d => d.Unit == "DIEM").Sum(d => d.ConvertedValue), x.EvaluatedAt);
+            if (!productCounts.TryGetValue(product.SubmittedByLecturerId, out var owned)) productCounts[product.SubmittedByLecturerId] = owned = [];
+            owned.Add(product.Id);
+            foreach (var coAuthor in coAuthors.Where(x => x.ProductId == product.Id))
+            {
+                if (!productCounts.TryGetValue(coAuthor.LecturerId, out var shared)) productCounts[coAuthor.LecturerId] = shared = [];
+                shared.Add(product.Id);
+            }
+        }
+        var rows = lecturers.Where(x => productCounts.ContainsKey(x.Id) || latest.ContainsKey(x.Id)).Select(x =>
+        {
+            latest.TryGetValue(x.Id, out var evaluation);
+            var own = evaluation is null
+                ? new List<ResearchManagement.Domain.Entities.EvaluationConversionDetail>()
+                : details.Where(d => d.EvaluationId == evaluation.Id).ToList();
+            return new ResearchReportRow(x.Id, x.Code, x.FullName, x.DepartmentId, departments[x.DepartmentId].Name, x.AcademicRank, x.Degree,
+                evaluation?.Classification, productCounts.GetValueOrDefault(x.Id)?.Count ?? 0,
+                own.Where(d => d.Unit == "GIO").Sum(d => d.ConvertedValue), own.Where(d => d.Unit == "DIEM").Sum(d => d.ConvertedValue), evaluation?.EvaluatedAt);
         }).OrderBy(x => x.DepartmentName).ThenBy(x => x.LecturerName).ToList();
         var totals = new ResearchReportTotals(rows.Count, rows.Sum(x => x.Products), rows.Sum(x => x.Hours), rows.Sum(x => x.Points));
         return new ResearchReportResponse(query.AcademicYearId, year.Code, totals,
@@ -124,5 +146,5 @@ public sealed class ResearchReportQuery
 }
 public sealed record ResearchReportTotals(int Lecturers, int Products, decimal Hours, decimal Points);
 public sealed record ResearchReportGroup(string Name, int Lecturers, int Products, decimal Hours, decimal Points);
-public sealed record ResearchReportRow(long LecturerId, string LecturerCode, string LecturerName, long DepartmentId, string DepartmentName, string? AcademicRank, string? Degree, string? Classification, int Products, decimal Hours, decimal Points, DateTimeOffset EvaluatedAt);
+public sealed record ResearchReportRow(long LecturerId, string LecturerCode, string LecturerName, long DepartmentId, string DepartmentName, string? AcademicRank, string? Degree, string? Classification, int Products, decimal Hours, decimal Points, DateTimeOffset? EvaluatedAt);
 public sealed record ResearchReportResponse(long AcademicYearId, string AcademicYearCode, ResearchReportTotals Totals, IReadOnlyList<ResearchReportGroup> ByAcademicRank, IReadOnlyList<ResearchReportGroup> ByDegree, IReadOnlyList<ResearchReportGroup> ByDepartment, IReadOnlyList<ResearchReportRow> Rows);

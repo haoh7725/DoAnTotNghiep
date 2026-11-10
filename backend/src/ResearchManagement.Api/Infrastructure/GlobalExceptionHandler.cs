@@ -19,6 +19,7 @@ public sealed class GlobalExceptionHandler(
         var (status, title) = postgres?.SqlState switch
         {
             PostgresErrorCodes.UniqueViolation => (StatusCodes.Status409Conflict, "Dữ liệu đã tồn tại"),
+            PostgresErrorCodes.SerializationFailure => (StatusCodes.Status409Conflict, "Dữ liệu vừa thay đổi"),
             PostgresErrorCodes.ForeignKeyViolation => (StatusCodes.Status409Conflict, "Dữ liệu đang được sử dụng"),
             PostgresErrorCodes.CheckViolation => (StatusCodes.Status422UnprocessableEntity, "Vi phạm quy tắc nghiệp vụ"),
             _ => exception switch
@@ -70,13 +71,12 @@ public sealed class GlobalExceptionHandler(
 
     private static string? GetPostgresBusinessMessage(Exception exception)
     {
-        if (exception is not DbUpdateException
-            {
-                InnerException: PostgresException postgresException
-            })
-        {
-            return null;
-        }
+        var postgresException = exception as PostgresException
+            ?? exception.InnerException as PostgresException;
+        if (postgresException is null) return null;
+
+        if (postgresException.SqlState == PostgresErrorCodes.SerializationFailure)
+            return "Dữ liệu phân bổ vừa được người khác cập nhật. Vui lòng tải lại và thực hiện lại thao tác.";
 
         return postgresException.MessageText switch
         {

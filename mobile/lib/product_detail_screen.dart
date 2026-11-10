@@ -50,7 +50,7 @@ String articleStatusLabel(String? s) {
     case 'DANG_PHAN_BIEN':
       return 'Đang phản biện';
     case 'DA_NHAN_DANG':
-      return 'Đã nhận đăng';
+      return 'Đã nhận xét';
     case 'DA_XUAT_BAN':
       return 'Đã xuất bản';
     default:
@@ -87,9 +87,9 @@ class StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.13),
+        color: color.withValues(alpha: 0.13),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.5)),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Text(
         label,
@@ -443,9 +443,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ),
                   _ArticleStatusOption(
                     value: 'DA_NHAN_DANG',
-                    label: 'Đã nhận đăng',
+                    label: 'Đã nhận xét',
                     description:
-                        'Bài viết đã được tạp chí hoặc hội thảo chấp nhận đăng',
+                        'Bài viết đã nhận được nhận xét hoặc phản hồi chuyên môn',
                     groupValue: selectedStatus,
                     color: Colors.teal,
                     onChanged: (v) => setDialogState(() => selectedStatus = v),
@@ -977,7 +977,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 dense: true,
                 contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(
-                  backgroundColor: const Color(0xFF177158).withOpacity(0.12),
+                  backgroundColor: const Color(
+                    0xFF177158,
+                  ).withValues(alpha: 0.12),
                   child: Text(
                     '${author['displayOrder'] ?? ''}',
                     style: const TextStyle(
@@ -1095,9 +1097,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: const Color(0xFF177158).withOpacity(0.08),
+            color: const Color(0xFF177158).withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF177158).withOpacity(0.2)),
+            border: Border.all(
+              color: const Color(0xFF177158).withValues(alpha: 0.2),
+            ),
           ),
           child: const Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1269,37 +1273,42 @@ class _ArticleStatusOption extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: selected ? color.withOpacity(0.08) : Colors.transparent,
+        color: selected ? color.withValues(alpha: 0.08) : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: selected ? color : Colors.grey.shade300,
           width: selected ? 1.5 : 1.0,
         ),
       ),
-      child: RadioListTile<String>(
-        value: value,
+      child: RadioGroup<String>(
         groupValue: groupValue,
-        activeColor: color,
         onChanged: (v) {
           if (v != null) onChanged(v);
         },
-        title: Row(
-          children: [
-            Text(
-              label,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            ),
-          ],
-        ),
-        subtitle: Text(
-          description,
-          style: const TextStyle(fontSize: 12, color: Colors.black54),
+        child: RadioListTile<String>(
+          value: value,
+          activeColor: color,
+          title: Row(
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+            ],
+          ),
+          subtitle: Text(
+            description,
+            style: const TextStyle(fontSize: 12, color: Colors.black54),
+          ),
         ),
       ),
     );
@@ -1358,7 +1367,7 @@ class _HistoryItem extends StatelessWidget {
                 Expanded(
                   child: Container(
                     width: 2,
-                    color: const Color(0xFF177158).withOpacity(0.25),
+                    color: const Color(0xFF177158).withValues(alpha: 0.25),
                   ),
                 ),
             ],
