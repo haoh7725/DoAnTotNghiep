@@ -59,6 +59,8 @@ input,select { width:100%; padding:11px 13px; border:1px solid #d4dee7; border-r
 .content > .muted { margin-top:0; }
 .panel { background:var(--surface); border:1px solid var(--line); border-radius:13px; padding:23px 24px; margin:22px 0; box-shadow:var(--shadow); }
 .panel h2 { margin-top:0; }
+.subpanel { margin:20px 0; padding:18px; border:1px solid var(--line); border-radius:11px; background:#f8fafb; }
+.subpanel h3 { margin:0 0 8px; }
 .permission-grid,.summary-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; }
 .permission { padding:17px; border:1px solid #e5edf1; border-radius:10px; background:#f7fafb; display:flex; flex-direction:column; gap:9px; }
 .permission strong { color:var(--navy); font-size:.9rem; }

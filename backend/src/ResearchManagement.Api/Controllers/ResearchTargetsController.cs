@@ -7,6 +7,7 @@ using ResearchManagement.Application.Common;
 using ResearchManagement.Application.ResearchTargets;
 using ResearchManagement.Application.ResearchTargets.Models;
 using ResearchManagement.Api.Authorization;
+using ResearchManagement.Domain.Constants;
 using ResearchManagement.Infrastructure.Persistence;
 namespace ResearchManagement.Api.Controllers;
 
@@ -77,6 +78,14 @@ public sealed class ResearchTargetsController(
         var result = await researchTargetService.CreateAsync(
             request,
             cancellationToken);
+
+        await NotifyFacultyDeansAsync(
+            result.Id,
+            request.FacultyId,
+            year.Code,
+            result.AssignedArticleCount,
+            cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
 
         return CreatedAtAction(
             nameof(GetById),
@@ -209,6 +218,35 @@ public sealed class ResearchTargetsController(
             var notification = new ResearchManagement.Domain.Entities.Notification(delivery.AccountId, "HE_THONG",
                 $"Phân bổ chỉ tiêu NCKH cho {delivery.Name} đã được khóa: {delivery.AllocatedArticleCount} bài. Bạn có thể phân công cho giảng viên.",
                 $"PHAN_BO_DA_KHOA:{targetId}:{delivery.Id}");
+            notification.MarkAsSent();
+            db.Notifications.Add(notification);
+        }
+    }
+
+    private async Task NotifyFacultyDeansAsync(
+        long targetId,
+        long facultyId,
+        string academicYearCode,
+        int assignedArticleCount,
+        CancellationToken ct)
+    {
+        var facultyName = await db.Faculties.AsNoTracking()
+            .Where(x => x.Id == facultyId)
+            .Select(x => x.Name)
+            .SingleAsync(ct);
+        var recipients = await (from role in db.RoleAssignments.AsNoTracking()
+                                join account in db.Accounts.AsNoTracking() on role.AccountId equals account.Id
+                                where role.Role == Roles.FacultyDean &&
+                                      role.FacultyId == facultyId &&
+                                      account.Status == AccountStatuses.Active
+                                select role.AccountId).Distinct().ToListAsync(ct);
+        foreach (var accountId in recipients)
+        {
+            var notification = new ResearchManagement.Domain.Entities.Notification(
+                accountId,
+                "HE_THONG",
+                $"{facultyName} được Phòng QLKH giao {assignedArticleCount} bài báo trong năm học {academicYearCode}. Vui lòng tiếp nhận và phân bổ xuống các bộ môn.",
+                $"CHI_TIEU_CHO_TIEP_NHAN:{targetId}:{accountId}");
             notification.MarkAsSent();
             db.Notifications.Add(notification);
         }

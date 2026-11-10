@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ResearchManagement.Application.Auth.Abstractions;
 using ResearchManagement.Application.Common;
+using ResearchManagement.Application.ResearchTargetAllocations;
 using ResearchManagement.Domain.Constants;
 using ResearchManagement.Domain.Entities;
 using ResearchManagement.Infrastructure.Persistence;
@@ -59,8 +60,30 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
     {
         var allocation = await GetAllocation(departmentAllocationId, ct);
         EnsureAccess(allocation);
-        return Ok(await db.Lecturers.AsNoTracking().Where(x => x.DepartmentId == allocation.DepartmentId)
-            .OrderBy(x => x.FullName).Select(x => new { x.Id, x.Code, x.FullName }).ToListAsync(ct));
+        var target = await db.ResearchTargets.AsNoTracking()
+            .SingleAsync(x => x.Id == allocation.ResearchTargetId, ct);
+        var lecturers = await db.Lecturers.AsNoTracking()
+            .Where(x => x.DepartmentId == allocation.DepartmentId)
+            .OrderBy(x => x.FullName)
+            .Select(x => new { x.Id, x.Code, x.FullName })
+            .ToListAsync(ct);
+        var rows = new List<object>(lecturers.Count);
+        foreach (var lecturer in lecturers)
+        {
+            var capacity = await GetCommitmentCapacity(
+                lecturer.Id, target.AcademicYearId, null, ct);
+            rows.Add(new
+            {
+                lecturer.Id,
+                lecturer.Code,
+                lecturer.FullName,
+                capacity.CommittedArticles,
+                capacity.AssignedArticles,
+                capacity.CompletedOutsideAssignment,
+                capacity.AvailableArticles
+            });
+        }
+        return Ok(rows);
     }
 
     [HttpPost]
@@ -75,6 +98,10 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
         if (lecturer.DepartmentId != allocation.DepartmentId) throw new BusinessRuleException("Giảng viên không thuộc bộ môn được phân bổ.");
         if (await db.LecturerTargetAllocations.AnyAsync(x => x.DepartmentAllocationId == allocation.Id && x.LecturerId == lecturer.Id, ct))
             throw new BusinessRuleException("Giảng viên đã được giao trong chỉ tiêu này.");
+        var target = await db.ResearchTargets.AsNoTracking()
+            .SingleAsync(x => x.Id == allocation.ResearchTargetId, ct);
+        (await GetCommitmentCapacity(lecturer.Id, target.AcademicYearId, null, ct))
+            .EnsureCanAssign(request.AllocatedArticleCount);
         await EnsureTotal(allocation, request.AllocatedArticleCount, null, ct);
         var item = new LecturerTargetAllocation(allocation.Id, lecturer.Id, request.AllocatedArticleCount, CurrentVietnamDate());
         db.LecturerTargetAllocations.Add(item);
@@ -95,6 +122,10 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
         var item = await db.LecturerTargetAllocations.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new NotFoundException("Không tìm thấy phân công.");
         var allocation = await GetAllocation(item.DepartmentAllocationId, ct); EnsureCanAssign(allocation);
         if (await HasProducts(allocation.ResearchTargetId, item.LecturerId, ct)) throw new BusinessRuleException("Không thể sửa vì giảng viên đã phát sinh sản phẩm.");
+        var target = await db.ResearchTargets.AsNoTracking()
+            .SingleAsync(x => x.Id == allocation.ResearchTargetId, ct);
+        (await GetCommitmentCapacity(item.LecturerId, target.AcademicYearId, id, ct))
+            .EnsureCanAssign(request.AllocatedArticleCount);
         await EnsureTotal(allocation, request.AllocatedArticleCount, id, ct);
         item.Update(request.AllocatedArticleCount, CurrentVietnamDate()); await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct);
         return NoContent();
@@ -129,6 +160,49 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
         if (count <= 0) throw new BusinessRuleException("Số bài giao phải lớn hơn 0.");
         var used = await db.LecturerTargetAllocations.Where(x => x.DepartmentAllocationId == a.Id && (!excludingId.HasValue || x.Id != excludingId.Value)).SumAsync(x => x.AllocatedArticleCount, ct);
         if (used + count > a.AllocatedArticleCount) throw new BusinessRuleException("Tổng giao cho giảng viên vượt chỉ tiêu của bộ môn.");
+    }
+    private async Task<LecturerCommitmentCapacity> GetCommitmentCapacity(
+        long lecturerId,
+        long academicYearId,
+        long? excludingAssignmentId,
+        CancellationToken ct)
+    {
+        var committed = await (from item in db.ResearchPlanItems.AsNoTracking()
+                               join plan in db.ResearchPlans.AsNoTracking() on item.ResearchPlanId equals plan.Id
+                               join type in db.ProductTypes.AsNoTracking() on item.ProductTypeId equals type.Id
+                               where plan.LecturerId == lecturerId &&
+                                     plan.AcademicYearId == academicYearId &&
+                                     plan.Status == "DA_DANG_KY" &&
+                                     type.Code == "BAI_BAO"
+                               select (int?)item.CommittedQuantity).SumAsync(ct) ?? 0;
+
+        var assigned = await (from personal in db.LecturerTargetAllocations.AsNoTracking()
+                              join department in db.ResearchTargetAllocations.AsNoTracking() on personal.DepartmentAllocationId equals department.Id
+                              join target in db.ResearchTargets.AsNoTracking() on department.ResearchTargetId equals target.Id
+                              where personal.LecturerId == lecturerId &&
+                                    target.AcademicYearId == academicYearId &&
+                                    target.Status == "DA_KHOA" &&
+                                    (!excludingAssignmentId.HasValue || personal.Id != excludingAssignmentId.Value)
+                              select (int?)personal.AllocatedArticleCount).SumAsync(ct) ?? 0;
+
+        var completedOutsideAssignment = await (
+            from product in db.Products.AsNoTracking()
+            join item in db.ResearchPlanItems.AsNoTracking() on product.ResearchPlanItemId equals item.Id
+            join plan in db.ResearchPlans.AsNoTracking() on item.ResearchPlanId equals plan.Id
+            join type in db.ProductTypes.AsNoTracking() on item.ProductTypeId equals type.Id
+            where product.SubmittedByLecturerId == lecturerId &&
+                  plan.AcademicYearId == academicYearId &&
+                  type.Code == "BAI_BAO" &&
+                  product.Status == "DA_DUYET" &&
+                  product.ArticleStatus == "DA_XUAT_BAN" &&
+                  !db.LecturerTargetAllocations.Any(personal =>
+                      personal.LecturerId == lecturerId &&
+                      db.ResearchTargetAllocations.Any(department =>
+                          department.Id == personal.DepartmentAllocationId &&
+                          department.ResearchTargetId == product.ResearchTargetId))
+            select product.Id).CountAsync(ct);
+
+        return new LecturerCommitmentCapacity(committed, assigned, completedOutsideAssignment);
     }
     private Task<bool> HasProducts(long targetId, long lecturerId, CancellationToken ct) => db.Products.AnyAsync(x => x.ResearchTargetId == targetId && x.SubmittedByLecturerId == lecturerId, ct);
     private static DateOnly CurrentVietnamDate() => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, OperatingSystem.IsWindows() ? "SE Asia Standard Time" : "Asia/Ho_Chi_Minh").DateTime);
