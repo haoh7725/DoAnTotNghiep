@@ -93,6 +93,8 @@ public sealed class ResearchTargetsController(
             ?? throw new NotFoundException("Không tìm thấy chỉ tiêu NCKH.");
         if (!currentUser.CanAccess(target.FacultyId, null))
             throw new ForbiddenException("Không có quyền cập nhật chỉ tiêu của khoa này.");
+        if (target.Status != "CHO_TIEP_NHAN")
+            throw new BusinessRuleException("Chỉ tiêu đã được Trưởng khoa tiếp nhận hoặc công bố nên không thể sửa. Hãy hủy và tạo lại chỉ tiêu nếu cần điều chỉnh.");
         var year = await db.AcademicYears.AsNoTracking()
             .SingleAsync(x => x.Id == target.AcademicYearId, cancellationToken);
         if (request.Deadline.HasValue &&
@@ -123,7 +125,7 @@ public sealed class ResearchTargetsController(
     }
 
     [HttpPost("{id:long}/publish")]
-    [Authorize(Roles = "TRUONG_KHOA,PHONG_QLKH,QUAN_TRI")]
+    [Authorize(Roles = "TRUONG_KHOA,QUAN_TRI")]
     public async Task<IActionResult> Publish(long id, CancellationToken cancellationToken)
     {
         var target = await GetManageableTarget(id, cancellationToken);
@@ -134,7 +136,7 @@ public sealed class ResearchTargetsController(
     }
 
     [HttpPost("{id:long}/lock")]
-    [Authorize(Roles = "TRUONG_KHOA,PHONG_QLKH,QUAN_TRI")]
+    [Authorize(Roles = "TRUONG_KHOA,QUAN_TRI")]
     public async Task<IActionResult> Lock(long id, CancellationToken cancellationToken)
     {
         var target = await GetManageableTarget(id, cancellationToken);
@@ -144,15 +146,18 @@ public sealed class ResearchTargetsController(
             throw new BusinessRuleException("Chỉ được khóa khi tổng phân bổ bằng đúng chỉ tiêu được giao.");
         try { target.Lock(DateTimeOffset.UtcNow); }
         catch (InvalidOperationException e) { throw new BusinessRuleException(e.Message); }
+        await NotifyDepartmentHeadsAsync(id, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         return Ok(await researchTargetService.GetByIdAsync(id, cancellationToken));
     }
 
     [HttpPost("{id:long}/cancel")]
-    [Authorize(Roles = "TRUONG_KHOA,PHONG_QLKH,QUAN_TRI")]
+    [Authorize(Roles = "TRUONG_KHOA,QUAN_TRI")]
     public async Task<IActionResult> Cancel(long id, CancellationToken cancellationToken)
     {
         var target = await GetManageableTarget(id, cancellationToken);
+        if (target.Status != "CHO_TIEP_NHAN")
+            throw new BusinessRuleException("Chỉ được hủy chỉ tiêu khi Trưởng khoa chưa tiếp nhận.");
         if (await db.ResearchTargetAllocations.AnyAsync(x => x.ResearchTargetId == id, cancellationToken))
             throw new BusinessRuleException("Không thể hủy chỉ tiêu đã có phân bổ.");
         try { target.Cancel(); }
@@ -176,12 +181,36 @@ public sealed class ResearchTargetsController(
             return true;
 
         var units = await (from allocation in db.ResearchTargetAllocations.AsNoTracking()
+                           join target in db.ResearchTargets.AsNoTracking() on allocation.ResearchTargetId equals target.Id
                            join department in db.Departments.AsNoTracking() on allocation.DepartmentId equals department.Id
-                           where allocation.ResearchTargetId == targetId
+                           where allocation.ResearchTargetId == targetId && target.Status == "DA_KHOA"
                            select new { department.FacultyId, DepartmentId = department.Id })
             .ToListAsync(cancellationToken);
 
         return units.Any(x => currentUser.CanAccess(x.FacultyId, x.DepartmentId));
+    }
+
+    private async Task NotifyDepartmentHeadsAsync(long targetId, CancellationToken ct)
+    {
+        var allocations = await (from allocation in db.ResearchTargetAllocations.AsNoTracking()
+                                 join department in db.Departments.AsNoTracking() on allocation.DepartmentId equals department.Id
+                                 where allocation.ResearchTargetId == targetId
+                                 select new { allocation.Id, allocation.DepartmentId, allocation.AllocatedArticleCount, department.Name })
+            .ToListAsync(ct);
+        foreach (var allocation in allocations)
+        {
+            var recipients = await db.RoleAssignments.AsNoTracking()
+                .Where(x => x.Role == "TRUONG_BO_MON" && x.DepartmentId == allocation.DepartmentId)
+                .Select(x => x.AccountId).Distinct().ToListAsync(ct);
+            foreach (var accountId in recipients)
+            {
+                var notification = new ResearchManagement.Domain.Entities.Notification(accountId, "HE_THONG",
+                    $"Phân bổ chỉ tiêu NCKH cho {allocation.Name} đã được khóa: {allocation.AllocatedArticleCount} bài. Bạn có thể phân công cho giảng viên.",
+                    $"PHAN_BO_DA_KHOA:{targetId}:{allocation.Id}");
+                notification.MarkAsSent();
+                db.Notifications.Add(notification);
+            }
+        }
     }
 
     private static DateOnly CurrentVietnamDate() =>

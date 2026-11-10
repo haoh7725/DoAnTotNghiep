@@ -23,6 +23,17 @@ input,select { width:100%; padding:11px 13px; border:1px solid #d4dee7; border-r
 .login-form h2 { font-size:2rem; letter-spacing:-.035em; margin:12px 0; color:var(--navy); }
 .login-form .primary { width:100%; margin-top:10px; padding:13px; }
 .alert { padding:13px 15px; border:1px solid #f0c8bf; border-radius:9px; background:#fff4f1; color:#9e4736; line-height:1.5; }
+.toast { position:fixed; z-index:1000; right:28px; bottom:28px; width:min(420px,calc(100vw - 32px)); display:grid; grid-template-columns:28px 1fr 28px; align-items:start; gap:10px; padding:14px 14px 14px 16px; border:1px solid; border-radius:12px; box-shadow:0 16px 36px rgba(15,35,55,.2); animation:toast-in .2s ease-out; }
+.toast p { margin:1px 0; font-size:.88rem; line-height:1.45; font-weight:600; }
+.toast > span { width:24px; height:24px; display:grid; place-items:center; border-radius:50%; font-weight:800; }
+.toast button { padding:0; width:26px; height:26px; min-height:0; border:0; background:transparent; font-size:1.25rem; line-height:1; }
+.toast--error { background:#fff5f2; color:#963d2c; border-color:#edbcb1; }
+.toast--error > span { background:#f7d7cf; }
+.toast--success { background:#effaf6; color:#147061; border-color:#aae0d3; }
+.toast--success > span { background:#ccefe5; }
+@keyframes toast-in { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+/* Các lỗi thao tác ở cấp trang dùng cùng vị trí dễ thấy; cảnh báo trong biểu mẫu vẫn giữ tại chỗ. */
+.content > .alert { position:fixed; z-index:999; right:28px; bottom:28px; width:min(420px,calc(100vw - 32px)); margin:0; box-shadow:0 16px 36px rgba(15,35,55,.2); animation:toast-in .2s ease-out; }
 .loading { padding:64px; text-align:center; color:var(--muted); }
 .workspace { display:flex; min-height:100vh; }
 .sidebar { position:sticky; top:0; width:264px; height:100vh; flex-shrink:0; padding:25px 17px 18px; background:var(--navy); color:#f5f8fb; display:flex; flex-direction:column; box-shadow:5px 0 24px rgba(20,44,67,.08); }
@@ -77,4 +88,4 @@ td button { padding:7px 10px; font-size:.77rem; }
 .connection-error-card .alert { margin-bottom:20px; text-align:left; }
 .connection-error-card .primary { width:100%; min-height:46px; }
 @media(max-width:900px) { .sidebar { width:224px; padding:22px 13px; } .content { padding:0 24px 34px; } .login-story { padding:40px 7%; } }
-@media(max-width:650px) { .login-layout { grid-template-columns:1fr; } .login-story { min-height:auto; padding:24px; } .login-story h1 { font-size:2rem; } .story-foot,.story-text { display:none; } .login-form-wrap { padding:36px 24px; } .workspace { display:block; } .sidebar { position:relative; width:100%; height:auto; padding:14px 16px; } .nav-label,.sidebar .nav-section { display:none; } .sidebar nav { display:flex; flex-wrap:wrap; margin-top:12px; gap:4px; } .sidebar nav button { padding:9px 10px; font-size:.75rem; } .sidebar nav button.active:before { display:none; } .sidebar-bottom { padding-top:12px; display:flex; align-items:center; justify-content:space-between; } .sidebar-bottom span { display:none; } .sidebar-bottom button { margin:0; } .page-top { margin-bottom:24px; } .content { padding:0 16px 28px; } .panel { padding:17px; } .form-grid { grid-template-columns:1fr; } .sidebar .brand { font-size:1rem; } }
+@media(max-width:650px) { .toast,.content > .alert { right:16px; bottom:16px; } .login-layout { grid-template-columns:1fr; } .login-story { min-height:auto; padding:24px; } .login-story h1 { font-size:2rem; } .story-foot,.story-text { display:none; } .login-form-wrap { padding:36px 24px; } .workspace { display:block; } .sidebar { position:relative; width:100%; height:auto; padding:14px 16px; } .nav-label,.sidebar .nav-section { display:none; } .sidebar nav { display:flex; flex-wrap:wrap; margin-top:12px; gap:4px; } .sidebar nav button { padding:9px 10px; font-size:.75rem; } .sidebar nav button.active:before { display:none; } .sidebar-bottom { padding-top:12px; display:flex; align-items:center; justify-content:space-between; } .sidebar-bottom span { display:none; } .sidebar-bottom button { margin:0; } .page-top { margin-bottom:24px; } .content { padding:0 16px 28px; } .panel { padding:17px; } .form-grid { grid-template-columns:1fr; } .sidebar .brand { font-size:1rem; } }

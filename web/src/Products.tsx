@@ -38,6 +38,8 @@ const roleCanApproveFrom: Record<string, string> = {
 const reviewableStatuses = ['NOP', 'TRUONG_BO_MON_DUYET', 'TRUONG_KHOA_DUYET', 'PHONG_QLKH_DUYET']
 
 const editable = (p: Product) => ['NHAP', 'TRA_LAI'].includes(p.status)
+const canManageProductAttachments = (user: Profile | null, p: Product) =>
+  editable(p) && (user?.roles.some(r => r.role === 'GIANG_VIEN') ?? false)
 const canManagerReview = (user: Profile | null, p: Product) => {
   if (!user) return false
   if (!reviewableStatuses.includes(p.status)) return false
@@ -336,8 +338,8 @@ function ProductDetail({ id, user, onBack }: { id: number; user: Profile | null;
           </section>
         }
 
-        <CoAuthors product={p} onChanged={() => setRevision(x => x + 1)} />
-        <Evidences product={p} onChanged={() => setRevision(x => x + 1)} />
+        <CoAuthors product={p} user={user} onChanged={() => setRevision(x => x + 1)} />
+        <Evidences product={p} user={user} onChanged={() => setRevision(x => x + 1)} />
       </>}
 
       {tab === 'history' && <ReviewHistoryPanel productId={id} key={`hist-${revision}`} />}
@@ -661,14 +663,16 @@ function ProductForm({ product, onSubmit, busy, error, planItems, targets }: {
 }
 
 // ── CoAuthors ──────────────────────────────────────────────────────────────────
-function CoAuthors({ product, onChanged }: { product: Product; onChanged: () => void }) {
+function CoAuthors({ product, user, onChanged }: { product: Product; user: Profile | null; onChanged: () => void }) {
   const [error, setError] = useState('')
   const [lecturers, setLecturers] = useState<LecturerOption[]>([])
+  const canManage = canManageProductAttachments(user, product)
   useEffect(() => {
+    if (!canManage) return
     api<LecturerOption[]>('/products/co-author-options')
       .then(setLecturers)
       .catch(e => setError((e as Error).message))
-  }, [])
+  }, [canManage])
   async function add(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const form = e.currentTarget; const f = new FormData(form)
     try {
@@ -682,14 +686,14 @@ function CoAuthors({ product, onChanged }: { product: Product; onChanged: () => 
   }
   return <section className="panel">
     <h2>Đồng tác giả</h2>
-    {error && <p className="alert">{error}</p>}
+    {canManage && error && <p className="alert">{error}</p>}
     <ul className="product-list">
       {product.coAuthors.map(a => <li key={a.id}>
         <span>{a.displayOrder}. {a.lecturerFullName}{a.lecturerCode ? ` (${a.lecturerCode})` : ''} — {a.authorRole}</span>
-        {editable(product) && <button className="danger" onClick={() => remove(a.id)}>Bỏ</button>}
+        {canManage && <button className="danger" onClick={() => remove(a.id)}>Bỏ</button>}
       </li>)}
     </ul>
-    {editable(product) && (
+    {canManage && (
       <form className="inline-editor product-author" onSubmit={add}>
         <select name="lecturerId" required defaultValue="">
           <option value="" disabled>Chọn giảng viên đồng tác giả</option>
@@ -706,8 +710,9 @@ function CoAuthors({ product, onChanged }: { product: Product; onChanged: () => 
 }
 
 // ── Evidences ──────────────────────────────────────────────────────────────────
-function Evidences({ product, onChanged }: { product: Product; onChanged: () => void }) {
+function Evidences({ product, user, onChanged }: { product: Product; user: Profile | null; onChanged: () => void }) {
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
+  const canManage = canManageProductAttachments(user, product)
   async function upload(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const form = e.currentTarget; const data = new FormData(form); setBusy(true); setError('')
     try { await apiForm(`/products/${product.id}/evidences`, data); form.reset(); onChanged() }
@@ -724,10 +729,10 @@ function Evidences({ product, onChanged }: { product: Product; onChanged: () => 
       {product.evidences.map(e => <li key={e.id}>
         <a href={`/api/products/${product.id}/evidences/${e.id}/download`}>{e.originalFileName}</a>
         <span>{(e.fileSizeBytes / 1024).toFixed(1)} KB</span>
-        {editable(product) && <button className="danger" onClick={() => remove(e.id)}>Xóa</button>}
+        {canManage && <button className="danger" onClick={() => remove(e.id)}>Xóa</button>}
       </li>)}
     </ul>
-    {product.status !== 'DA_DUYET' && (
+    {canManage && (
       <form className="product-upload" onSubmit={upload}>
         <label>Tệp minh chứng<input name="file" type="file" required accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.zip" /></label>
         <label>Mô tả<input name="description" maxLength={300} /></label>

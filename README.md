@@ -44,8 +44,9 @@ npm run dev
 
 Mở `http://localhost:5173`. API phải phản hồi tại `http://localhost:8081/health`
 (hoặc endpoint Swagger nếu được bật). Khi khởi tạo database mới với
-`SEED_DEMO_DATA=true`, đăng nhập được bằng `demo.qlkh`, `demo.truongkhoa`,
-`demo.truongbomon`, `demo.gv01`… với mật khẩu `Demo@12345678`.
+`SEED_SAMPLE_DATA=true`, hệ thống có sẵn bộ dữ liệu quy mô một khoa. Các tài khoản
+`qlkh`, `bgh`, `truongkhoa`, `tbm.cnpm`, `tbm.httt`, `gv.nguyenminhanh`… dùng chung
+mật khẩu `Huit@2026!`.
 
 ### Nếu pull về nhưng không chạy được
 
@@ -57,7 +58,7 @@ Mở `http://localhost:5173`. API phải phản hồi tại `http://localhost:80
   `web/.env.local` có `API_PROXY_TARGET=http://localhost:8081` khi dùng Docker.
 - Sau khi backend hoặc SQL đổi: chạy `docker compose --env-file .env -f infra/compose.yaml up --build -d`
   để build lại API.
-- Muốn làm sạch toàn bộ dữ liệu local để tạo lại dữ liệu demo: `docker compose --env-file .env -f infra/compose.yaml down -v`, rồi chạy lại bước 3. Lệnh này xóa dữ liệu local của dự án.
+- Muốn làm sạch toàn bộ dữ liệu local để tạo lại bộ dữ liệu mẫu: `docker compose --env-file .env -f infra/compose.yaml down -v`, rồi chạy lại bước 3. Lệnh này xóa dữ liệu local của dự án.
 
 ### Database đã được tạo từ phiên bản cũ
 
@@ -153,12 +154,12 @@ Backend đã có xác thực JWT và phân quyền theo vai trò/phạm vi:
 - `GET /api/auth/me`: thông tin tài khoản và các phân quyền hiện tại (Web dùng cookie HttpOnly, Mobile dùng header `Authorization: Bearer <token>`).
 - Policy: `Admin`, `ResearchOffice`, `Management` (xem `Api/Authorization/Policies.cs`). Kiểm tra phạm vi khoa/bộ môn qua `ICurrentUser.CanAccess(facultyId, departmentId)`.
 - Lần chạy đầu, nếu đặt `SEED_ADMIN_PASSWORD` trong `.env`, hệ thống tạo tài khoản QUAN_TRI (mặc định tên `admin`).
-- Trong môi trường Development, hệ thống tự tạo bộ dữ liệu demo xuyên suốt nghiệp vụ. Các tài khoản
-  `demo.qlkh`, `demo.bgh`, `demo.truongkhoa`, `demo.truongbomon` và `demo.gv01` đến `demo.gv04`
-  dùng chung mật khẩu `Demo@12345678`. Seeder chạy lặp lại an toàn và có thể tắt bằng cấu hình
-  `Seed:DemoData=false`. Khoa, bộ môn và năm học demo dùng mã có tiền tố `DEMO_`/`DEMO-`
-  để không xung đột với dữ liệu người dùng đã nhập.
-  Hai PDF minh chứng demo được đóng gói trong `ResearchManagement.Api/DemoEvidence` và tự tải
+- Trong môi trường Development, hệ thống tự tạo bộ dữ liệu mẫu quy mô vận hành: 2 khoa, 8 bộ môn, 32 giảng viên,
+  3 năm học, 80 kế hoạch, hơn 150 nội dung/sản phẩm, chỉ tiêu phân bổ cá nhân, thông báo, quy đổi và đánh giá.
+  Các tài khoản `qlkh`, `bgh`, `truongkhoa`, `tbm.cnpm`, `tbm.httt` và các tài khoản `gv.*`
+  dùng chung mật khẩu `Huit@2026!`. Seeder chạy lặp lại an toàn và có thể tắt bằng cấu hình
+  `Seed:SampleData=false`. Đây là dữ liệu phát triển cục bộ; không dùng tài khoản hoặc mật khẩu này khi triển khai thật.
+  Hai PDF minh chứng mẫu được đóng gói trong `ResearchManagement.Api/DemoEvidence` và tự tải
   lên bucket MinIO khi seed, nên endpoint tải xuống hoạt động cả local và Docker.
 - Lỗi trả về theo chuẩn ProblemDetails; danh sách có phân trang dùng `PagedQuery` / `PagedResult<T>`.
 
@@ -172,4 +173,4 @@ Tài khoản và phân quyền; hồ sơ giảng viên; sản phẩm khoa học 
 2. Hồ sơ, sản phẩm, minh chứng và xét duyệt.
 3. Kế hoạch, chỉ tiêu, tiến độ và nhắc hạn.
 4. Quy đổi, đánh giá, dashboard và xuất báo cáo.
-5. Tích hợp Mobile, kiểm thử và triển khai demo.
+5. Tích hợp Mobile, kiểm thử và triển khai.

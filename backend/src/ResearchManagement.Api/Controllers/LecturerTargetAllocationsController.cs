@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ResearchManagement.Application.Auth.Abstractions;
 using ResearchManagement.Application.Common;
+using ResearchManagement.Domain.Constants;
 using ResearchManagement.Domain.Entities;
 using ResearchManagement.Infrastructure.Persistence;
 
@@ -34,7 +35,7 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
     }
 
     [HttpGet]
-    [Authorize(Roles = "TRUONG_BO_MON,TRUONG_KHOA,PHONG_QLKH,QUAN_TRI")]
+    [Authorize(Roles = "TRUONG_BO_MON,PHONG_QLKH,QUAN_TRI")]
     public async Task<IActionResult> List([FromQuery] long departmentAllocationId, CancellationToken ct)
     {
         var allocation = await GetAllocation(departmentAllocationId, ct);
@@ -49,7 +50,7 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
     }
 
     [HttpGet("options")]
-    [Authorize(Roles = "TRUONG_BO_MON,TRUONG_KHOA,PHONG_QLKH,QUAN_TRI")]
+    [Authorize(Roles = "TRUONG_BO_MON,PHONG_QLKH,QUAN_TRI")]
     public async Task<IActionResult> Options([FromQuery] long departmentAllocationId, CancellationToken ct)
     {
         var allocation = await GetAllocation(departmentAllocationId, ct);
@@ -59,11 +60,11 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
     }
 
     [HttpPost]
-    [Authorize(Roles = "TRUONG_BO_MON,TRUONG_KHOA,QUAN_TRI")]
+    [Authorize(Roles = "TRUONG_BO_MON,QUAN_TRI")]
     public async Task<IActionResult> Create(SaveRequest request, CancellationToken ct)
     {
         var allocation = await GetAllocation(request.DepartmentAllocationId, ct);
-        EnsureAccess(allocation);
+        EnsureCanAssign(allocation);
         var lecturer = await db.Lecturers.SingleOrDefaultAsync(x => x.Id == request.LecturerId, ct)
             ?? throw new NotFoundException("Không tìm thấy giảng viên.");
         if (lecturer.DepartmentId != allocation.DepartmentId) throw new BusinessRuleException("Giảng viên không thuộc bộ môn được phân bổ.");
@@ -81,11 +82,11 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
     }
 
     [HttpPut("{id:long}")]
-    [Authorize(Roles = "TRUONG_BO_MON,TRUONG_KHOA,QUAN_TRI")]
+    [Authorize(Roles = "TRUONG_BO_MON,QUAN_TRI")]
     public async Task<IActionResult> Update(long id, SaveRequest request, CancellationToken ct)
     {
         var item = await db.LecturerTargetAllocations.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new NotFoundException("Không tìm thấy phân công.");
-        var allocation = await GetAllocation(item.DepartmentAllocationId, ct); EnsureAccess(allocation);
+        var allocation = await GetAllocation(item.DepartmentAllocationId, ct); EnsureCanAssign(allocation);
         if (await HasProducts(allocation.ResearchTargetId, item.LecturerId, ct)) throw new BusinessRuleException("Không thể sửa vì giảng viên đã phát sinh sản phẩm.");
         await EnsureTotal(allocation, request.AllocatedArticleCount, id, ct);
         item.Update(request.AllocatedArticleCount, CurrentVietnamDate()); await db.SaveChangesAsync(ct);
@@ -93,11 +94,11 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
     }
 
     [HttpDelete("{id:long}")]
-    [Authorize(Roles = "TRUONG_BO_MON,TRUONG_KHOA,QUAN_TRI")]
+    [Authorize(Roles = "TRUONG_BO_MON,QUAN_TRI")]
     public async Task<IActionResult> Delete(long id, CancellationToken ct)
     {
         var item = await db.LecturerTargetAllocations.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new NotFoundException("Không tìm thấy phân công.");
-        var allocation = await GetAllocation(item.DepartmentAllocationId, ct); EnsureAccess(allocation);
+        var allocation = await GetAllocation(item.DepartmentAllocationId, ct); EnsureCanAssign(allocation);
         if (await HasProducts(allocation.ResearchTargetId, item.LecturerId, ct)) throw new BusinessRuleException("Không thể hủy vì giảng viên đã phát sinh sản phẩm.");
         db.LecturerTargetAllocations.Remove(item); await db.SaveChangesAsync(ct); return NoContent();
     }
@@ -105,6 +106,16 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
     private async Task<ResearchTargetAllocation> GetAllocation(long id, CancellationToken ct) =>
         await db.ResearchTargetAllocations.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new NotFoundException("Không tìm thấy phân bổ bộ môn.");
     private void EnsureAccess(ResearchTargetAllocation x) { if (!currentUser.CanAccess(x.FacultyId, x.DepartmentId)) throw new ForbiddenException("Không có quyền phân công cho bộ môn này."); }
+    private void EnsureCanAssign(ResearchTargetAllocation allocation)
+    {
+        EnsureAccess(allocation);
+        if (!currentUser.IsInRole(Roles.Admin) && !currentUser.IsInRole(Roles.DepartmentHead))
+            throw new ForbiddenException("Chỉ Trưởng bộ môn mới được phân công chỉ tiêu cho giảng viên.");
+        var targetStatus = db.ResearchTargets.Where(x => x.Id == allocation.ResearchTargetId)
+            .Select(x => x.Status).Single();
+        if (targetStatus != "DA_KHOA")
+            throw new BusinessRuleException("Chỉ được phân công giảng viên sau khi Trưởng khoa khóa phân bổ bộ môn.");
+    }
     private async Task EnsureTotal(ResearchTargetAllocation a, int count, long? excludingId, CancellationToken ct)
     {
         if (count <= 0) throw new BusinessRuleException("Số bài giao phải lớn hơn 0.");

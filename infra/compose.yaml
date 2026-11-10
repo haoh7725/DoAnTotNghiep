@@ -61,7 +61,7 @@ services:
       Minio__UseSsl: "false"
       Seed__AdminUsername: ${SEED_ADMIN_USERNAME:-admin}
       Seed__AdminPassword: ${SEED_ADMIN_PASSWORD:-}
-      Seed__DemoData: ${SEED_DEMO_DATA:-true}
+      Seed__SampleData: ${SEED_SAMPLE_DATA:-true}
       Copyleaks__Email: ${COPYLEAKS_EMAIL:-}
       Copyleaks__ApiKey: ${COPYLEAKS_API_KEY:-}
       Copyleaks__PublicBaseUrl: ${COPYLEAKS_PUBLIC_BASE_URL:-}

@@ -44,11 +44,14 @@ public sealed class ResearchTargetAllocationsController(
         if (currentUser.CanAccess(target.FacultyId, null))
             return Ok(result);
 
+        if (target.Status != "DA_KHOA")
+            return Ok(new List<ResearchTargetAllocationResponse>());
+
         return Ok(result.Where(x => currentUser.CanAccess(x.FacultyId, x.DepartmentId)).ToList());
     }
 
     [HttpPost]
-    [Authorize(Roles = "TRUONG_KHOA,PHONG_QLKH,QUAN_TRI")]
+    [Authorize(Roles = "TRUONG_KHOA,QUAN_TRI")]
     public async Task<ActionResult<ResearchTargetAllocationResponse>> Create(
         CreateResearchTargetAllocationRequest request,
         CancellationToken cancellationToken)
@@ -58,7 +61,6 @@ public sealed class ResearchTargetAllocationsController(
         await EnsureValidAllocationAsync(request.ResearchTargetId, request.FacultyId, request.DepartmentId, allocationDate, cancellationToken);
 
         var result = await service.CreateAsync(request, cancellationToken);
-        await NotifyDepartmentManagersAsync(result, "được phân bổ", cancellationToken);
 
         return CreatedAtAction(
             nameof(GetById),
@@ -67,7 +69,7 @@ public sealed class ResearchTargetAllocationsController(
     }
 
     [HttpPut("{id:long}")]
-    [Authorize(Roles = "TRUONG_KHOA,PHONG_QLKH,QUAN_TRI")]
+    [Authorize(Roles = "TRUONG_KHOA,QUAN_TRI")]
     public async Task<ActionResult<ResearchTargetAllocationResponse>> Update(
         long id,
         UpdateResearchTargetAllocationRequest request,
@@ -88,28 +90,8 @@ public sealed class ResearchTargetAllocationsController(
             id,
             request,
             cancellationToken);
-        await NotifyDepartmentManagersAsync(result, "được điều chỉnh", cancellationToken);
 
         return Ok(result);
-    }
-
-    private async Task NotifyDepartmentManagersAsync(ResearchTargetAllocationResponse allocation, string action, CancellationToken ct)
-    {
-        var departmentName = await db.Departments.Where(x => x.Id == allocation.DepartmentId)
-            .Select(x => x.Name).SingleAsync(ct);
-        var recipients = await db.RoleAssignments.AsNoTracking()
-            .Where(x => x.Role == "TRUONG_BO_MON" && x.DepartmentId == allocation.DepartmentId)
-            .Select(x => x.AccountId).Distinct().ToListAsync(ct);
-        foreach (var accountId in recipients)
-        {
-            var notification = new ResearchManagement.Domain.Entities.Notification(
-                accountId, "HE_THONG",
-                $"Chỉ tiêu NCKH của {departmentName} {action}: {allocation.AllocatedArticleCount} bài, ngày {allocation.AllocationDate:dd/MM/yyyy}.",
-                $"PHAN_BO_CHI_TIEU:{allocation.Id}:{allocation.AllocatedArticleCount}:{allocation.AllocationDate:yyyyMMdd}");
-            notification.MarkAsSent();
-            db.Notifications.Add(notification);
-        }
-        if (recipients.Count > 0) await db.SaveChangesAsync(ct);
     }
 
     private void EnsureCanRead(long facultyId, long departmentId)
@@ -134,6 +116,8 @@ public sealed class ResearchTargetAllocationsController(
 
         if (target.FacultyId != facultyId || department.FacultyId != facultyId)
             throw new BusinessRuleException("Khoa của chỉ tiêu và bộ môn phân bổ phải trùng khớp.");
+        if (target.Status != "CONG_BO")
+            throw new BusinessRuleException("Chỉ được sửa phân bổ bộ môn khi chỉ tiêu đang ở trạng thái công bố và chưa khóa.");
         if (!currentUser.CanAccess(facultyId, departmentId))
             throw new ForbiddenException("Không có quyền phân bổ chỉ tiêu cho bộ môn này.");
         var year = await db.AcademicYears.AsNoTracking()

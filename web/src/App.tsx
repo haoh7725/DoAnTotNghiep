@@ -40,7 +40,7 @@ export default function App() {
   ) ?? false
 
   const canEditResearchAllocations = user?.roles.some(p =>
-    ['TRUONG_KHOA', 'PHONG_QLKH', 'QUAN_TRI'].includes(p.role)
+    ['TRUONG_KHOA', 'QUAN_TRI'].includes(p.role)
   ) ?? false
   const canViewJournalConferences = user?.roles.some(p =>
     ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'BAN_GIAM_HIEU', 'QUAN_TRI'].includes(p.role)
@@ -51,6 +51,9 @@ export default function App() {
   ) ?? false
 
   const canEvaluate = user?.roles.some(p =>
+    p.role === 'PHONG_QLKH' || p.role === 'QUAN_TRI'
+  ) ?? false
+  const canManageConversionRules = user?.roles.some(p =>
     p.role === 'PHONG_QLKH' || p.role === 'QUAN_TRI'
   ) ?? false
   useEffect(() => {
@@ -232,9 +235,9 @@ export default function App() {
             Danh mục tạp chí/hội nghị
           </button>
         )}
-        {administrator && <p className="nav-section">CẤU HÌNH HỆ THỐNG</p>}
+        {(administrator || canManageConversionRules) && <p className="nav-section">CẤU HÌNH HỆ THỐNG</p>}
         {administrator && <button className={tab === 'admin' ? 'active' : ''} onClick={() => setTab('admin')}>Quản trị dữ liệu nền</button>}
-        {administrator && <button className={tab === 'conversion-rules' ? 'active' : ''} onClick={() => setTab('conversion-rules')}>Quy định quy đổi</button>}
+        {canManageConversionRules && <button className={tab === 'conversion-rules' ? 'active' : ''} onClick={() => setTab('conversion-rules')}>Quy định quy đổi</button>}
         {manager && <button className={tab === 'reports' ? 'active' : ''} onClick={() => setTab('reports')}>{user.roles.some(r => r.role === 'BAN_GIAM_HIEU') ? 'Tổng hợp toàn trường' : 'Thống kê kết quả'}</button>}
         <button className={tab === 'password' ? 'active' : ''} onClick={() => setTab('password')}>Đổi mật khẩu</button></nav>
       <div className="sidebar-bottom"><strong>{user.fullName}</strong><span>@{user.username}</span><button onClick={logout} disabled={busy}>Đăng xuất</button></div>
@@ -305,7 +308,7 @@ export default function App() {
           : <p role="alert">Bạn không có quyền xem danh mục tạp chí/hội nghị.</p>
       )}
       {tab === 'admin' && (administrator ? <AdminPanel currentAccountId={user.id} onChanged={() => setRetry(x => x + 1)} /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
-      {tab === 'conversion-rules' && (administrator ? <ConversionRules /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
+      {tab === 'conversion-rules' && (canManageConversionRules ? <ConversionRules /> : <p role="alert">Chỉ Phòng QLKH hoặc quản trị viên được cấu hình quy định quy đổi.</p>)}
       {tab === 'reports' && (manager ? <ResearchReports lookups={lookups} /> : <p role="alert">Bạn không có quyền xem báo cáo.</p>)}
       {tab === 'password' && <PasswordForm onChanged={() => { setUser(null); setError('Đã đổi mật khẩu. Vui lòng đăng nhập lại.'); setTab('overview') }} />}
     </main>
