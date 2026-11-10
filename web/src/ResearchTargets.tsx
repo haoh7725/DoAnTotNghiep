@@ -24,7 +24,14 @@ type Allocation = {
   allocatedArticleCount: number
   allocationDate: string
 }
-type LecturerOption = { id: number; code: string; fullName: string }
+type LecturerOption = {
+  id: number
+  code: string
+  fullName: string
+  committedArticles: number
+  assignedArticles: number
+  availableArticles: number
+}
 type LecturerAssignment = { id: number; departmentAllocationId: number; lecturerId: number; lecturerCode: string; lecturerName: string; allocatedArticleCount: number; allocationDate: string }
 type TargetProgress = { assignedArticleCount: number; approvedArticles: number; completionPercent: number; isCompleted: boolean; units: { departmentId: number; departmentName: string; allocatedArticles: number; approvedArticles: number; completionPercent: number; isCompleted: boolean }[] }
 
@@ -52,6 +59,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
   const [selectedAllocation, setSelectedAllocation] = useState<Allocation | null>(null)
   const [lecturerOptions, setLecturerOptions] = useState<LecturerOption[]>([])
   const [lecturerAssignments, setLecturerAssignments] = useState<LecturerAssignment[]>([])
+  const [selectedLecturerId, setSelectedLecturerId] = useState<number | null>(null)
   const [progress, setProgress] = useState<TargetProgress | null>(null)
   const [targetPanel, setTargetPanel] = useState<'overview' | 'allocations' | 'lecturers'>('overview')
 
@@ -241,6 +249,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
 
   async function openLecturerAssignments(allocation: Allocation) {
     setSelectedAllocation(allocation); setTargetPanel('lecturers'); setError(''); setMessage('')
+    setSelectedLecturerId(null)
     try {
       const [items, options] = await Promise.all([
         api<LecturerAssignment[]>(`/lecturer-target-allocations?departmentAllocationId=${allocation.id}`),
@@ -264,6 +273,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
       await openLecturerAssignments(selectedAllocation)
       setMessage('Đã phân công chỉ tiêu cho giảng viên.')
       element.reset()
+      setSelectedLecturerId(null)
     } catch (e) { setError((e as Error).message) }
     finally { setBusy(false) }
   }
@@ -341,6 +351,10 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
   const remainingAllocation = selectedTarget
     ? selectedTarget.assignedArticleCount - allocatedTotal
     : 0
+  const selectedLecturer = lecturerOptions.find(x => x.id === selectedLecturerId)
+  const unassignedLecturers = lecturerOptions.filter(
+    x => !lecturerAssignments.some(a => a.lecturerId === x.id)
+  )
 
   function workflowStage(target: Target) {
     if (target.status === 'CHO_TIEP_NHAN') return 0
@@ -666,12 +680,38 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
         {lecturerAssignments.length > 0 && <div style={{ overflowX: 'auto' }}><table><thead><tr><th>Giảng viên</th><th>Số bài</th><th>Ngày giao</th><th></th></tr></thead><tbody>
           {lecturerAssignments.map(x => <tr key={x.id}><td>{x.lecturerCode} — {x.lecturerName}</td><td>{x.allocatedArticleCount}</td><td>{x.allocationDate}</td><td><button className="danger" disabled={busy} onClick={() => void deleteLecturerAssignment(x.id)}>Hủy</button></td></tr>)}
         </tbody></table></div>}
+
+        <div className="subpanel">
+          <h3>Căn cứ phân công theo cam kết bài báo</h3>
+          <p className="muted">
+            Có thể giao thêm = max(0, cam kết bài báo − đã giao).
+            Chỉ tính cam kết bài báo trong kế hoạch đã đăng ký của năm học này.
+          </p>
+          {lecturerOptions.length === 0 ? <p className="muted">Bộ môn chưa có giảng viên để phân công.</p> : <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead><tr><th>Giảng viên</th><th>Cam kết bài báo</th><th>Đã giao</th><th>Có thể giao thêm</th></tr></thead>
+              <tbody>{lecturerOptions.map(x => <tr key={x.id}>
+                <td>{x.code} — {x.fullName}</td>
+                <td>{x.committedArticles}</td>
+                <td>{x.assignedArticles}</td>
+                <td><strong>{x.availableArticles}</strong></td>
+              </tr>)}</tbody>
+            </table>
+          </div>}
+        </div>
+
         {isAllocationLocked && canAssignLecturers && <form onSubmit={saveLecturerAssignment}>
-          <label>Giảng viên<select name="lecturerId" required defaultValue=""><option value="">-- Chọn giảng viên --</option>
-            {lecturerOptions.filter(x => !lecturerAssignments.some(a => a.lecturerId === x.id)).map(x => <option key={x.id} value={x.id}>{x.code} — {x.fullName}</option>)}
+          <h3>Giao chỉ tiêu chính thức</h3>
+          <label>Giảng viên<select name="lecturerId" required value={selectedLecturerId ?? ''} onChange={e => setSelectedLecturerId(Number(e.target.value) || null)}><option value="">-- Chọn giảng viên --</option>
+            {unassignedLecturers.map(x => <option key={x.id} value={x.id} disabled={x.availableArticles <= 0}>{x.code} — {x.fullName} · còn {x.availableArticles} bài</option>)}
           </select></label>
-          <label>Số bài giao<input name="allocatedArticleCount" type="number" min="1" step="1" required /></label>
-          <button className="primary" disabled={busy}>Giao chỉ tiêu</button>
+          <label>Số bài giao<input name="allocatedArticleCount" type="number" min="1" max={selectedLecturer?.availableArticles} step="1" required disabled={!selectedLecturer} /></label>
+          {selectedLecturer && <p className="muted">
+            {selectedLecturer.fullName} cam kết {selectedLecturer.committedArticles} bài; đã giao {selectedLecturer.assignedArticles} bài;
+            có thể giao thêm tối đa <strong>{selectedLecturer.availableArticles} bài</strong>.
+          </p>}
+          {unassignedLecturers.length > 0 && unassignedLecturers.every(x => x.availableArticles <= 0) && <p className="muted">Không còn giảng viên chưa được phân công có khả năng nhận thêm theo cam kết.</p>}
+          <button className="primary" disabled={busy || !selectedLecturer || selectedLecturer.availableArticles <= 0}>Giao chỉ tiêu</button>
         </form>}
       </section>}
 

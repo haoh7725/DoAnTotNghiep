@@ -47,7 +47,9 @@ public sealed record ResearchPlanItemResponse(
     string Status,
     string? Result,
     string? DifficultyProposal,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int ActualProductCount,
+    int CompletedProductCount);
 
 public sealed record ProgressHistoryResponse(
     long Id,

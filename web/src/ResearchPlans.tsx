@@ -30,6 +30,8 @@ type ResearchPlanItem = {
     result: string | null
     difficultyProposal: string | null
     updatedAt: string
+    actualProductCount: number
+    completedProductCount: number
 }
 
 type ProgressHistory = {
@@ -606,17 +608,23 @@ export function ResearchPlans({ academicYears }: Props) {
                                         <h3>{item.name}</h3>
 
                                         <p className="muted">
-                                            Cam kết: {productTypes.find(type => type.id === item.productTypeId)?.name ?? 'Nội dung NCKH'}
+                                            Loại sản phẩm: {productTypes.find(type => type.id === item.productTypeId)?.name ?? 'Nội dung NCKH'}
                                         </p>
 
                                         <p>
-                                            <strong>Trạng thái:</strong>{' '}
+                                            <strong>Tiến độ hiện tại:</strong>{' '}
                                             {progressLabels[item.status] ?? item.status}
                                         </p>
 
                                         <p>
-                                            <strong>Số lượng cam kết:</strong>{' '}
+                                            <strong>Số lượng cam kết đầu năm:</strong>{' '}
                                             {item.committedQuantity}
+                                        </p>
+
+                                        <p>
+                                            <strong>Sản phẩm thực tế:</strong>{' '}
+                                            {item.actualProductCount} · <strong>Đã hoàn thành:</strong>{' '}
+                                            {item.completedProductCount}/{item.committedQuantity}
                                         </p>
 
                                         <p>
@@ -712,18 +720,10 @@ export function ResearchPlans({ academicYears }: Props) {
                             <p className="muted">Chỉ dùng để báo cáo mức độ thực hiện cam kết và khó khăn. Để nộp bài/đề tài có minh chứng xét duyệt, vào mục <strong>Sản phẩm khoa học</strong>.</p>
 
                             <form onSubmit={saveProgress}>
-                                <label>
-                                    Trạng thái
-                                    <select
-                                        value={progressStatus}
-                                        onChange={e => setProgressStatus(e.target.value)}
-                                        disabled={itemBusy}
-                                    >
-                                        <option value="CHUA_THUC_HIEN">Chưa thực hiện</option>
-                                        <option value="DANG_THUC_HIEN">Đang thực hiện</option>
-                                        <option value="DA_THUC_HIEN">Đã thực hiện</option>
-                                    </select>
-                                </label>
+                                <div className="product-context">
+                                    <strong>Tiến độ tự động: {progressLabels[progressStatus] ?? progressStatus}</strong>
+                                    <span>Trạng thái được tính từ sản phẩm thực tế: chưa có sản phẩm, đang thực hiện, hoặc đã được duyệt đủ số lượng cam kết.</span>
+                                </div>
 
                                 <label>
                                     Báo cáo ngắn về tiến độ
