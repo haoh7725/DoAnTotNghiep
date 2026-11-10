@@ -222,46 +222,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // ── Scientific profile ──
         if (_scientificProfile != null) ...[
           const SizedBox(height: 12),
-          SectionCard(
-            title: 'Lý lịch khoa học',
-            children: [
-              if ([
-                _scientificProfile!['expertise'],
-                _scientificProfile!['researchFields'],
-                _scientificProfile!['researchDirections'],
-                _scientificProfile!['activitySummary'],
-              ].every(
-                (value) => value == null || value.toString().trim().isEmpty,
-              ))
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 12),
-                  child: Text(
-                    'Chưa cập nhật lý lịch khoa học.',
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontSize: 13,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ),
-              _ScientificField(
-                label: 'Chuyên môn',
-                text: _scientificProfile!['expertise'] as String?,
-              ),
-              _ScientificField(
-                label: 'Lĩnh vực nghiên cứu',
-                text: _scientificProfile!['researchFields'] as String?,
-              ),
-              _ScientificField(
-                label: 'Hướng nghiên cứu',
-                text: _scientificProfile!['researchDirections'] as String?,
-              ),
-              _ScientificField(
-                label: 'Tóm tắt hoạt động',
-                text: _scientificProfile!['activitySummary'] as String?,
-              ),
-            ],
-          ),
+          _buildScientificProfile(),
         ],
 
         const SizedBox(height: 24),
@@ -351,6 +312,237 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+
+  Widget _buildScientificProfile() {
+    final profile = _scientificProfile!;
+    final rawDetails = profile['details'];
+    final details = rawDetails is Map
+        ? Map<String, dynamic>.from(rawDetails)
+        : <String, dynamic>{};
+    final updatedAt = profile['updatedAt']?.toString();
+
+    return Column(
+      children: [
+        Card(
+          color: const Color(0xFFEAF5F0),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.science_outlined, color: Color(0xFF177158)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Lý lịch khoa học đầy đủ',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Theo Phụ lục V Thông tư 08/2011/TT-BGDĐT. '
+                        'Chạm từng mục để xem chi tiết.',
+                      ),
+                      if (updatedAt != null && updatedAt.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          'Cập nhật: ${_formatDateTime(updatedAt)}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.black54,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _ProfileExpansion(
+          title: 'I. Lý lịch sơ lược',
+          icon: Icons.badge_outlined,
+          initiallyExpanded: true,
+          children: [
+            _ProfileRows(
+              rows: [
+                MapEntry('Nơi sinh', _text(details['birthPlace'])),
+                MapEntry('Quê quán', _text(details['hometown'])),
+                MapEntry('Dân tộc', _text(details['ethnicity'])),
+                MapEntry(
+                  'Năm nhận học vị cao nhất',
+                  _text(details['highestDegreeYear']),
+                ),
+                MapEntry(
+                  'Nước nhận học vị',
+                  _text(details['highestDegreeCountry']),
+                ),
+                MapEntry(
+                  'Năm bổ nhiệm chức danh khoa học',
+                  _text(details['academicRankYear']),
+                ),
+                MapEntry('Đơn vị công tác', _text(details['workUnit'])),
+                MapEntry('Địa chỉ liên lạc', _text(details['contactAddress'])),
+                MapEntry('Điện thoại cơ quan', _text(details['officePhone'])),
+                MapEntry('Điện thoại nhà riêng', _text(details['homePhone'])),
+                MapEntry('Fax', _text(details['fax'])),
+                MapEntry('Số CMND / CCCD', _text(details['identityNumber'])),
+                MapEntry(
+                  'Ngày cấp',
+                  _formatDate(_text(details['identityIssuedDate'])),
+                ),
+                MapEntry(
+                  'Nơi cấp',
+                  _text(details['identityIssuedPlace']),
+                ),
+              ],
+            ),
+          ],
+        ),
+        _ListProfileExpansion(
+          title: 'II. Quá trình đào tạo',
+          icon: Icons.school_outlined,
+          items: _items(details, 'education'),
+          rowBuilder: (item) => [
+            MapEntry('Bậc đào tạo', _educationLevel(item['level'])),
+            MapEntry('Hệ đào tạo', _text(item['trainingMode'])),
+            MapEntry('Nơi đào tạo', _text(item['institution'])),
+            MapEntry('Ngành / chuyên ngành', _text(item['specialization'])),
+            MapEntry('Nước đào tạo', _text(item['country'])),
+            MapEntry('Năm tốt nghiệp', _text(item['graduationYear'])),
+            MapEntry('Tên luận án', _text(item['thesisTitle'])),
+          ],
+        ),
+        _ListProfileExpansion(
+          title: 'Ngoại ngữ',
+          icon: Icons.language_outlined,
+          items: _items(details, 'languages'),
+          rowBuilder: (item) => [
+            MapEntry('Ngoại ngữ', _text(item['name'])),
+            MapEntry('Mức độ sử dụng', _text(item['proficiency'])),
+          ],
+        ),
+        _ListProfileExpansion(
+          title: 'III. Quá trình công tác chuyên môn',
+          icon: Icons.work_outline,
+          items: _items(details, 'employment'),
+          rowBuilder: (item) => [
+            MapEntry('Từ ngày', _formatDate(_text(item['fromDate']))),
+            MapEntry('Đến ngày', _formatDate(_text(item['toDate']))),
+            MapEntry('Nơi công tác', _text(item['organization'])),
+            MapEntry('Công việc đảm nhiệm', _text(item['position'])),
+          ],
+        ),
+        _ListProfileExpansion(
+          title: 'IV.1. Đề tài nghiên cứu đã và đang tham gia',
+          icon: Icons.assignment_outlined,
+          items: _items(details, 'researchProjects'),
+          rowBuilder: (item) => [
+            MapEntry('Tên đề tài', _text(item['title'])),
+            MapEntry('Năm bắt đầu', _text(item['startYear'])),
+            MapEntry('Năm hoàn thành / dự kiến', _text(item['endYear'])),
+            MapEntry('Cấp đề tài', _text(item['level'])),
+            MapEntry('Trách nhiệm tham gia', _text(item['responsibility'])),
+          ],
+        ),
+        _ListProfileExpansion(
+          title: 'IV.2. Các công trình khoa học đã công bố',
+          icon: Icons.menu_book_outlined,
+          items: _items(details, 'publications'),
+          rowBuilder: (item) => [
+            MapEntry('Tên công trình', _text(item['title'])),
+            MapEntry('Năm công bố', _text(item['year'])),
+            MapEntry('Tạp chí / nơi công bố', _text(item['journal'])),
+          ],
+        ),
+        _ProfileExpansion(
+          title: 'Thông tin chuyên môn và hoạt động khoa học',
+          icon: Icons.biotech_outlined,
+          children: [
+            _ScientificField(
+              label: 'Chuyên môn',
+              text: _text(profile['expertise']),
+            ),
+            _ScientificField(
+              label: 'Lĩnh vực nghiên cứu',
+              text: _text(profile['researchFields']),
+            ),
+            _ScientificField(
+              label: 'Hướng nghiên cứu',
+              text: _text(profile['researchDirections']),
+            ),
+            _ScientificField(
+              label: 'Tóm tắt hoạt động khoa học',
+              text: _text(profile['activitySummary']),
+            ),
+          ],
+        ),
+        _ProfileExpansion(
+          title: 'Thông tin kê khai',
+          icon: Icons.edit_note_outlined,
+          children: [
+            _ProfileRows(
+              rows: [
+                MapEntry(
+                  'Địa điểm kê khai',
+                  _text(details['declarationPlace']),
+                ),
+                MapEntry(
+                  'Ngày kê khai',
+                  _formatDate(_text(details['declarationDate'])),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  static String? _text(dynamic value) {
+    final text = value?.toString().trim();
+    return text == null || text.isEmpty ? null : text;
+  }
+
+  static String _formatDateTime(String value) {
+    try {
+      final date = DateTime.parse(value).toLocal();
+      return '${date.hour.toString().padLeft(2, '0')}:'
+          '${date.minute.toString().padLeft(2, '0')} '
+          '${date.day.toString().padLeft(2, '0')}/'
+          '${date.month.toString().padLeft(2, '0')}/${date.year}';
+    } catch (_) {
+      return value;
+    }
+  }
+
+  static List<Map<String, dynamic>> _items(
+    Map<String, dynamic> details,
+    String key,
+  ) {
+    final value = details[key];
+    if (value is! List) return [];
+    return value
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  static String? _educationLevel(dynamic value) => switch (value?.toString()) {
+    'DAI_HOC' => 'Đại học',
+    'DAI_HOC_2' => 'Bằng đại học 2',
+    'THAC_SI' => 'Thạc sĩ',
+    'TIEN_SI' => 'Tiến sĩ',
+    final String value when value.isNotEmpty => value,
+    _ => null,
+  };
 }
 
 class _ScientificField extends StatelessWidget {
@@ -379,6 +571,107 @@ class _ScientificField extends StatelessWidget {
           const Divider(height: 20),
         ],
       ),
+    );
+  }
+}
+
+class _ProfileExpansion extends StatelessWidget {
+  const _ProfileExpansion({
+    required this.title,
+    required this.icon,
+    required this.children,
+    this.initiallyExpanded = false,
+  });
+
+  final String title;
+  final IconData icon;
+  final List<Widget> children;
+  final bool initiallyExpanded;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        initiallyExpanded: initiallyExpanded,
+        leading: Icon(icon, color: const Color(0xFF177158)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: children,
+      ),
+    );
+  }
+}
+
+class _ProfileRows extends StatelessWidget {
+  const _ProfileRows({required this.rows});
+
+  final List<MapEntry<String, String?>> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = rows.where((row) => row.value?.isNotEmpty == true).toList();
+    if (visible.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Chưa kê khai.',
+            style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+          ),
+        ),
+      );
+    }
+    return Column(
+      children: visible
+          .map((row) => DetailRow(row.key, row.value))
+          .toList(),
+    );
+  }
+}
+
+class _ListProfileExpansion extends StatelessWidget {
+  const _ListProfileExpansion({
+    required this.title,
+    required this.icon,
+    required this.items,
+    required this.rowBuilder,
+  });
+
+  final String title;
+  final IconData icon;
+  final List<Map<String, dynamic>> items;
+  final List<MapEntry<String, String?>> Function(Map<String, dynamic>)
+  rowBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ProfileExpansion(
+      title: '$title (${items.length})',
+      icon: icon,
+      children: items.isEmpty
+          ? const [_ProfileRows(rows: [])]
+          : [
+              for (var index = 0; index < items.length; index++) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 10, bottom: 6),
+                    child: Text(
+                      'Mục ${index + 1}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF177158),
+                      ),
+                    ),
+                  ),
+                ),
+                _ProfileRows(rows: rowBuilder(items[index])),
+                if (index < items.length - 1) const Divider(height: 20),
+              ],
+            ],
     );
   }
 }
