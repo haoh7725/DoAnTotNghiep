@@ -1268,6 +1268,7 @@ CREATE TABLE nckh.thong_bao (
     da_doc_luc timestamp with time zone,
     loi_gui text,
     san_pham_ung_dung_id bigint,
+    duong_dan_hanh_dong character varying(200),
     CONSTRAINT ck_thong_bao_kenh CHECK (((kenh)::text = ANY ((ARRAY['IN_APP'::character varying, 'EMAIL'::character varying, 'PUSH'::character varying])::text[]))),
     CONSTRAINT ck_thong_bao_loai CHECK (((loai)::text = ANY ((ARRAY['NHAC_HAN'::character varying, 'QUA_HAN'::character varying, 'PHAN_HOI'::character varying, 'HE_THONG'::character varying])::text[]))),
     CONSTRAINT ck_thong_bao_so_lan_thu CHECK ((so_lan_thu >= 0)),

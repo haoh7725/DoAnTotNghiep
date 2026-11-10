@@ -109,7 +109,8 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
         db.LecturerTargetAllocations.Add(item);
         var notification = new Notification(lecturer.AccountId, "HE_THONG",
             $"Bạn được giao {request.AllocatedArticleCount} bài trong chỉ tiêu NCKH #{allocation.ResearchTargetId}.",
-            $"PHAN_CONG_GV:{allocation.Id}:{lecturer.Id}:{request.AllocatedArticleCount}");
+            $"PHAN_CONG_GV:{allocation.Id}:{lecturer.Id}:{request.AllocatedArticleCount}",
+            actionPath: "my-targets");
         notification.MarkAsSent(); db.Notifications.Add(notification);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
@@ -129,7 +130,14 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
         (await GetCommitmentCapacity(item.LecturerId, target.AcademicYearId, id, ct))
             .EnsureCanAssign(request.AllocatedArticleCount);
         await EnsureTotal(allocation, request.AllocatedArticleCount, id, ct);
-        item.Update(request.AllocatedArticleCount, CurrentVietnamDate()); await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct);
+        var lecturer = await db.Lecturers.AsNoTracking().SingleAsync(x => x.Id == item.LecturerId, ct);
+        item.Update(request.AllocatedArticleCount, CurrentVietnamDate());
+        var notification = new Notification(lecturer.AccountId, "HE_THONG",
+            $"Phân công chỉ tiêu NCKH của bạn đã được cập nhật thành {request.AllocatedArticleCount} bài.",
+            $"PHAN_CONG_GV_CAP_NHAT:{item.Id}:{request.AllocatedArticleCount}:{Guid.NewGuid():N}",
+            actionPath: "my-targets");
+        notification.MarkAsSent(); db.Notifications.Add(notification);
+        await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct);
         return NoContent();
     }
 
@@ -141,7 +149,14 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
         var item = await db.LecturerTargetAllocations.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new NotFoundException("Không tìm thấy phân công.");
         var allocation = await GetAllocation(item.DepartmentAllocationId, ct); EnsureCanAssign(allocation);
         if (await HasProducts(allocation.ResearchTargetId, item.LecturerId, ct)) throw new BusinessRuleException("Không thể hủy vì giảng viên đã phát sinh sản phẩm.");
-        db.LecturerTargetAllocations.Remove(item); await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct); return NoContent();
+        var lecturer = await db.Lecturers.AsNoTracking().SingleAsync(x => x.Id == item.LecturerId, ct);
+        db.LecturerTargetAllocations.Remove(item);
+        var notification = new Notification(lecturer.AccountId, "HE_THONG",
+            $"Phân công {item.AllocatedArticleCount} bài thuộc chỉ tiêu NCKH #{allocation.ResearchTargetId} đã được hủy.",
+            $"PHAN_CONG_GV_HUY:{item.Id}:{Guid.NewGuid():N}",
+            actionPath: "my-targets");
+        notification.MarkAsSent(); db.Notifications.Add(notification);
+        await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct); return NoContent();
     }
 
     private async Task<ResearchTargetAllocation> GetAllocation(long id, CancellationToken ct) =>

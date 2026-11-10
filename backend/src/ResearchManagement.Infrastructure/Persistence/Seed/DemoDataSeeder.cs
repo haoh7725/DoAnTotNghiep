@@ -313,11 +313,12 @@ public static class DemoDataSeeder
 
             db.Notifications.AddRange(
                 Sent(new Notification(lecturer2.Id, "QUA_HAN", "Nội dung kế hoạch kiểm thử tự động đã quá hạn.",
-                    "seed:overdue:item3", items[2].Id, researchPlanId: plans[1].Id)),
+                    "seed:overdue:item3", items[2].Id, researchPlanId: plans[1].Id, actionPath: "research-plans")),
                 new Notification(lecturer1.Id, "NHAC_HAN", "Bài báo dự báo kết quả học tập sắp đến hạn.",
-                    "seed:due:item1", items[0].Id, researchPlanId: plans[0].Id),
+                    "seed:due:item1", items[0].Id, researchPlanId: plans[0].Id, actionPath: "research-plans"),
                 new Notification(lecturer4.Id, "PHAN_HOI", "Sản phẩm đã được trả lại: bổ sung quyết định giao đề tài.",
-                    "seed:return:product5", researchPlanItemId: items[6].Id, researchPlanId: plans[3].Id));
+                    "seed:return:product5", researchPlanItemId: items[6].Id, researchPlanId: plans[3].Id,
+                    scientificProductId: products[4].Id, actionPath: $"products:{products[4].Id}"));
 
             await db.SaveChangesAsync(cancellationToken);
             await EnsureExtendedDemoDataAsync(db, researchOffice.Id, cancellationToken);
@@ -710,6 +711,13 @@ public static class DemoDataSeeder
         }
         // Thông báo cũ từng được gửi ngay lúc tạo phân bổ; quy tắc mới chỉ gửi sau khi khóa.
         await db.Notifications.Where(x => x.DeduplicationKey.StartsWith("PHAN_BO_CHI_TIEU:")).ExecuteDeleteAsync(ct);
+        await db.Notifications
+            .Where(x => x.ActionPath == null && x.DeduplicationKey.StartsWith("seed:assigned-target:"))
+            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.ActionPath, "my-targets"), ct);
+        await db.Notifications
+            .Where(x => x.ActionPath == null &&
+                        (x.DeduplicationKey.StartsWith("seed:due:") || x.DeduplicationKey.StartsWith("seed:overdue:")))
+            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.ActionPath, "research-plans"), ct);
         if (accounts.Count > 0) { db.Accounts.AddRange(accounts); await db.SaveChangesAsync(ct); }
     }
 
@@ -864,6 +872,48 @@ public static class DemoDataSeeder
                 target.Lock(new DateTimeOffset(year.StartDate.AddDays(30).ToDateTime(new TimeOnly(8, 0)), TimeSpan.Zero));
             await db.SaveChangesAsync(cancellationToken);
 
+            if (year.Id == latestYearId)
+            {
+                var deanAccountIds = await db.RoleAssignments.AsNoTracking()
+                    .Where(x => x.Role == Roles.FacultyDean && x.FacultyId == faculty.Id)
+                    .Select(x => x.AccountId)
+                    .Distinct()
+                    .ToListAsync(cancellationToken);
+                foreach (var accountId in deanAccountIds)
+                {
+                    var key = $"CHI_TIEU_CHO_TIEP_NHAN:{target.Id}:{accountId}";
+                    if (!await db.Notifications.AnyAsync(x => x.DeduplicationKey == key, cancellationToken))
+                        db.Notifications.Add(Sent(new Notification(
+                            accountId,
+                            "HE_THONG",
+                            $"{faculty.Name} được Phòng QLKH giao {target.AssignedArticleCount} bài báo trong năm học {year.Code}. Chỉ tiêu đã được tiếp nhận và phân bổ.",
+                            key,
+                            actionPath: "research-targets")));
+                }
+
+                foreach (var allocation in targetAllocations)
+                {
+                    var headAccountIds = await db.RoleAssignments.AsNoTracking()
+                        .Where(x => x.Role == Roles.DepartmentHead && x.DepartmentId == allocation.DepartmentId)
+                        .Select(x => x.AccountId)
+                        .Distinct()
+                        .ToListAsync(cancellationToken);
+                    var departmentName = departments.Single(x => x.Id == allocation.DepartmentId).Name;
+                    foreach (var accountId in headAccountIds)
+                    {
+                        var key = $"PHAN_BO_DA_KHOA:{target.Id}:{allocation.Id}";
+                        if (!await db.Notifications.AnyAsync(x => x.RecipientAccountId == accountId && x.DeduplicationKey == key, cancellationToken))
+                            db.Notifications.Add(Sent(new Notification(
+                                accountId,
+                                "HE_THONG",
+                                $"Phân bổ chỉ tiêu NCKH cho {departmentName} đã được khóa: {allocation.AllocatedArticleCount} bài. Bạn có thể phân công cho giảng viên.",
+                                key,
+                                actionPath: "research-targets")));
+                    }
+                }
+                await db.SaveChangesAsync(cancellationToken);
+            }
+
             var articleProducts = await (from product in db.Products
                                          join item in db.ResearchPlanItems on product.ResearchPlanItemId equals item.Id
                                          join plan in db.ResearchPlans on item.ResearchPlanId equals plan.Id
@@ -903,7 +953,7 @@ public static class DemoDataSeeder
                     db.Notifications.Add(Sent(new Notification(
                         lecturer.AccountId, "HE_THONG",
                         $"Bạn đã được giao chỉ tiêu bài báo năm học {year.Code}. Hãy liên kết sản phẩm trong kế hoạch để theo dõi tiến độ.",
-                        key, researchPlanId: plan.Id)));
+                        key, researchPlanId: plan.Id, actionPath: "my-targets")));
             }
             await db.SaveChangesAsync(cancellationToken);
         }

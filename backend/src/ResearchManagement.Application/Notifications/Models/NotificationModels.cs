@@ -10,6 +10,7 @@ public sealed record NotificationResponse(
     long? ResearchPlanItemId,
     long? ResearchPlanId,
     long? ScientificProductId,
+    string? ActionPath,
     DateTimeOffset ScheduledAt,
     DateTimeOffset? SentAt,
     DateTimeOffset? ReadAt,

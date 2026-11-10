@@ -34,6 +34,10 @@ public sealed class NotificationConfiguration
         builder.Property(x => x.ScientificProductId)
             .HasColumnName("san_pham_ung_dung_id");
 
+        builder.Property(x => x.ActionPath)
+            .HasColumnName("duong_dan_hanh_dong")
+            .HasMaxLength(200);
+
         builder.HasOne<Product>()
             .WithMany()
             .HasForeignKey(x => x.ScientificProductId)

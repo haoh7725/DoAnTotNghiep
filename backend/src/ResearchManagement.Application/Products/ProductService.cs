@@ -334,7 +334,8 @@ public sealed class ProductService(
                 "PHAN_HOI",
                 reason,
                 $"TRA_LAI:PRODUCT:{product.Id}:{Guid.NewGuid():N}",
-                scientificProductId: product.Id);
+                scientificProductId: product.Id,
+                actionPath: $"products:{product.Id}");
             notification.MarkAsSent();
             await notifications.AddAsync(notification, cancellationToken);
         }

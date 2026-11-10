@@ -9,11 +9,15 @@ using ResearchManagement.Application.Evaluations.Models;
 using ResearchManagement.Domain.Constants;
 using ResearchManagement.Domain.Entities;
 using ResearchManagement.Infrastructure.Persistence;
+using ResearchManagement.Api.Infrastructure;
 
 namespace ResearchManagement.Api.Controllers;
 
 [ApiController, Route("api/evaluations"), Authorize]
-public sealed class EvaluationsController(ApplicationDbContext db, ICurrentUser currentUser) : ControllerBase
+public sealed class EvaluationsController(
+    ApplicationDbContext db,
+    ICurrentUser currentUser,
+    WorkflowNotificationDispatcher workflowNotifications) : ControllerBase
 {
     [HttpGet("me")]
     public async Task<ActionResult<EvaluationDetailResponse>> Mine([FromQuery] long academicYearId, CancellationToken ct)
@@ -128,6 +132,21 @@ public sealed class EvaluationsController(ApplicationDbContext db, ICurrentUser 
         var classification = await CalculateClassificationAsync(evaluation, ct);
         try { evaluation.Finalize(classification.Name, classification.Basis); }
         catch (InvalidOperationException e) { throw new ConflictException(e.Message); }
+        var resultOwner = await db.Lecturers.AsNoTracking()
+            .Where(x => x.Id == evaluation.LecturerId)
+            .Select(x => new { x.AccountId, x.FullName })
+            .SingleAsync(ct);
+        var yearCode = await db.AcademicYears.AsNoTracking()
+            .Where(x => x.Id == evaluation.AcademicYearId)
+            .Select(x => x.Code)
+            .SingleAsync(ct);
+        await workflowNotifications.QueueForAccountAsync(
+            resultOwner.AccountId,
+            $"Kết quả thi đua năm học {yearCode} của bạn đã được chốt: {classification.Name}.",
+            $"EVALUATION_FINALIZED:{evaluation.Id}",
+            "evaluations",
+            null,
+            ct);
         await db.SaveChangesAsync(ct);
         return await ToDetail(evaluation, ct);
     }

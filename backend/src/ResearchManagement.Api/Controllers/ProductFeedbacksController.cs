@@ -32,7 +32,7 @@ public sealed class ProductFeedbacksController(ApplicationDbContext db, ICurrent
         var owner = await db.Lecturers.SingleAsync(x => x.Id == product.SubmittedByLecturerId, ct);
         var feedback = new ProductFeedback(productId, user.Id!.Value, request.Content);
         db.ProductFeedbacks.Add(feedback); await db.SaveChangesAsync(ct);
-        var notification = new Notification(owner.AccountId, "PHAN_HOI", $"Phòng QLKH có phản hồi mới cho sản phẩm '{product.Title}'.", $"PHAN_HOI:{feedback.Id}", feedbackId: feedback.Id, scientificProductId: productId);
+        var notification = new Notification(owner.AccountId, "PHAN_HOI", $"Phòng QLKH có phản hồi mới cho sản phẩm '{product.Title}'.", $"PHAN_HOI:{feedback.Id}", feedbackId: feedback.Id, scientificProductId: productId, actionPath: $"products:{productId}");
         notification.MarkAsSent(); db.Notifications.Add(notification); await db.SaveChangesAsync(ct);
         var senderName = await db.Accounts.Where(x => x.Id == user.Id.Value).Select(x => x.Username).SingleAsync(ct);
         return CreatedAtAction(nameof(Get), new { productId }, new { feedback.Id, feedback.ProductId, feedback.SenderAccountId, SenderName = senderName, feedback.Content, feedback.CreatedAt });
