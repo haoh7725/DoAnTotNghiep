@@ -19,6 +19,32 @@ public sealed class ReportsController(ApplicationDbContext db, ICurrentUser curr
     public async Task<ActionResult<ResearchReportResponse>> Get([FromQuery] ResearchReportQuery query, CancellationToken ct) =>
         await BuildAsync(query, ct);
 
+    [HttpGet("trends")]
+    public async Task<ActionResult<IReadOnlyList<ResearchReportTrend>>> Trends(
+        [FromQuery] long[] academicYearIds,
+        [FromQuery] long? facultyId,
+        [FromQuery] long? departmentId,
+        CancellationToken ct)
+    {
+        if (academicYearIds.Length < 2)
+            throw new BusinessRuleException("Phải chọn ít nhất hai năm học để so sánh.");
+        if (academicYearIds.Length > 10)
+            throw new BusinessRuleException("Chỉ được so sánh tối đa 10 năm học.");
+        var result = new List<ResearchReportTrend>();
+        foreach (var yearId in academicYearIds.Distinct())
+        {
+            var report = await BuildAsync(new ResearchReportQuery
+            {
+                AcademicYearId = yearId,
+                FacultyId = facultyId,
+                DepartmentId = departmentId
+            }, ct);
+            result.Add(new ResearchReportTrend(report.AcademicYearId, report.AcademicYearCode,
+                report.Totals.Lecturers, report.Totals.Products, report.Totals.Hours, report.Totals.Points));
+        }
+        return result;
+    }
+
     [HttpGet("export.xlsx")]
     public async Task<IActionResult> Excel([FromQuery] ResearchReportQuery query, CancellationToken ct)
     {
@@ -113,7 +139,9 @@ public sealed class ReportsController(ApplicationDbContext db, ICurrentUser curr
             }
         }
         var rows = new List<ResearchReportRow>();
-        foreach (var lecturer in lecturers.Where(x => productCounts.ContainsKey(x.Id) || latest.ContainsKey(x.Id)))
+        // Báo cáo phải phản ánh toàn bộ giảng viên trong phạm vi, kể cả người chưa
+        // có sản phẩm hoặc chưa được chốt đánh giá (các chỉ số của họ bằng 0).
+        foreach (var lecturer in lecturers)
         {
             latest.TryGetValue(lecturer.Id, out var evaluation);
             var departmentId = evaluation?.DepartmentIdSnapshot ?? lecturer.DepartmentId;
@@ -162,3 +190,4 @@ public sealed record ResearchReportTotals(int Lecturers, int Products, decimal H
 public sealed record ResearchReportGroup(string Name, int Lecturers, int Products, decimal Hours, decimal Points);
 public sealed record ResearchReportRow(long LecturerId, string LecturerCode, string LecturerName, long DepartmentId, string DepartmentName, string? AcademicRank, string? Degree, string? Classification, int Products, int ConvertedProducts, decimal Hours, decimal Points, DateTimeOffset? EvaluatedAt);
 public sealed record ResearchReportResponse(long AcademicYearId, string AcademicYearCode, ResearchReportTotals Totals, IReadOnlyList<ResearchReportGroup> ByAcademicRank, IReadOnlyList<ResearchReportGroup> ByDegree, IReadOnlyList<ResearchReportGroup> ByDepartment, IReadOnlyList<ResearchReportRow> Rows);
+public sealed record ResearchReportTrend(long AcademicYearId, string AcademicYearCode, int Lecturers, int Products, decimal Hours, decimal Points);

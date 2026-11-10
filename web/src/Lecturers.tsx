@@ -241,9 +241,52 @@ function LecturerDetail({ user, lookups, lecturerId, onBack }: {
     <h1>{lecturerId === undefined ? 'Hồ sơ của tôi' : lecturer.fullName}</h1>
     <p className="muted">{lecturer.code} · {lecturer.departmentName} · {lecturer.facultyName}</p>
     <p className={`lec-notice ${level}`} role="note"><strong>{{ office: 'Toàn quyền chỉnh sửa', owner: 'Chính chủ', view: 'Chỉ xem' }[level]}</strong>{notice}</p>
+    {perm.office && <PlanReopenSection lecturer={lecturer} lookups={lookups} />}
     <PersonalSection key={`p${lecturer.id}`} lecturer={lecturer} perm={perm} lookups={lookups} onSaved={setLecturer} />
     <ProfileSection key={`s${lecturer.id}`} lecturer={lecturer} profile={profile} canEdit={perm.editProfile} onSaved={setProfile} />
   </>
+}
+
+type PlanSummary = {
+  id: number; academicYearId: number; committedProductCount: number
+  status: string; deadline: string | null
+}
+
+function PlanReopenSection({ lecturer, lookups }: { lecturer: Lecturer; lookups: Lookups | null }) {
+  const [yearId, setYearId] = useState('')
+  const [plan, setPlan] = useState<PlanSummary | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const years = lookups?.academicYears ?? []
+
+  useEffect(() => {
+    if (!yearId) { setPlan(null); return }
+    let active = true; setLoading(true); setError('')
+    api<PlanSummary | undefined>(`/research-plans?lecturerId=${lecturer.id}&academicYearId=${yearId}`)
+      .then(data => { if (active) setPlan(data ?? null) })
+      .catch(e => { if (active) setError((e as Error).message) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [lecturer.id, yearId])
+
+  async function reopen() {
+    if (!plan || !confirm('Mở lại kế hoạch để giảng viên chỉnh sửa? Giảng viên phải đăng ký lại sau khi hoàn tất.')) return
+    setBusy(true); setError('')
+    try { setPlan(await api<PlanSummary>(`/research-plans/${plan.id}/reopen`, 'POST')) }
+    catch (e) { setError((e as Error).message) }
+    finally { setBusy(false) }
+  }
+
+  return <section className="panel">
+    <div className="section-top"><div><h2>Điều chỉnh kế hoạch NCKH</h2><p className="muted">Phòng QLKH có thể mở lại kế hoạch đã đăng ký; giảng viên sẽ nhận thông báo và phải đăng ký lại.</p></div></div>
+    {error && <p className="alert" role="alert">{error}</p>}
+    <label>Năm học<select value={yearId} onChange={e => setYearId(e.target.value)}><option value="">Chọn năm học</option>{years.map(year => <option key={year.id} value={year.id}>{year.code}</option>)}</select></label>
+    {loading ? <p>Đang kiểm tra kế hoạch…</p> : yearId && !plan ? <p className="empty">Giảng viên chưa có kế hoạch trong năm học này.</p> : plan && <div className="section-top">
+      <p><strong>{plan.committedProductCount}</strong> sản phẩm cam kết · Trạng thái: <strong>{plan.status === 'DA_DANG_KY' ? 'Đã đăng ký' : 'Đang chỉnh sửa'}</strong></p>
+      {plan.status === 'DA_DANG_KY' && <button className="primary" disabled={busy} onClick={() => void reopen()}>{busy ? 'Đang mở…' : 'Mở lại kế hoạch'}</button>}
+    </div>}
+  </section>
 }
 
 type Perm = ReturnType<typeof permissionsFor>

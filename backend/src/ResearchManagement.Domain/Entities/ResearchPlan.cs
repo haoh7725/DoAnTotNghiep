@@ -41,4 +41,11 @@ public sealed class ResearchPlan : BaseEntity
     {
         Status = "DA_DANG_KY";
     }
+
+    public void Reopen()
+    {
+        if (Status != "DA_DANG_KY")
+            throw new InvalidOperationException("Chỉ kế hoạch đã đăng ký mới có thể mở lại.");
+        Status = "NHAP";
+    }
 }

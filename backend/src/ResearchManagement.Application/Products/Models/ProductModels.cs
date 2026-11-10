@@ -43,6 +43,17 @@ public sealed class UpdateProductRequest
     [StringLength(100)] public string? ProjectLevel { get; set; }
 }
 
+public sealed class UpdateArticleProgressRequest
+{
+    [Required, RegularExpression("^(DANG_VIET|DANG_PHAN_BIEN|DA_NHAN_XET|DA_NHAN_DANG|DA_XUAT_BAN)$")]
+    public string ArticleStatus { get; set; } = string.Empty;
+
+    public DateOnly? PublishedDate { get; set; }
+
+    [StringLength(500)]
+    public string? PublicationInfo { get; set; }
+}
+
 public sealed class ReviewProductRequest
 {
     /// <summary>"APPROVE" hoặc "REJECT".</summary>

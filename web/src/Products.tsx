@@ -50,9 +50,9 @@ const canManagerReview = (user: Profile | null, p: Product) => {
     return fromStatus === p.status
   })
 }
-// PHONG_QLKH duyệt bước cuối (PHONG_QLKH_DUYET → DA_DUYET) cần nhập điểm
+// Phòng QLKH thẩm định và công nhận trong một bước; vẫn hỗ trợ trạng thái cũ.
 const needsScore = (user: Profile | null, p: Product) =>
-  p.status === 'PHONG_QLKH_DUYET' &&
+  ['TRUONG_KHOA_DUYET', 'PHONG_QLKH_DUYET'].includes(p.status) &&
   user?.roles.some(r => r.role === 'PHONG_QLKH' || r.role === 'QUAN_TRI')
 
 
@@ -91,6 +91,7 @@ export function ProductReviewWorkspace({ user, initialProductId }: { user: Profi
       key={selected}
       id={selected}
       user={user}
+      allowProgressUpdate={false}
       onBack={() => {
         setSelected(null)
         setRevision(value => value + 1)
@@ -174,7 +175,7 @@ export function ProductWorkspace({ user, initialProductId }: { user?: Profile | 
   }, [revision])
 
   if (selected !== null)
-    return <ProductDetail id={selected} user={user ?? null} onBack={() => { setSelected(null); setRevision(x => x + 1) }} />
+    return <ProductDetail id={selected} user={user ?? null} allowProgressUpdate onBack={() => { setSelected(null); setRevision(x => x + 1) }} />
 
   return <>
     <p className="eyebrow">SẢN PHẨM KHOA HỌC</p>
@@ -249,11 +250,12 @@ function CreateProduct({ onCreated }: { onCreated: (id: number) => void }) {
 }
 
 // ── ProductDetail ──────────────────────────────────────────────────────────────
-function ProductDetail({ id, user, onBack }: { id: number; user: Profile | null; onBack: () => void }) {
+function ProductDetail({ id, user, allowProgressUpdate = false, onBack }: { id: number; user: Profile | null; allowProgressUpdate?: boolean; onBack: () => void }) {
   const [p, setP] = useState<Product | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [editingProgress, setEditingProgress] = useState(false)
   const [revision, setRevision] = useState(0)
   const [linkTargets, setLinkTargets] = useState<AvailableTarget[]>([])
   const [planItems, setPlanItems] = useState<PlanItem[]>([])
@@ -294,6 +296,27 @@ function ProductDetail({ id, user, onBack }: { id: number; user: Profile | null;
     setBusy(true); setError('')
     try { setP(await api<Product>(`/products/${id}/submit`, 'POST')) }
     catch (x) { setError((x as Error).message) }
+    finally { setBusy(false) }
+  }
+
+  async function saveProgress(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = new FormData(e.currentTarget)
+    const articleStatus = String(form.get('articleStatus') ?? '')
+    const publishedDate = String(form.get('publishedDate') ?? '') || null
+    if (articleStatus === 'DA_XUAT_BAN' && !publishedDate) {
+      setError('Bài viết đã xuất bản phải có ngày công bố.')
+      return
+    }
+    setBusy(true); setError('')
+    try {
+      setP(await api<Product>(`/products/${id}/article-progress`, 'PATCH', {
+        articleStatus,
+        publishedDate,
+        publicationInfo: String(form.get('publicationInfo') ?? '').trim() || null,
+      }))
+      setEditingProgress(false)
+    } catch (x) { setError((x as Error).message) }
     finally { setBusy(false) }
   }
 
@@ -348,11 +371,25 @@ function ProductDetail({ id, user, onBack }: { id: number; user: Profile | null;
           : <section className="panel">
             <div className="section-top">
               <h2>Thông tin</h2>
-              {editable(p) && <div className="actions">
-                <button onClick={() => setEditing(true)}>Chỉnh sửa</button>
-                <button className="primary" disabled={busy} onClick={submitProduct}>Gửi duyệt</button>
-              </div>}
+              <div className="actions">
+                {allowProgressUpdate && p.status !== 'DA_DUYET' &&
+                  <button onClick={() => setEditingProgress(x => !x)}>Cập nhật tiến độ bài viết</button>}
+                {editable(p) && <>
+                  <button onClick={() => setEditing(true)}>Chỉnh sửa nội dung</button>
+                  <button className="primary" disabled={busy} onClick={submitProduct}>Gửi duyệt</button>
+                </>}
+              </div>
             </div>
+            {editingProgress && <form className="product-progress-form" onSubmit={saveProgress}>
+              <h3>Tiến độ xuất bản</h3>
+              <label>Trạng thái bài viết<select name="articleStatus" required defaultValue={p.articleStatus ?? 'DANG_VIET'}>
+                <option value="DANG_VIET">Đang viết</option><option value="DANG_PHAN_BIEN">Đang phản biện</option>
+                <option value="DA_NHAN_XET">Đã nhận xét</option><option value="DA_XUAT_BAN">Đã xuất bản</option>
+              </select></label>
+              <label>Ngày công bố<input name="publishedDate" type="date" max={new Date().toISOString().slice(0, 10)} defaultValue={p.publishedDate ?? ''} /></label>
+              <label>Nơi công bố<input name="publicationInfo" maxLength={500} defaultValue={p.publicationInfo ?? ''} /></label>
+              <div className="actions"><button className="primary" disabled={busy}>Lưu tiến độ</button><button type="button" onClick={() => setEditingProgress(false)}>Hủy</button></div>
+            </form>}
             {p.status === 'TRA_LAI' && (
               <p className="alert review-alert" role="alert">
                 ⚠️ Sản phẩm được yêu cầu bổ sung. Vui lòng chỉnh sửa và gửi duyệt lại.

@@ -79,17 +79,18 @@ public sealed class ResearchNormService(
                 "Giảng viên đã có định mức NCKH trong năm học này.");
         }
 
-        if (request.RequiredHours < 0)
+        if (request.RequiredHours < 0 || request.RequiredPoints < 0)
         {
             throw new BusinessRuleException(
-                "Số giờ định mức không được âm.");
+                "Số giờ và điểm định mức không được âm.");
         }
 
         var researchNorm = new ResearchNorm(
             request.LecturerId,
             request.AcademicYearId,
             request.RequiredHours,
-            request.Basis);
+            request.Basis,
+            request.RequiredPoints);
 
         await researchNorms.AddAsync(
             researchNorm,
@@ -112,15 +113,16 @@ public sealed class ResearchNormService(
             ?? throw new NotFoundException(
                 "Không tìm thấy định mức NCKH.");
 
-        if (request.RequiredHours < 0)
+        if (request.RequiredHours < 0 || request.RequiredPoints < 0)
         {
             throw new BusinessRuleException(
-                "Số giờ định mức không được âm.");
+                "Số giờ và điểm định mức không được âm.");
         }
 
         researchNorm.Update(
             request.RequiredHours,
-            request.Basis);
+            request.Basis,
+            request.RequiredPoints);
 
         await researchNorms.SaveChangesAsync(
             cancellationToken);
@@ -135,5 +137,6 @@ public sealed class ResearchNormService(
             researchNorm.LecturerId,
             researchNorm.AcademicYearId,
             researchNorm.RequiredHours,
+            researchNorm.RequiredPoints,
             researchNorm.Basis);
 }

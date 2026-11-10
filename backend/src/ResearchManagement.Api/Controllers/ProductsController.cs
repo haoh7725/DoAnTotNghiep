@@ -194,6 +194,18 @@ public sealed class ProductsController(
         return Ok(result);
     }
 
+    // PATCH /api/products/{id}/article-progress
+    // Chỉ cập nhật trạng thái xuất bản, không mở khóa toàn bộ nội dung sản phẩm.
+    [HttpPatch("api/products/{id:long}/article-progress")]
+    public async Task<ActionResult<ProductResponse>> UpdateArticleProgress(
+        long id,
+        [FromBody] UpdateArticleProgressRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await productService.UpdateArticleProgressAsync(id, request, cancellationToken);
+        return Ok(result);
+    }
+
     public sealed record LinkTargetRequest(long ResearchTargetId);
 
     [HttpPost("api/products/{id:long}/link-target")]
@@ -248,13 +260,8 @@ public sealed class ProductsController(
                     unit.FacultyId, unit.DepartmentId, result.Id, cancellationToken);
             else if (result.Status == ProductStatuses.FacultyDeanApproved)
                 await workflowNotifications.QueueForRoleAsync(Roles.ResearchOffice,
-                    $"Sản phẩm '{result.Title}' đã được Trưởng khoa duyệt và đang chờ Phòng QLKH thẩm định.",
+                    $"Sản phẩm '{result.Title}' đã được Trưởng khoa duyệt và đang chờ Phòng QLKH thẩm định, công nhận.",
                     $"PRODUCT_WAIT_OFFICE:{result.Id}", $"product-reviews:{result.Id}",
-                    unit.FacultyId, unit.DepartmentId, result.Id, cancellationToken);
-            else if (result.Status == ProductStatuses.ResearchOfficeApproved)
-                await workflowNotifications.QueueForRoleAsync(Roles.ResearchOffice,
-                    $"Sản phẩm '{result.Title}' đã thẩm định và đang chờ Phòng QLKH công nhận kết quả.",
-                    $"PRODUCT_WAIT_FINAL:{result.Id}", $"product-reviews:{result.Id}",
                     unit.FacultyId, unit.DepartmentId, result.Id, cancellationToken);
             else if (result.Status == ProductStatuses.Approved)
             {

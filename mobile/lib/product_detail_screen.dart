@@ -327,6 +327,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     return isOwner || isAdmin;
   }
 
+  bool _canUpdateArticleProgress() {
+    if (_product == null || _product!['status'] == 'DA_DUYET') return false;
+    final submittedByLecturerId = _product!['submittedByLecturerId'];
+    final isOwner = _currentLecturerId != null &&
+        _currentLecturerId == submittedByLecturerId;
+    return isOwner || _currentUserRoles.contains('QUAN_TRI');
+  }
+
   String _getEditDisabledReason() {
     if (_product == null) return '';
     final status = _product!['status'] as String? ?? '';
@@ -348,7 +356,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   // ──── Cập nhật trạng thái bài viết & thông tin ────────────────────────────
   Future<void> _showUpdateArticleStatusDialog() async {
-    if (!_canEdit() || _product == null) return;
+    if (!_canUpdateArticleProgress() || _product == null) return;
 
     final p = _product!;
     String? currentArticleStatus = p['articleStatus'] as String?;
@@ -557,22 +565,27 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                         ? '${selectedDate!.year}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}'
                                         : null;
 
+                                    if (selectedStatus == null) {
+                                      throw const FormatException(
+                                        'Vui lòng chọn trạng thái bài viết.',
+                                      );
+                                    }
+                                    if (selectedStatus == 'DA_XUAT_BAN' &&
+                                        selectedDate == null) {
+                                      throw const FormatException(
+                                        'Bài viết đã xuất bản phải có ngày công bố.',
+                                      );
+                                    }
                                     final payload = <String, dynamic>{
-                                      'title': p['title'],
-                                      'description': p['description'],
                                       'publicationInfo':
                                           pubInfoController.text.trim().isEmpty
                                           ? null
                                           : pubInfoController.text.trim(),
                                       'publishedDate': dateStr,
                                       'articleStatus': selectedStatus,
-                                      'journalIndex': p['journalIndex'],
-                                      'journalClassification':
-                                          p['journalClassification'],
-                                      'projectLevel': p['projectLevel'],
                                     };
 
-                                    await widget.client.updateProduct(
+                                    await widget.client.updateArticleProgress(
                                       widget.productId,
                                       payload,
                                     );
@@ -737,7 +750,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final p = _product!;
     final coAuthors = p['coAuthors'] as List<dynamic>? ?? [];
     final evidences = p['evidences'] as List<dynamic>? ?? [];
-    final canEdit = _canEdit();
+    final canUpdateProgress = _canUpdateArticleProgress();
     final disabledReason = _getEditDisabledReason();
     final articleStatus = p['articleStatus'] as String?;
 
@@ -838,7 +851,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 const SizedBox(height: 12),
 
                 // Hành động chỉnh sửa hoặc thông báo khóa quyền
-                if (canEdit) ...[
+                if (canUpdateProgress) ...[
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
@@ -856,7 +869,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       onPressed: _showUpdateArticleStatusDialog,
                       icon: const Icon(Icons.edit_outlined, size: 20),
                       label: const Text(
-                        'Cập nhật trạng thái',
+                        'Cập nhật tiến độ bài viết',
                         textAlign: TextAlign.center,
                       ),
                     ),

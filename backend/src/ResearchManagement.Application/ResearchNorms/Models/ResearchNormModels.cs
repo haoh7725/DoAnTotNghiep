@@ -4,17 +4,20 @@ public sealed record CreateResearchNormRequest(
     long LecturerId,
     long AcademicYearId,
     decimal RequiredHours,
-    string? Basis);
+    string? Basis,
+    decimal RequiredPoints = 100m);
 
 public sealed record UpdateResearchNormRequest(
     decimal RequiredHours,
-    string? Basis);
+    string? Basis,
+    decimal RequiredPoints = 100m);
 
 public sealed record ResearchNormResponse(
     long Id,
     long LecturerId,
     long AcademicYearId,
     decimal RequiredHours,
+    decimal RequiredPoints,
     string? Basis,
     string? LecturerCode = null,
     string? LecturerName = null);

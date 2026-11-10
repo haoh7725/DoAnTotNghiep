@@ -113,6 +113,10 @@ public sealed class ResearchPlanItemService(
         }
         if (request.Deadline.HasValue && plan.Deadline.HasValue && request.Deadline.Value > plan.Deadline.Value)
             throw new BusinessRuleException("Hạn nội dung không được sau hạn chung của kế hoạch.");
+        var existingProducts = await products.GetByPlanItemIdAsync(item.Id, cancellationToken);
+        if (request.CommittedQuantity < existingProducts.Count)
+            throw new BusinessRuleException(
+                $"Không thể giảm cam kết xuống {request.CommittedQuantity} vì đã có {existingProducts.Count} sản phẩm liên kết với nội dung này.");
 
         item.Update(
             request.Name,

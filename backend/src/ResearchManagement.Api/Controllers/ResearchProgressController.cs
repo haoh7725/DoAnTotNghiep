@@ -32,12 +32,14 @@ public sealed class ResearchProgressController(
             allocations = allocations.Where(x => currentUser.CanAccess(target.FacultyId, x.DepartmentId)).ToList();
         if (!canViewWholeFaculty && allocations.Count == 0)
             throw new ForbiddenException("Không có quyền xem tiến độ chỉ tiêu này.");
-        var approved = await (from product in db.Products.AsNoTracking()
+        var approved = await (from allocation in db.ResearchTargetAllocations.AsNoTracking()
+                              join personal in db.LecturerTargetAllocations.AsNoTracking() on allocation.Id equals personal.DepartmentAllocationId
+                              from product in db.Products.AsNoTracking()
                               join item in db.ResearchPlanItems.AsNoTracking() on product.ResearchPlanItemId equals item.Id
                               join type in db.ProductTypes.AsNoTracking() on item.ProductTypeId equals type.Id
-                              join personal in db.LecturerTargetAllocations.AsNoTracking() on product.SubmittedByLecturerId equals personal.LecturerId
-                              join allocation in db.ResearchTargetAllocations.AsNoTracking() on personal.DepartmentAllocationId equals allocation.Id
                               where allocation.ResearchTargetId == targetId && product.ResearchTargetId == targetId && type.Code == "BAI_BAO"
+                                  && (product.SubmittedByLecturerId == personal.LecturerId ||
+                                      db.ProductCoAuthors.Any(a => a.ProductId == product.Id && a.LecturerId == personal.LecturerId))
                                   && product.Status == "DA_DUYET" && product.ArticleStatus == "DA_XUAT_BAN"
                               group product by allocation.DepartmentId into grouped
                               select new { DepartmentId = grouped.Key, Count = grouped.Select(x => x.Id).Distinct().Count() })
@@ -107,23 +109,20 @@ public sealed class ResearchProgressController(
         // Bộ môn được xác định từ giảng viên đứng tên gửi.
         var approvedArticleIds =
             from product in db.Products.AsNoTracking()
-            join author in db.Lecturers.AsNoTracking()
-                on product.SubmittedByLecturerId equals author.Id
             join item in db.ResearchPlanItems.AsNoTracking()
                 on product.ResearchPlanItemId equals item.Id
             join plan in db.ResearchPlans.AsNoTracking()
                 on item.ResearchPlanId equals plan.Id
             join productType in db.ProductTypes.AsNoTracking()
                 on item.ProductTypeId equals productType.Id
-            where author.DepartmentId == department.Id
-                && plan.LecturerId == author.Id
-                && plan.AcademicYearId == academicYearId
+            where plan.AcademicYearId == academicYearId
                 && productType.Code == "BAI_BAO"
                 && product.Status == "DA_DUYET"
                 && product.ArticleStatus == "DA_XUAT_BAN"
                 && product.ResearchTargetId.HasValue
                 && db.LecturerTargetAllocations.Any(personal =>
-                    personal.LecturerId == author.Id &&
+                    (personal.LecturerId == product.SubmittedByLecturerId ||
+                     db.ProductCoAuthors.Any(coAuthor => coAuthor.ProductId == product.Id && coAuthor.LecturerId == personal.LecturerId)) &&
                     db.ResearchTargetAllocations.Any(a => a.Id == personal.DepartmentAllocationId &&
                         a.ResearchTargetId == product.ResearchTargetId && a.DepartmentId == department.Id &&
                         a.FacultyId == department.FacultyId))
@@ -191,14 +190,17 @@ public sealed class ResearchProgressController(
 
         if (plan != null)
         {
-            // Chỉ tính sản phẩm của giảng viên này,
-            // gắn với nội dung thuộc đúng kế hoạch đang xem.
+            // Tính cả sản phẩm đứng tên chính và sản phẩm có giảng viên là đồng tác giả,
+            // thống nhất với cách đánh giá, quy đổi cuối năm.
             var query =
                 from product in db.Products.AsNoTracking()
                 join item in db.ResearchPlanItems.AsNoTracking()
                     on product.ResearchPlanItemId equals item.Id
-                where item.ResearchPlanId == plan.Id
-                    && product.SubmittedByLecturerId == lecturer.Id
+                join productPlan in db.ResearchPlans.AsNoTracking()
+                    on item.ResearchPlanId equals productPlan.Id
+                where productPlan.AcademicYearId == academicYearId
+                    && (product.SubmittedByLecturerId == lecturer.Id ||
+                        db.ProductCoAuthors.Any(author => author.ProductId == product.Id && author.LecturerId == lecturer.Id))
                     && product.Status == "DA_DUYET"
                 select product.Id;
 
