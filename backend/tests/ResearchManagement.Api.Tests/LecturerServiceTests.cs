@@ -48,6 +48,17 @@ public class LecturerServiceTests
     // ---- Tạo, sửa, xóa ----
 
     [Fact]
+    public async Task AccountOptions_OnlyResearchOfficeOrAdminCanRead()
+    {
+        Assert.Equal(4, (await Lecturers(Office()).GetAvailableAccountOptionsAsync(default)).Count);
+        Assert.Equal(4, (await Lecturers(Admin()).GetAvailableAccountOptionsAsync(default)).Count);
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            Lecturers(Dean(1)).GetAvailableAccountOptionsAsync(default));
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            Lecturers(Board()).GetAvailableAccountOptionsAsync(default));
+    }
+
+    [Fact]
     public async Task Create_ByOffice_ReturnsDepartmentAndFacultyFromBaseData()
     {
         var result = await Lecturers(Office()).CreateAsync(NewRequest(departmentId: 30), default);
@@ -396,6 +407,10 @@ public class LecturerServiceTests
 
     private sealed class FakeAccounts(params long[] knownIds) : IAccountRepository
     {
+        public Task<IReadOnlyList<LecturerAccountOptionResponse>> GetAvailableLecturerAccountsAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<LecturerAccountOptionResponse>>(knownIds
+                .Select(id => new LecturerAccountOptionResponse(id, "user" + id, "Tài khoản " + id, null, [Roles.Lecturer]))
+                .ToList());
         public Task<Account?> GetByIdAsync(long id, CancellationToken cancellationToken) =>
             Task.FromResult<Account?>(knownIds.Contains(id) ? new Account("user" + id, "", "Tài khoản " + id) : null);
         public Task<Account?> GetByUsernameAsync(string username, CancellationToken cancellationToken) =>

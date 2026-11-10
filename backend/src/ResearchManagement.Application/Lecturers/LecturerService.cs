@@ -1,4 +1,5 @@
 using ResearchManagement.Application.Auth.Abstractions;
+using ResearchManagement.Application.Auth.Models;
 using ResearchManagement.Application.Common;
 using ResearchManagement.Application.Lecturers.Abstractions;
 using ResearchManagement.Application.Lecturers.Models;
@@ -16,6 +17,13 @@ public sealed class LecturerService(
     public Task<PagedResult<LecturerResponse>> SearchAsync(
         LecturerSearchQuery query, CancellationToken cancellationToken) =>
         lecturers.SearchAsync(query, LecturerAccess.VisibilityOf(currentUser), cancellationToken);
+
+    public Task<IReadOnlyList<LecturerAccountOptionResponse>> GetAvailableAccountOptionsAsync(
+        CancellationToken cancellationToken)
+    {
+        RequireOffice();
+        return accounts.GetAvailableLecturerAccountsAsync(cancellationToken);
+    }
 
     public async Task<LecturerResponse> GetByIdAsync(long id, CancellationToken cancellationToken)
     {

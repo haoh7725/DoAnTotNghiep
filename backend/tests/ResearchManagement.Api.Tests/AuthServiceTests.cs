@@ -90,6 +90,8 @@ public class AuthServiceTests
 
     private sealed class FakeAccountRepository : IAccountRepository
     {
+        public Task<IReadOnlyList<LecturerAccountOptionResponse>> GetAvailableLecturerAccountsAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<LecturerAccountOptionResponse>>([]);
         public List<Account> Items { get; } = [];
 
         public Task<Account?> GetByUsernameAsync(string username, CancellationToken ct) =>

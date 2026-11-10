@@ -56,6 +56,11 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
   const [targetPanel, setTargetPanel] = useState<'overview' | 'allocations' | 'lecturers'>('overview')
 
   const selectedTarget = targets.find(t => t.id === selectedId)
+  const isResearchOffice = roles.includes('PHONG_QLKH')
+  const isFacultyDean = roles.includes('TRUONG_KHOA')
+  const isDepartmentHead = roles.includes('TRUONG_BO_MON')
+  const isExecutive = roles.includes('BAN_GIAM_HIEU')
+  const isAdministrator = roles.includes('QUAN_TRI')
   const canReceiveAndDistribute = roles.some(x => x === 'TRUONG_KHOA' || x === 'QUAN_TRI')
   const faculties = lookups?.faculties ?? []
   const departments = lookups?.departments ?? []
@@ -329,6 +334,40 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
   const isAllocationLocked = selectedTarget?.status === 'DA_KHOA'
   const canAssignLecturers = roles.some(x => ['TRUONG_BO_MON', 'QUAN_TRI'].includes(x))
   const canViewLecturerAssignments = roles.some(x => ['TRUONG_BO_MON', 'PHONG_QLKH', 'QUAN_TRI'].includes(x))
+  const canViewDepartmentAllocations = !isExecutive && (
+    isResearchOffice || isFacultyDean || isAdministrator ||
+    (isDepartmentHead && isAllocationLocked)
+  )
+  const remainingAllocation = selectedTarget
+    ? selectedTarget.assignedArticleCount - allocatedTotal
+    : 0
+
+  function workflowStage(target: Target) {
+    if (target.status === 'CHO_TIEP_NHAN') return 0
+    if (target.status === 'DA_TIEP_NHAN' || target.status === 'CONG_BO') return 1
+    if (target.status === 'DA_KHOA' && (progress?.approvedArticles ?? 0) > 0) return 4
+    if (target.status === 'DA_KHOA') return 3
+    return -1
+  }
+
+  function nextActionText(target: Target) {
+    if (target.status === 'DA_HUY') return 'Chỉ tiêu đã hủy, không còn thao tác cần thực hiện.'
+    if (isExecutive) return 'Theo dõi kết quả toàn trường; tài khoản Ban giám hiệu chỉ được xem, không thực hiện phân bổ.'
+    if (isResearchOffice) return target.status === 'DA_KHOA'
+      ? 'Theo dõi việc phân công cho giảng viên và kết quả thực hiện của các đơn vị.'
+      : 'Theo dõi khoa tiếp nhận và phân bổ chỉ tiêu; Phòng QLKH không phân bổ thay cho khoa.'
+    if (isFacultyDean) {
+      if (target.status === 'CHO_TIEP_NHAN') return 'Tiếp nhận chỉ tiêu do Phòng QLKH giao.'
+      if (target.status === 'DA_TIEP_NHAN') return 'Công bố chỉ tiêu để bắt đầu phân bổ xuống các bộ môn.'
+      if (target.status === 'CONG_BO' && remainingAllocation > 0) return `Phân bổ thêm ${remainingAllocation} bài cho các bộ môn trước khi khóa.`
+      if (target.status === 'CONG_BO') return 'Đã phân bổ đủ. Kiểm tra lần cuối và khóa để chuyển cho Trưởng bộ môn.'
+      return 'Phân bổ đã khóa. Trưởng bộ môn sẽ tiếp tục phân công cho giảng viên.'
+    }
+    if (isDepartmentHead) return isAllocationLocked
+      ? 'Mở chỉ tiêu bộ môn được nhận và phân công cho từng giảng viên.'
+      : 'Chờ Trưởng khoa hoàn tất và khóa phân bổ xuống bộ môn.'
+    return 'Theo dõi trạng thái và tiến độ thực hiện chỉ tiêu.'
+  }
 
   return (
     <>
@@ -381,7 +420,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
                     <td>{yearName(target.academicYearId)}</td>
                     <td>{target.assignedArticleCount}{target.journalConferenceId ? ` · ${catalog.find(x => x.id === target.journalConferenceId)?.name ?? 'Danh mục đã xóa'}` : ''}</td>
                     <td>{target.deadline || 'Chưa quy định'}</td>
-                    <td>{({ CHO_TIEP_NHAN: 'Chờ tiếp nhận', DA_TIEP_NHAN: 'Đã tiếp nhận', CONG_BO: 'Đã công bố', DA_KHOA: 'Đã khóa', DA_HUY: 'Đã hủy' } as Record<string,string>)[target.status] ?? target.status}</td>
+                    <td>{({ CHO_TIEP_NHAN: 'Chờ Trưởng khoa tiếp nhận', DA_TIEP_NHAN: 'Đã tiếp nhận · Chờ mở phân bổ', CONG_BO: 'Đang phân bổ bộ môn', DA_KHOA: 'Đã khóa · Bộ môn thực hiện', DA_HUY: 'Đã hủy' } as Record<string,string>)[target.status] ?? target.status}</td>
                     <td>
                       <button
                         type="button"
@@ -500,7 +539,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
 
       <section className="panel">
         <div className="section-heading">
-          <h2>Thực hiện chỉ tiêu</h2>
+          <h2>Quy trình thực hiện chỉ tiêu</h2>
           {targetPanel === 'allocations' && canEditAllocations && selectedTarget?.status === 'CONG_BO' && (
             <button
               type="button"
@@ -508,7 +547,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
               onClick={openNewAllocation}
               disabled={availableDepartments.length === 0}
             >
-              + Thêm phân bổ
+              + Phân bổ cho bộ môn
             </button>
           )}
         </div>
@@ -527,16 +566,38 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
               {' · '}
               <strong>Đã phân bổ:</strong> {allocatedTotal} bài
               {' · '}
-              <strong>Chênh lệch:</strong>{' '}
-              {selectedTarget.assignedArticleCount - allocatedTotal} bài
+              <strong>{remainingAllocation >= 0 ? 'Còn chưa phân bổ:' : 'Phân bổ vượt chỉ tiêu:'}</strong>{' '}
+              {Math.abs(remainingAllocation)} bài
             </p>
-            <div className="tabs target-workflow-tabs" aria-label="Các bước thực hiện chỉ tiêu">
-              <button className={targetPanel === 'overview' ? 'active' : ''} onClick={() => setTargetPanel('overview')}>1. Tổng quan</button>
-              <button className={targetPanel === 'allocations' ? 'active' : ''} onClick={() => setTargetPanel('allocations')}>2. Phân bổ bộ môn</button>
-              {isAllocationLocked && canViewLecturerAssignments && <button className={targetPanel === 'lecturers' ? 'active' : ''} onClick={() => setTargetPanel('lecturers')}>3. Phân công giảng viên</button>}
+            <ol className="target-workflow" aria-label="Tiến trình thực hiện chỉ tiêu">
+              {[
+                'Giao chỉ tiêu cho khoa',
+                'Phân bổ xuống bộ môn',
+                'Khóa phân bổ',
+                'Phân công giảng viên',
+                'Theo dõi thực hiện',
+              ].map((label, index) => {
+                const stage = workflowStage(selectedTarget)
+                const state = selectedTarget.status === 'DA_HUY'
+                  ? 'cancelled'
+                  : index < stage ? 'done' : index === stage ? 'current' : 'pending'
+                return <li key={label} className={state}>
+                  <span aria-hidden="true">{state === 'done' ? '✓' : state === 'current' ? '●' : '○'}</span>
+                  <strong>{label}</strong>
+                </li>
+              })}
+            </ol>
+            <div className="target-next-action">
+              <strong>Việc cần làm tiếp theo</strong>
+              <p>{nextActionText(selectedTarget)}</p>
+            </div>
+            <div className="tabs target-view-switcher" aria-label="Nội dung chỉ tiêu">
+              <button className={targetPanel === 'overview' ? 'active' : ''} onClick={() => setTargetPanel('overview')}>Tổng quan tiến độ</button>
+              {canViewDepartmentAllocations && <button className={targetPanel === 'allocations' ? 'active' : ''} onClick={() => setTargetPanel('allocations')}>{isDepartmentHead ? 'Chỉ tiêu bộ môn được nhận' : 'Phân bổ theo bộ môn'}</button>}
+              {isAllocationLocked && canViewLecturerAssignments && <button className={targetPanel === 'lecturers' ? 'active' : ''} onClick={() => setTargetPanel('lecturers')}>{canAssignLecturers ? 'Phân công giảng viên' : 'Theo dõi phân công giảng viên'}</button>}
             </div>
             {targetPanel === 'overview' && <>
-            <p className="muted">Thực hiện lần lượt: tiếp nhận chỉ tiêu → phân bổ đủ xuống bộ môn → khóa phân bổ. Sau khi khóa, Trưởng bộ môn mới giao cho giảng viên.</p>
+            <p className="muted">Tiến độ tổng hợp từ sản phẩm đã được duyệt theo chỉ tiêu đang chọn.</p>
             {progress && <section className="panel" style={{ marginTop: 16 }}>
               <h3>Dashboard tiến độ chỉ tiêu</h3>
               <p><strong>Toàn khoa:</strong> {progress.approvedArticles}/{progress.assignedArticleCount} bài · {progress.completionPercent}% {progress.isCompleted ? '· Đã hoàn thành' : ''}</p>
@@ -545,14 +606,14 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
             </section>}
             {(canEdit || canReceiveAndDistribute) && <div className="actions">
               {selectedTarget.status === 'CHO_TIEP_NHAN' && canReceiveAndDistribute && <button className="primary" onClick={() => void transition('accept')} disabled={busy}>Tiếp nhận chỉ tiêu</button>}
-              {selectedTarget.status === 'DA_TIEP_NHAN' && canReceiveAndDistribute && <button className="primary" onClick={() => void transition('publish')} disabled={busy}>Công bố để phân bổ</button>}
-              {selectedTarget.status === 'CONG_BO' && canReceiveAndDistribute && <button onClick={() => void transition('lock')} disabled={busy}>Khóa phân bổ</button>}
+              {selectedTarget.status === 'DA_TIEP_NHAN' && canReceiveAndDistribute && <button className="primary" onClick={() => void transition('publish')} disabled={busy}>Mở phân bổ cho bộ môn</button>}
+              {selectedTarget.status === 'CONG_BO' && canReceiveAndDistribute && <button onClick={() => void transition('lock')} disabled={busy || remainingAllocation !== 0} title={remainingAllocation !== 0 ? 'Cần phân bổ đủ chỉ tiêu trước khi khóa.' : undefined}>Khóa và chuyển cho bộ môn</button>}
               {!allocations.length && selectedTarget.status !== 'DA_KHOA' && selectedTarget.status !== 'DA_HUY' && (canEdit || canReceiveAndDistribute) && <button className="danger" onClick={() => void transition('cancel')} disabled={busy}>Hủy chỉ tiêu</button>}
             </div>}
             </>}
 
-            {targetPanel === 'allocations' && <>
-            <p className="muted">Bước 2: chia tổng chỉ tiêu của khoa cho các bộ môn. Tổng số bài đã phân bổ không được vượt chỉ tiêu của khoa.</p>
+            {targetPanel === 'allocations' && canViewDepartmentAllocations && <>
+            <p className="muted">Phân bổ tổng chỉ tiêu của khoa xuống các bộ môn. Tổng số bài phân bổ không được vượt chỉ tiêu của khoa.</p>
             {allocations.length === 0 ? (
               <p className="muted">Chưa có phân bổ cho chỉ tiêu này.</p>
             ) : (
@@ -593,12 +654,12 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
               </div>
             )}
             </>}
-            {targetPanel === 'lecturers' && isAllocationLocked && <p className="muted">Bước 3: Trưởng bộ môn chọn bộ môn của mình, sau đó phân công chỉ tiêu cho từng giảng viên.</p>}
+            {targetPanel === 'lecturers' && isAllocationLocked && canViewLecturerAssignments && <p className="muted">Chọn chỉ tiêu bộ môn được nhận để xem hoặc phân công cho từng giảng viên theo phạm vi quyền.</p>}
           </>
         )}
       </section>
 
-      {targetPanel === 'lecturers' && selectedAllocation && <section className="panel">
+      {targetPanel === 'lecturers' && isAllocationLocked && canViewLecturerAssignments && selectedAllocation && <section className="panel">
         <div className="section-heading"><h2>Phân công cho giảng viên — {departmentName(selectedAllocation.departmentId)}</h2>
           <button onClick={() => { setSelectedAllocation(null); setTargetPanel('allocations') }}>Quay lại phân bổ bộ môn</button></div>
         <p><strong>Chỉ tiêu bộ môn:</strong> {selectedAllocation.allocatedArticleCount} bài · <strong>Đã giao cá nhân:</strong> {lecturerAssignments.reduce((s, x) => s + x.allocatedArticleCount, 0)} bài</p>

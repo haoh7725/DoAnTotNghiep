@@ -7,7 +7,7 @@ kết quả thi đua, tiến độ chỉ tiêu và trung tâm thông báo.
 
 ```powershell
 flutter pub get
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8081/api
+flutter run --dart-define=API_URL=http://10.0.2.2:8081/api
 ```
 
 Khi chạy trên thiết bị thật, thay `10.0.2.2` bằng địa chỉ IP của máy chạy backend.

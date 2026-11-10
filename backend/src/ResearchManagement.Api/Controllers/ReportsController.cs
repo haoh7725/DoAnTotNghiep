@@ -100,12 +100,13 @@ public sealed class ReportsController(ApplicationDbContext db, ICurrentUser curr
                                       select new { product.Id, product.SubmittedByLecturerId }).ToListAsync(ct);
         var approvedIds = approvedProducts.Select(x => x.Id).ToArray();
         var coAuthors = await db.ProductCoAuthors.AsNoTracking().Where(x => approvedIds.Contains(x.ProductId)).ToListAsync(ct);
+        var coAuthorsByProduct = coAuthors.ToLookup(x => x.ProductId);
         var productCounts = new Dictionary<long, HashSet<long>>();
         foreach (var product in approvedProducts)
         {
             if (!productCounts.TryGetValue(product.SubmittedByLecturerId, out var owned)) productCounts[product.SubmittedByLecturerId] = owned = [];
             owned.Add(product.Id);
-            foreach (var coAuthor in coAuthors.Where(x => x.ProductId == product.Id))
+            foreach (var coAuthor in coAuthorsByProduct[product.Id])
             {
                 if (!productCounts.TryGetValue(coAuthor.LecturerId, out var shared)) productCounts[coAuthor.LecturerId] = shared = [];
                 shared.Add(product.Id);

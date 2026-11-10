@@ -26,4 +26,12 @@ public sealed record LoginResponse(
     DateTimeOffset ExpiresAt,
     ProfileResponse Profile);
 
+/// <summary>Tài khoản đang hoạt động, có vai trò giảng dạy/quản lý đơn vị và chưa gắn hồ sơ giảng viên.</summary>
+public sealed record LecturerAccountOptionResponse(
+    long Id,
+    string Username,
+    string FullName,
+    string? Email,
+    IReadOnlyList<string> Roles);
+
 public sealed record AccessToken(string Value, DateTimeOffset ExpiresAt);

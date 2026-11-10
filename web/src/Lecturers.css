@@ -6,6 +6,9 @@ input:disabled, select:disabled { background: #eef2ec; color: #6d7d70; cursor: n
 .lec-filter { display: grid; grid-template-columns: 2fr 1.4fr 1.4fr auto; gap: 0 16px; align-items: end; }
 .lec-filter label { margin: 0 0 4px; }
 .lec-filter .primary { height: 46px; margin-bottom: 4px; }
+.lec-create-form { border-color: #b8d9d2; background: #fbfefd; }
+.lec-create-form > label { margin-bottom: 8px; }
+.lec-create-form .empty { background: #f5f8fa; border-radius: 9px; }
 
 .lec-back { margin-bottom: 8px; }
 .lec-badge { margin-left: 8px; padding: 2px 8px; border-radius: 20px; background: #d6eadc; color: #165d44; font-size: .68rem; font-weight: 700; vertical-align: middle; }

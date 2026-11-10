@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ResearchManagement.Api.Authorization;
+using ResearchManagement.Application.Auth.Models;
 using ResearchManagement.Application.Common;
 using ResearchManagement.Application.Lecturers;
 using ResearchManagement.Application.Lecturers.Models;
@@ -22,6 +23,12 @@ public sealed class LecturersController(
     public async Task<ActionResult<PagedResult<LecturerResponse>>> Search(
         [FromQuery] LecturerSearchQuery query, CancellationToken cancellationToken) =>
         Ok(await lecturers.SearchAsync(query, cancellationToken));
+
+    [HttpGet("account-options")]
+    [Authorize(Policy = Policies.ResearchOffice)]
+    public async Task<ActionResult<IReadOnlyList<LecturerAccountOptionResponse>>> GetAccountOptions(
+        CancellationToken cancellationToken) =>
+        Ok(await lecturers.GetAvailableAccountOptionsAsync(cancellationToken));
 
     // Các route "me" phải đứng cùng nhóm với {id:long}; ràng buộc :long nên không xung đột.
     [HttpGet("me")]
