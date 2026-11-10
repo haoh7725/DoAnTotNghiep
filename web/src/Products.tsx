@@ -8,7 +8,7 @@ import './Products.css'
 type Summary = { id: number; researchPlanItemId: number; title: string; articleStatus: string | null; status: string; scoreEquivalent: number | null; updatedAt: string; createdAt: string }
 type CoAuthor = { id: number; lecturerId: number; lecturerFullName: string; lecturerCode: string | null; displayOrder: number; authorRole: string }
 type Evidence = { id: number; originalFileName: string; fileSizeBytes: number; description: string | null; uploadedAt: string }
-type Product = Summary & { submittedByLecturerId: number; submittedByLecturerFullName: string; description: string | null; publicationInfo: string | null; publishedDate: string | null; journalIndex: string | null; journalClassification: string | null; projectLevel: string | null; coAuthors: CoAuthor[]; evidences: Evidence[] }
+type Product = Summary & { submittedByLecturerId: number; submittedByLecturerFullName: string; description: string | null; publicationInfo: string | null; publishedDate: string | null; journalIndex: string | null; journalClassification: string | null; projectLevel: string | null; researchTargetId: number | null; journalConferenceId: number | null; coAuthors: CoAuthor[]; evidences: Evidence[] }
 type PlanItem = { id: number; name: string; productTypeName: string; academicYearCode: string; status: string }
 type LecturerOption = { id: number; fullName: string; code: string; departmentName: string }
 type AvailableTarget = { id: number; academicYearId: number; academicYearCode: string; allocatedArticleCount: number; journalConferenceId: number | null; journalConferenceName: string | null; deadline: string | null; status: string }
@@ -150,10 +150,10 @@ export function ProductReviewWorkspace({ user }: { user: Profile }) {
 }
 
 // ── ProductWorkspace (entry) ───────────────────────────────────────────────────
-export function ProductWorkspace({ user }: { user?: Profile | null }) {
+export function ProductWorkspace({ user, initialProductId }: { user?: Profile | null; initialProductId?: number | null }) {
   const [items, setItems] = useState<Summary[]>([])
   const [planItems, setPlanItems] = useState<PlanItem[]>([])
-  const [selected, setSelected] = useState<number | null>(null)
+  const [selected, setSelected] = useState<number | null>(initialProductId ?? null)
   const [revision, setRevision] = useState(0)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -255,6 +255,8 @@ function ProductDetail({ id, user, onBack }: { id: number; user: Profile | null;
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
   const [revision, setRevision] = useState(0)
+  const [linkTargets, setLinkTargets] = useState<AvailableTarget[]>([])
+  const [planItems, setPlanItems] = useState<PlanItem[]>([])
   const [tab, setTab] = useState<'info' | 'plagiarism' | 'history' | 'snapshots' | 'feedback'>('info')
 
   useEffect(() => {
@@ -264,6 +266,21 @@ function ProductDetail({ id, user, onBack }: { id: number; user: Profile | null;
       .catch(e => { if (active) setError((e as Error).message) })
     return () => { active = false }
   }, [id, revision])
+
+  useEffect(() => {
+    if (!user?.roles.some(r => r.role === 'GIANG_VIEN')) return
+    api<AvailableTarget[]>('/products/available-research-targets').then(setLinkTargets).catch(() => setLinkTargets([]))
+    api<PlanItem[]>('/products/available-plan-items').then(setPlanItems).catch(() => setPlanItems([]))
+  }, [user])
+
+  async function linkTarget(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const targetId = Number(new FormData(e.currentTarget).get('researchTargetId'))
+    setBusy(true); setError('')
+    try { setP(await api<Product>(`/products/${id}/link-target`, 'POST', { researchTargetId: targetId })) }
+    catch (x) { setError((x as Error).message) }
+    finally { setBusy(false) }
+  }
 
   async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const f = new FormData(e.currentTarget)
@@ -302,6 +319,21 @@ function ProductDetail({ id, user, onBack }: { id: number; user: Profile | null;
       </div>
 
       {tab === 'info' && <>
+        {p.researchTargetId === null && planItems.some(x => x.id === p.researchPlanItemId && x.productTypeName.trim().toLocaleLowerCase('vi-VN') === 'bài báo') &&
+          <section className="panel">
+            <h2>Liên kết với chỉ tiêu được giao</h2>
+            <p className="muted">Chỉ giảng viên tự chọn chỉ tiêu cho bài báo của mình. Sau khi được duyệt và xuất bản, bài liên kết mới tính vào tiến độ chỉ tiêu.</p>
+            <form onSubmit={linkTarget}>
+              <label>Chỉ tiêu
+                <select name="researchTargetId" required defaultValue="">
+                  <option value="">Chọn chỉ tiêu phù hợp</option>
+                  {linkTargets.filter(x => x.status === 'DA_KHOA' && x.journalConferenceId === p.journalConferenceId).map(x =>
+                    <option key={x.id} value={x.id}>{x.academicYearCode} · {x.journalConferenceName ?? 'Chỉ tiêu chung'}</option>)}
+                </select>
+              </label>
+              <button className="primary" disabled={busy}>Liên kết với chỉ tiêu</button>
+            </form>
+          </section>}
         {/* Manager review panel */}
         {canManagerReview(user, p) && (
           <ReviewPanel product={p} user={user!} onReviewed={updated => { setP(updated); setRevision(x => x + 1) }} />
@@ -642,7 +674,7 @@ function ProductForm({ product, onSubmit, busy, error, planItems, targets }: {
             {x.academicYearCode} · {x.journalConferenceName ?? 'Chỉ tiêu bài báo chung'} · phân bổ {x.allocatedArticleCount} bài
           </option>)}
         </select>
-        {targets?.length === 0 && <small className="muted">Bạn chưa được giao chỉ tiêu bài báo đang công bố; vẫn có thể lưu sản phẩm nhưng không tính vào chỉ tiêu.</small>}
+        {targets?.length === 0 && <small className="muted">Bạn chưa được giao chỉ tiêu bài báo; vẫn có thể lưu sản phẩm và tự liên kết sau.</small>}
       </label>}</>}
       <label className="wide">{planItems ? '3. Tên sản phẩm thực tế' : 'Tên sản phẩm'}<input name="title" required minLength={3} maxLength={500} defaultValue={product?.title} /></label>
       {(isArticle || !planItems) && <label>Trạng thái bài viết

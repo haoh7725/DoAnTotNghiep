@@ -33,10 +33,13 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
                                   x.Status == "DA_DUYET" && x.ArticleStatus == "DA_XUAT_BAN" &&
                                   db.ResearchPlanItems.Any(item => item.Id == x.ResearchPlanItemId &&
                                       db.ProductTypes.Any(type => type.Id == item.ProductTypeId && type.Code == "BAI_BAO"))),
+                              LinkedProducts = db.Products.Where(x => x.ResearchTargetId == target.Id && x.SubmittedByLecturerId == lecturer.Id)
+                                  .OrderByDescending(x => x.UpdatedAt)
+                                  .Select(x => new { x.Id, x.Title, x.Status, x.ArticleStatus }).ToList(),
                               personal.AllocationDate, target.Deadline, target.Status }).ToListAsync(ct);
         return Ok(rows.Select(x => new { x.Id, x.TargetId, AcademicYearCode = x.Code, x.AllocatedArticleCount, x.ApprovedArticles,
             CompletionPercent = x.AllocatedArticleCount <= 0 ? 0m : Math.Round(x.ApprovedArticles * 100m / x.AllocatedArticleCount, 2),
-            IsCompleted = x.ApprovedArticles >= x.AllocatedArticleCount, x.AllocationDate, x.Deadline, x.Status }));
+            IsCompleted = x.ApprovedArticles >= x.AllocatedArticleCount, x.LinkedProducts, x.AllocationDate, x.Deadline, x.Status }));
     }
 
     [HttpGet]
@@ -79,7 +82,6 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
                 lecturer.FullName,
                 capacity.CommittedArticles,
                 capacity.AssignedArticles,
-                capacity.CompletedOutsideAssignment,
                 capacity.AvailableArticles
             });
         }
@@ -185,24 +187,7 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
                                     (!excludingAssignmentId.HasValue || personal.Id != excludingAssignmentId.Value)
                               select (int?)personal.AllocatedArticleCount).SumAsync(ct) ?? 0;
 
-        var completedOutsideAssignment = await (
-            from product in db.Products.AsNoTracking()
-            join item in db.ResearchPlanItems.AsNoTracking() on product.ResearchPlanItemId equals item.Id
-            join plan in db.ResearchPlans.AsNoTracking() on item.ResearchPlanId equals plan.Id
-            join type in db.ProductTypes.AsNoTracking() on item.ProductTypeId equals type.Id
-            where product.SubmittedByLecturerId == lecturerId &&
-                  plan.AcademicYearId == academicYearId &&
-                  type.Code == "BAI_BAO" &&
-                  product.Status == "DA_DUYET" &&
-                  product.ArticleStatus == "DA_XUAT_BAN" &&
-                  !db.LecturerTargetAllocations.Any(personal =>
-                      personal.LecturerId == lecturerId &&
-                      db.ResearchTargetAllocations.Any(department =>
-                          department.Id == personal.DepartmentAllocationId &&
-                          department.ResearchTargetId == product.ResearchTargetId))
-            select product.Id).CountAsync(ct);
-
-        return new LecturerCommitmentCapacity(committed, assigned, completedOutsideAssignment);
+        return new LecturerCommitmentCapacity(committed, assigned);
     }
     private Task<bool> HasProducts(long targetId, long lecturerId, CancellationToken ct) => db.Products.AnyAsync(x => x.ResearchTargetId == targetId && x.SubmittedByLecturerId == lecturerId, ct);
     private static DateOnly CurrentVietnamDate() => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow, OperatingSystem.IsWindows() ? "SE Asia Standard Time" : "Asia/Ho_Chi_Minh").DateTime);

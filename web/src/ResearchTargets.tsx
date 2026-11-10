@@ -30,7 +30,6 @@ type LecturerOption = {
   fullName: string
   committedArticles: number
   assignedArticles: number
-  completedOutsideAssignment: number
   availableArticles: number
 }
 type LecturerAssignment = { id: number; departmentAllocationId: number; lecturerId: number; lecturerCode: string; lecturerName: string; allocatedArticleCount: number; allocationDate: string }
@@ -685,17 +684,16 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
         <div className="subpanel">
           <h3>Căn cứ phân công theo cam kết bài báo</h3>
           <p className="muted">
-            Có thể giao thêm = max(0, cam kết bài báo − đã giao − bài đã hoàn thành ngoài phân công).
+            Có thể giao thêm = max(0, cam kết bài báo − đã giao).
             Chỉ tính cam kết bài báo trong kế hoạch đã đăng ký của năm học này.
           </p>
           {lecturerOptions.length === 0 ? <p className="muted">Bộ môn chưa có giảng viên để phân công.</p> : <div style={{ overflowX: 'auto' }}>
             <table>
-              <thead><tr><th>Giảng viên</th><th>Cam kết bài báo</th><th>Đã giao</th><th>Hoàn thành ngoài phân công</th><th>Có thể giao thêm</th></tr></thead>
+              <thead><tr><th>Giảng viên</th><th>Cam kết bài báo</th><th>Đã giao</th><th>Có thể giao thêm</th></tr></thead>
               <tbody>{lecturerOptions.map(x => <tr key={x.id}>
                 <td>{x.code} — {x.fullName}</td>
                 <td>{x.committedArticles}</td>
                 <td>{x.assignedArticles}</td>
-                <td>{x.completedOutsideAssignment}</td>
                 <td><strong>{x.availableArticles}</strong></td>
               </tr>)}</tbody>
             </table>
@@ -710,7 +708,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
           <label>Số bài giao<input name="allocatedArticleCount" type="number" min="1" max={selectedLecturer?.availableArticles} step="1" required disabled={!selectedLecturer} /></label>
           {selectedLecturer && <p className="muted">
             {selectedLecturer.fullName} cam kết {selectedLecturer.committedArticles} bài; đã giao {selectedLecturer.assignedArticles} bài;
-            hoàn thành ngoài phân công {selectedLecturer.completedOutsideAssignment} bài; có thể giao thêm tối đa <strong>{selectedLecturer.availableArticles} bài</strong>.
+            có thể giao thêm tối đa <strong>{selectedLecturer.availableArticles} bài</strong>.
           </p>}
           {unassignedLecturers.length > 0 && unassignedLecturers.every(x => x.availableArticles <= 0) && <p className="muted">Không còn giảng viên chưa được phân công có khả năng nhận thêm theo cam kết.</p>}
           <button className="primary" disabled={busy || !selectedLecturer || selectedLecturer.availableArticles <= 0}>Giao chỉ tiêu</button>

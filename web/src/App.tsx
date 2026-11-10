@@ -10,6 +10,7 @@ import { ResearchReports } from './Reports'
 import { ResearchPlans } from './ResearchPlans'
 import { ResearchNorms } from './ResearchNorms'
 import { ResearchTargets } from './ResearchTargets'
+import { MyResearchTargets } from './MyResearchTargets'
 import JournalConferences from './JournalConferences'
 import Notifications from './Notifications'
 import { Evaluations } from './Evaluations'
@@ -23,6 +24,7 @@ export default function App() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [tab, setTab] = useState('overview')
+  const [productToOpen, setProductToOpen] = useState<number | null>(null)
   const [unreadCount, setUnreadCount] = useState(0)
   const [lookups, setLookups] = useState<Lookups | null>(null)
   const [lookupError, setLookupError] = useState('')
@@ -216,13 +218,14 @@ export default function App() {
             Kế hoạch & Tiến độ
           </button>
         )}
+        {user.roles.some(r => r.role === 'GIANG_VIEN') && <button className={tab === 'my-targets' ? 'active' : ''} onClick={() => setTab('my-targets')}>Chỉ tiêu của tôi</button>}
         <button
           className={`notif-nav-btn${tab === 'notifications' ? ' active' : ''}`}
           onClick={() => setTab('notifications')}
         >
           Thông báo
         </button>
-        {user.roles.some(r => r.role === 'GIANG_VIEN') && <button className={tab === 'products' ? 'active' : ''} onClick={() => setTab('products')}>Sản phẩm khoa học</button>}
+        {user.roles.some(r => r.role === 'GIANG_VIEN') && <button className={tab === 'products' ? 'active' : ''} onClick={() => { setProductToOpen(null); setTab('products') }}>Sản phẩm khoa học</button>}
         {(user.roles.some(r => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'QUAN_TRI'].includes(r.role)) || canBrowseLecturers(user) || canViewResearchNorms || canViewResearchTargets || canViewJournalConferences) && <p className="nav-section">QUẢN LÝ, ĐÁNH GIÁ & BÁO CÁO</p>}
         {user.roles.some(r =>
           ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'QUAN_TRI']
@@ -297,10 +300,14 @@ export default function App() {
         user.roles.some(r => r.role === 'GIANG_VIEN') && (
           <ResearchPlans academicYears={lookups?.academicYears ?? []} />
         )}
+      {tab === 'my-targets' && user.roles.some(r => r.role === 'GIANG_VIEN') && <MyResearchTargets
+        onOpenProducts={() => { setProductToOpen(null); setTab('products') }}
+        onOpenProduct={id => { setProductToOpen(id); setTab('products') }}
+      />}
       {tab === 'notifications' && (
         <Notifications onUnreadCountChange={setUnreadCount} />
       )}
-      {tab === 'products' && <ProductWorkspace user={user} />}
+      {tab === 'products' && <ProductWorkspace user={user} initialProductId={productToOpen} />}
       {tab === 'product-reviews' &&
         user.roles.some(r =>
           ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'QUAN_TRI']

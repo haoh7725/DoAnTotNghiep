@@ -138,7 +138,7 @@ public sealed class ProductsController(ProductService productService, Applicatio
                              join journal in db.JournalConferences.AsNoTracking() on target.JournalConferenceId equals journal.Id into journals
                              from journal in journals.DefaultIfEmpty()
                              where allocation.DepartmentId == lecturer.DepartmentId && personal.LecturerId == lecturer.Id
-                                && (target.Status == "CONG_BO" || target.Status == "DA_KHOA")
+                                && target.Status == "DA_KHOA"
                              orderby year.StartDate descending, target.Id descending
                              select new { target.Id, target.AcademicYearId, AcademicYearCode = year.Code,
                                  AllocatedArticleCount = personal.AllocatedArticleCount, target.JournalConferenceId,
@@ -185,6 +185,16 @@ public sealed class ProductsController(ProductService productService, Applicatio
         CancellationToken cancellationToken)
     {
         var result = await productService.UpdateAsync(id, request, cancellationToken);
+        return Ok(result);
+    }
+
+    public sealed record LinkTargetRequest(long ResearchTargetId);
+
+    [HttpPost("api/products/{id:long}/link-target")]
+    public async Task<ActionResult<ProductResponse>> LinkTarget(
+        long id, LinkTargetRequest request, CancellationToken cancellationToken)
+    {
+        var result = await productService.LinkTargetAsync(id, request.ResearchTargetId, cancellationToken);
         return Ok(result);
     }
 

@@ -4,6 +4,8 @@ using ResearchManagement.Application.ResearchPlans.Abstractions;
 using ResearchManagement.Application.ResearchPlans.Models;
 using ResearchManagement.Domain.Entities;
 using ResearchManagement.Application.ProductTypes.Abstractions;
+using ResearchManagement.Application.Products.Abstractions;
+using ResearchManagement.Domain.Constants;
 
 namespace ResearchManagement.Application.ResearchPlans;
 
@@ -12,16 +14,10 @@ public sealed class ResearchPlanItemService(
     IResearchPlanRepository plans,
     IProgressHistoryRepository progressHistories,
     IProductTypeRepository productTypes,
+    IProductRepository products,
     ILecturerAccessRepository lecturerAccess,
     ICurrentUser currentUser)
 {
-    private static readonly HashSet<string> ValidStatuses =
-    [
-        "CHUA_THUC_HIEN",
-        "DANG_THUC_HIEN",
-        "DA_THUC_HIEN"
-    ];
-
     public async Task<ResearchPlanItemResponse> GetByIdAsync(
         long id,
         CancellationToken cancellationToken)
@@ -36,7 +32,7 @@ public sealed class ResearchPlanItemService(
 
         await EnsureCanAccessPlanAsync(plan, cancellationToken);
 
-        return ToResponse(item);
+        return await ToResponseAsync(item, cancellationToken);
     }
 
     public async Task<IReadOnlyList<ResearchPlanItemResponse>> GetByResearchPlanIdAsync(
@@ -54,7 +50,10 @@ public sealed class ResearchPlanItemService(
             researchPlanId,
             cancellationToken);
 
-        return result.Select(ToResponse).ToList();
+        var responses = new List<ResearchPlanItemResponse>(result.Count);
+        foreach (var item in result)
+            responses.Add(await ToResponseAsync(item, cancellationToken));
+        return responses;
     }
 
     public async Task<ResearchPlanItemResponse> CreateAsync(
@@ -89,7 +88,7 @@ public sealed class ResearchPlanItemService(
         await items.AddAsync(item, cancellationToken);
         await items.SaveChangesAsync(cancellationToken);
 
-        return ToResponse(item);
+        return await ToResponseAsync(item, cancellationToken);
     }
 
     public async Task<ResearchPlanItemResponse> UpdateAsync(
@@ -122,7 +121,7 @@ public sealed class ResearchPlanItemService(
 
         await items.SaveChangesAsync(cancellationToken);
 
-        return ToResponse(item);
+        return await ToResponseAsync(item, cancellationToken);
     }
 
     public async Task<IReadOnlyList<ProgressHistoryResponse>> GetProgressHistoryAsync(
@@ -170,13 +169,7 @@ public sealed class ResearchPlanItemService(
 
         await EnsureOwnerPlanAsync(plan, cancellationToken);
 
-        var status = request.Status.Trim().ToUpperInvariant();
-
-        if (!ValidStatuses.Contains(status))
-        {
-            throw new BusinessRuleException(
-                "Trạng thái tiến độ không hợp lệ.");
-        }
+        var (status, _, _) = await GetDerivedProgressAsync(item, cancellationToken);
 
         var accountId = currentUser.Id
             ?? throw new AuthenticationFailedException(
@@ -200,7 +193,7 @@ public sealed class ResearchPlanItemService(
 
         await items.SaveChangesAsync(cancellationToken);
 
-        return ToResponse(item);
+        return await ToResponseAsync(item, cancellationToken);
     }
 
     private async Task EnsureCanAccessPlanAsync(
@@ -240,17 +233,33 @@ public sealed class ResearchPlanItemService(
             throw new ForbiddenException("Chỉ giảng viên chính chủ được thay đổi kế hoạch và tiến độ.");
     }
 
-    private static ResearchPlanItemResponse ToResponse(
-        ResearchPlanItem item) =>
-        new(
+    private async Task<(string Status, int Actual, int Completed)> GetDerivedProgressAsync(
+        ResearchPlanItem item, CancellationToken cancellationToken)
+    {
+        var actualProducts = await products.GetByPlanItemIdAsync(item.Id, cancellationToken);
+        var completed = actualProducts.Count(x => x.Status == ProductStatuses.Approved);
+        var status = actualProducts.Count == 0
+            ? "CHUA_THUC_HIEN"
+            : completed >= item.CommittedQuantity ? "DA_THUC_HIEN" : "DANG_THUC_HIEN";
+        return (status, actualProducts.Count, completed);
+    }
+
+    private async Task<ResearchPlanItemResponse> ToResponseAsync(
+        ResearchPlanItem item, CancellationToken cancellationToken)
+    {
+        var (status, actual, completed) = await GetDerivedProgressAsync(item, cancellationToken);
+        return new(
             item.Id,
             item.ResearchPlanId,
             item.ProductTypeId,
             item.Name,
             item.CommittedQuantity,
             item.Deadline,
-            item.Status,
+            status,
             item.Result,
             item.DifficultyProposal,
-            item.UpdatedAt);
+            item.UpdatedAt,
+            actual,
+            completed);
+    }
 }

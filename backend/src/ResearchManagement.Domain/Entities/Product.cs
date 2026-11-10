@@ -117,5 +117,14 @@ public sealed class Product : BaseEntity
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
+    public void LinkTarget(long researchTargetId, long? journalConferenceId)
+    {
+        if (ResearchTargetId.HasValue)
+            throw new InvalidOperationException("Sản phẩm đã liên kết với chỉ tiêu.");
+        ResearchTargetId = researchTargetId;
+        JournalConferenceId = journalConferenceId;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
     private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
