@@ -217,7 +217,8 @@ public sealed class ResearchTargetsController(
         {
             var notification = new ResearchManagement.Domain.Entities.Notification(delivery.AccountId, "HE_THONG",
                 $"Phân bổ chỉ tiêu NCKH cho {delivery.Name} đã được khóa: {delivery.AllocatedArticleCount} bài. Bạn có thể phân công cho giảng viên.",
-                $"PHAN_BO_DA_KHOA:{targetId}:{delivery.Id}");
+                $"PHAN_BO_DA_KHOA:{targetId}:{delivery.Id}",
+                actionPath: "research-targets");
             notification.MarkAsSent();
             db.Notifications.Add(notification);
         }
@@ -246,7 +247,8 @@ public sealed class ResearchTargetsController(
                 accountId,
                 "HE_THONG",
                 $"{facultyName} được Phòng QLKH giao {assignedArticleCount} bài báo trong năm học {academicYearCode}. Vui lòng tiếp nhận và phân bổ xuống các bộ môn.",
-                $"CHI_TIEU_CHO_TIEP_NHAN:{targetId}:{accountId}");
+                $"CHI_TIEU_CHO_TIEP_NHAN:{targetId}:{accountId}",
+                actionPath: "research-targets");
             notification.MarkAsSent();
             db.Notifications.Add(notification);
         }

@@ -64,9 +64,9 @@ type PendingProduct = {
   departmentName: string
 }
 
-export function ProductReviewWorkspace({ user }: { user: Profile }) {
+export function ProductReviewWorkspace({ user, initialProductId }: { user: Profile; initialProductId?: number | null }) {
   const [items, setItems] = useState<PendingProduct[]>([])
-  const [selected, setSelected] = useState<number | null>(null)
+  const [selected, setSelected] = useState<number | null>(initialProductId ?? null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [revision, setRevision] = useState(0)

@@ -441,7 +441,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
         _ListProfileExpansion(
-          title: 'IV.1. Đề tài nghiên cứu đã và đang tham gia',
+          title: 'IV.1 — Đề tài nghiên cứu đã và đang tham gia',
           icon: Icons.assignment_outlined,
           items: _items(details, 'researchProjects'),
           rowBuilder: (item) => [
@@ -453,7 +453,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
         _ListProfileExpansion(
-          title: 'IV.2. Các công trình khoa học đã công bố',
+          title: 'IV.2 — Các công trình khoa học đã công bố',
           icon: Icons.menu_book_outlined,
           items: _items(details, 'publications'),
           rowBuilder: (item) => [
@@ -596,7 +596,14 @@ class _ProfileExpansion extends StatelessWidget {
       child: ExpansionTile(
         initiallyExpanded: initiallyExpanded,
         leading: Icon(icon, color: const Color(0xFF177158)),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontSize: 16,
+            height: 1.3,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         children: children,
       ),

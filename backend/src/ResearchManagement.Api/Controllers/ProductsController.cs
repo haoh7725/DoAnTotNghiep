@@ -6,12 +6,18 @@ using ResearchManagement.Application.Auth.Abstractions;
 using ResearchManagement.Application.Common;
 using ResearchManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using ResearchManagement.Api.Infrastructure;
+using ResearchManagement.Domain.Constants;
 
 namespace ResearchManagement.Api.Controllers;
 
 [ApiController]
 [Authorize]
-public sealed class ProductsController(ProductService productService, ApplicationDbContext db, ICurrentUser currentUser) : ControllerBase
+public sealed class ProductsController(
+    ProductService productService,
+    ApplicationDbContext db,
+    ICurrentUser currentUser,
+    WorkflowNotificationDispatcher workflowNotifications) : ControllerBase
 {
     [HttpGet("api/products/pending-review")]
     [Authorize(Roles = "TRUONG_BO_MON,TRUONG_KHOA,PHONG_QLKH,QUAN_TRI")]
@@ -204,6 +210,17 @@ public sealed class ProductsController(ProductService productService, Applicatio
         long id, CancellationToken cancellationToken)
     {
         var result = await productService.SubmitAsync(id, cancellationToken);
+        var unit = await ProductUnitAsync(result.SubmittedByLecturerId, cancellationToken);
+        await workflowNotifications.QueueForRoleAsync(
+            Roles.DepartmentHead,
+            $"Sản phẩm '{result.Title}' vừa được giảng viên gửi duyệt. Vui lòng kiểm tra và xét duyệt.",
+            $"PRODUCT_SUBMITTED:{result.Id}",
+            $"product-reviews:{result.Id}",
+            unit.FacultyId,
+            unit.DepartmentId,
+            result.Id,
+            cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
         return Ok(result);
     }
 
@@ -214,7 +231,43 @@ public sealed class ProductsController(ProductService productService, Applicatio
         [FromBody] ReviewProductRequest request,
         CancellationToken cancellationToken)
     {
+        var before = await db.Products.AsNoTracking()
+            .Where(x => x.Id == id)
+            .Select(x => new { x.Status, x.SubmittedByLecturerId })
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
         var result = await productService.ReviewAsync(id, request, cancellationToken);
+
+        if (request.Action.Trim().Equals("APPROVE", StringComparison.OrdinalIgnoreCase))
+        {
+            var unit = await ProductUnitAsync(before.SubmittedByLecturerId, cancellationToken);
+            if (result.Status == ProductStatuses.DepartmentHeadApproved)
+                await workflowNotifications.QueueForRoleAsync(Roles.FacultyDean,
+                    $"Sản phẩm '{result.Title}' đã được Trưởng bộ môn duyệt và đang chờ Trưởng khoa xét duyệt.",
+                    $"PRODUCT_WAIT_DEAN:{result.Id}", $"product-reviews:{result.Id}",
+                    unit.FacultyId, unit.DepartmentId, result.Id, cancellationToken);
+            else if (result.Status == ProductStatuses.FacultyDeanApproved)
+                await workflowNotifications.QueueForRoleAsync(Roles.ResearchOffice,
+                    $"Sản phẩm '{result.Title}' đã được Trưởng khoa duyệt và đang chờ Phòng QLKH thẩm định.",
+                    $"PRODUCT_WAIT_OFFICE:{result.Id}", $"product-reviews:{result.Id}",
+                    unit.FacultyId, unit.DepartmentId, result.Id, cancellationToken);
+            else if (result.Status == ProductStatuses.ResearchOfficeApproved)
+                await workflowNotifications.QueueForRoleAsync(Roles.ResearchOffice,
+                    $"Sản phẩm '{result.Title}' đã thẩm định và đang chờ Phòng QLKH công nhận kết quả.",
+                    $"PRODUCT_WAIT_FINAL:{result.Id}", $"product-reviews:{result.Id}",
+                    unit.FacultyId, unit.DepartmentId, result.Id, cancellationToken);
+            else if (result.Status == ProductStatuses.Approved)
+            {
+                var ownerAccountId = await db.Lecturers.AsNoTracking()
+                    .Where(x => x.Id == before.SubmittedByLecturerId)
+                    .Select(x => x.AccountId)
+                    .SingleAsync(cancellationToken);
+                await workflowNotifications.QueueForAccountAsync(ownerAccountId,
+                    $"Sản phẩm '{result.Title}' đã được Phòng QLKH công nhận hoàn tất.",
+                    $"PRODUCT_APPROVED:{result.Id}", $"products:{result.Id}", result.Id, cancellationToken);
+            }
+            await db.SaveChangesAsync(cancellationToken);
+        }
         return Ok(result);
     }
 
@@ -242,5 +295,15 @@ public sealed class ProductsController(ProductService productService, Applicatio
     {
         var result = await productService.GetReviewHistoryAsync(id, cancellationToken);
         return Ok(result);
+    }
+
+    private async Task<(long FacultyId, long DepartmentId)> ProductUnitAsync(long lecturerId, CancellationToken ct)
+    {
+        var unit = await (from lecturer in db.Lecturers.AsNoTracking()
+                          join department in db.Departments.AsNoTracking() on lecturer.DepartmentId equals department.Id
+                          where lecturer.Id == lecturerId
+                          select new { department.FacultyId, DepartmentId = department.Id })
+            .SingleAsync(ct);
+        return (unit.FacultyId, unit.DepartmentId);
     }
 }

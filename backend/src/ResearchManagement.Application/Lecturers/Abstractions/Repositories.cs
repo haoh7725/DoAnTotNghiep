@@ -17,6 +17,7 @@ public interface ILecturerRepository
     Task<Lecturer?> GetByAccountIdAsync(long accountId, CancellationToken cancellationToken);
 
     Task<bool> DepartmentExistsAsync(long departmentId, CancellationToken cancellationToken);
+    Task<long?> GetDepartmentFacultyIdAsync(long departmentId, CancellationToken cancellationToken);
     Task<bool> ExistsByCodeAsync(string code, long? excludeId, CancellationToken cancellationToken);
     Task<bool> ExistsByAccountIdAsync(long accountId, CancellationToken cancellationToken);
 

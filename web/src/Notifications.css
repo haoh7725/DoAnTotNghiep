@@ -275,3 +275,5 @@
     margin-left: 60px;
   }
 }
+.notification-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
+.notification-open { color:#fff; border-color:var(--teal); background:var(--teal); }

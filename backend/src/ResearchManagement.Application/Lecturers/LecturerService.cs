@@ -49,10 +49,40 @@ public sealed class LecturerService(
         var code = request.Code.Trim();
         var birthDate = ValidBirthDate(request.BirthDate);
 
-        if (await accounts.GetByIdAsync(request.AccountId, cancellationToken) is null)
+        var account = await accounts.GetByIdAsync(request.AccountId, cancellationToken);
+        if (account is null)
             throw new BusinessRuleException("Tài khoản không tồn tại.");
-        if (!await lecturers.DepartmentExistsAsync(request.DepartmentId, cancellationToken))
+        if (!account.IsActive)
+            throw new BusinessRuleException("Chỉ được liên kết tài khoản đang hoạt động.");
+
+        var eligibleRoles = new[] { Roles.Lecturer, Roles.DepartmentHead, Roles.FacultyDean };
+        var eligibleAssignments = account.RoleAssignments
+            .Where(x => eligibleRoles.Contains(x.Role))
+            .ToList();
+        if (eligibleAssignments.Count == 0)
+            throw new BusinessRuleException("Tài khoản phải có vai trò Giảng viên, Trưởng bộ môn hoặc Trưởng khoa.");
+        if (account.RoleAssignments.Any(x => x.Role is Roles.ResearchOffice or Roles.BoardOfDirectors or Roles.Admin))
+            throw new BusinessRuleException("Tài khoản quản trị toàn trường không được liên kết hồ sơ giảng viên.");
+
+        var departmentFacultyId = await lecturers.GetDepartmentFacultyIdAsync(request.DepartmentId, cancellationToken);
+        if (!departmentFacultyId.HasValue)
             throw new BusinessRuleException("Bộ môn không tồn tại.");
+
+        var scopedDepartmentIds = eligibleAssignments
+            .Where(x => x.Role == Roles.DepartmentHead && x.DepartmentId.HasValue)
+            .Select(x => x.DepartmentId!.Value)
+            .Distinct()
+            .ToList();
+        if (scopedDepartmentIds.Count > 0 && !scopedDepartmentIds.Contains(request.DepartmentId))
+            throw new BusinessRuleException("Bộ môn của hồ sơ phải khớp với phạm vi Trưởng bộ môn đã được phân quyền.");
+
+        var scopedFacultyIds = eligibleAssignments
+            .Where(x => x.Role == Roles.FacultyDean && x.FacultyId.HasValue)
+            .Select(x => x.FacultyId!.Value)
+            .Distinct()
+            .ToList();
+        if (scopedFacultyIds.Count > 0 && !scopedFacultyIds.Contains(departmentFacultyId.Value))
+            throw new BusinessRuleException("Bộ môn của hồ sơ phải thuộc khoa mà Trưởng khoa được phân quyền.");
         if (await lecturers.ExistsByAccountIdAsync(request.AccountId, cancellationToken))
             throw new ConflictException("Tài khoản đã được liên kết với một giảng viên khác.");
         if (await lecturers.ExistsByCodeAsync(code, null, cancellationToken))

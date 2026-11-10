@@ -45,7 +45,8 @@ public sealed class ReminderService(
                 content: content,
                 deduplicationKey: deduplicationKey,
                 researchPlanItemId: item.ResearchPlanItemId,
-                researchPlanId: item.ResearchPlanId);
+                researchPlanId: item.ResearchPlanId,
+                actionPath: "research-plans");
 
             notification.MarkAsSent();
 

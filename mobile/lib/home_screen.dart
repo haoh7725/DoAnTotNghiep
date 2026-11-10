@@ -85,7 +85,10 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           _EvaluationTab(client: widget.client, onLogout: widget.onLogout),
           ProductsScreen(client: widget.client),
-          NotificationsScreen(api: widget.client),
+          NotificationsScreen(
+            api: widget.client,
+            onNavigateTab: (index) => setState(() => _currentIndex = index),
+          ),
           ResearchProgressScreen(client: widget.client),
           ProfileScreen(client: widget.client, onLogout: widget.onLogout),
         ],

@@ -38,12 +38,21 @@ public sealed class AccountRepository(ApplicationDbContext db) : IAccountReposit
                     .Select(role => role.Role)
                     .Distinct()
                     .OrderBy(role => role)
-                    .ToList()
+                    .ToList(),
+                FacultyId = account.RoleAssignments
+                    .Where(role => eligibleRoles.Contains(role.Role) && role.FacultyId != null)
+                    .Select(role => role.FacultyId)
+                    .FirstOrDefault(),
+                DepartmentId = account.RoleAssignments
+                    .Where(role => eligibleRoles.Contains(role.Role) && role.DepartmentId != null)
+                    .Select(role => role.DepartmentId)
+                    .FirstOrDefault()
             })
             .ToListAsync(cancellationToken);
 
         return rows.Select(account => new LecturerAccountOptionResponse(
-            account.Id, account.Username, account.FullName, account.Email, account.Roles)).ToList();
+            account.Id, account.Username, account.FullName, account.Email, account.Roles,
+            account.FacultyId, account.DepartmentId)).ToList();
     }
 
     public Task<bool> ExistsByUsernameAsync(string username, CancellationToken cancellationToken) =>

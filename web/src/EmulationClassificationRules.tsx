@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { api } from './api'
+import { useAutoReveal } from './useAutoReveal'
 
 type Year = { id: number; code: string }
 type Rule = { id: number; academicYearId: number; name: string; minimumPercent: number; sortOrder: number }
@@ -11,6 +12,7 @@ export function EmulationClassificationRules({ years }: { years: Year[] }) {
   const [editing, setEditing] = useState<Rule | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const formRef = useAutoReveal<HTMLElement>(editing !== null, editing?.id)
 
   async function load(id = yearId) {
     if (!id) { setRules([]); return }
@@ -34,6 +36,6 @@ export function EmulationClassificationRules({ years }: { years: Year[] }) {
       <div className="table-wrap"><table><thead><tr><th>Xếp loại</th><th>Từ tỷ lệ giờ NCKH</th><th>Thứ tự</th><th /></tr></thead><tbody>{rules.map(r => <tr key={r.id}><td>{r.name}</td><td>≥ {r.minimumPercent}%</td><td>{r.sortOrder}</td><td><button onClick={() => setEditing(r)}>Sửa</button>{' '}<button className="danger" disabled={busy} onClick={() => void remove(r.id)}>Xóa</button></td></tr>)}</tbody></table></div>
       {!rules.length && yearId && <p className="muted">Chưa có ngưỡng nào; chưa thể chốt tự động đánh giá của năm học này.</p>}
     </section>
-    {yearId && <section className="panel"><h2>{editing ? 'Sửa ngưỡng' : 'Thêm ngưỡng'}</h2><form key={editing?.id ?? 'new'} onSubmit={save}><label>Tên xếp loại<input name="name" required maxLength={100} defaultValue={editing?.name ?? ''} /></label><label>Tỷ lệ tối thiểu (%)<input name="minimumPercent" type="number" min="0" step="0.01" required defaultValue={editing?.minimumPercent ?? ''} /></label><label>Thứ tự khi cùng ngưỡng<input name="sortOrder" type="number" min="0" required defaultValue={editing?.sortOrder ?? rules.length + 1} /></label><button className="primary" disabled={busy}>{busy ? 'Đang lưu...' : 'Lưu ngưỡng'}</button>{editing && <button type="button" onClick={() => setEditing(null)}>Hủy</button>}</form></section>}
+    {yearId && <section ref={formRef} className="panel auto-reveal-target"><h2>{editing ? 'Sửa ngưỡng' : 'Thêm ngưỡng'}</h2><form key={editing?.id ?? 'new'} onSubmit={save}><label>Tên xếp loại<input name="name" required maxLength={100} defaultValue={editing?.name ?? ''} /></label><label>Tỷ lệ tối thiểu (%)<input name="minimumPercent" type="number" min="0" step="0.01" required defaultValue={editing?.minimumPercent ?? ''} /></label><label>Thứ tự khi cùng ngưỡng<input name="sortOrder" type="number" min="0" required defaultValue={editing?.sortOrder ?? rules.length + 1} /></label><button className="primary" disabled={busy}>{busy ? 'Đang lưu...' : 'Lưu ngưỡng'}</button>{editing && <button type="button" onClick={() => setEditing(null)}>Hủy</button>}</form></section>}
   </>
 }

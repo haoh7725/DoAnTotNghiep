@@ -5,8 +5,9 @@ import 'research_plan_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   final ApiClient api;
+  final ValueChanged<int>? onNavigateTab;
 
-  const NotificationsScreen({super.key, required this.api});
+  const NotificationsScreen({super.key, required this.api, this.onNavigateTab});
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -95,6 +96,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final productId = (item['scientificProductId'] as num?)?.toInt();
     final planId = (item['researchPlanId'] as num?)?.toInt();
     final itemId = (item['researchPlanItemId'] as num?)?.toInt();
+    final actionPath = item['actionPath']?.toString();
 
     if (item['isRead'] != true) {
       await markAsRead(item);
@@ -104,12 +106,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     Widget? destination;
 
-    if (productId != null) {
+    if (actionPath == 'evaluations') {
+      widget.onNavigateTab?.call(0);
+      return;
+    } else if (actionPath == 'my-targets') {
+      widget.onNavigateTab?.call(3);
+      return;
+    } else if (actionPath?.startsWith('products:') == true || productId != null) {
+      final linkedProductId = int.tryParse(actionPath?.split(':').last ?? '') ?? productId;
+      if (linkedProductId == null) return;
       destination = ProductDetailScreen(
         client: widget.api,
-        productId: productId,
+        productId: linkedProductId,
       );
-    } else if (itemId != null || planId != null) {
+    } else if (actionPath == 'research-plans' || itemId != null || planId != null) {
       destination = ResearchPlanScreen(
         client: widget.api,
         planId: planId,

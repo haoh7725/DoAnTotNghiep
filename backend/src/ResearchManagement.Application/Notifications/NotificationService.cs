@@ -91,6 +91,7 @@ public sealed class NotificationService(
             notification.ResearchPlanItemId,
             notification.ResearchPlanId,
             notification.ScientificProductId,
+            notification.ActionPath,
             notification.ScheduledAt,
             notification.SentAt,
             notification.ReadAt,

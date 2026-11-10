@@ -17,6 +17,7 @@ public sealed class Notification : BaseEntity
         long? feedbackId = null,
         long? researchPlanId = null,
         long? scientificProductId = null,
+        string? actionPath = null,
         DateTimeOffset? scheduledAt = null)
     {
         if (recipientAccountId <= 0)
@@ -31,6 +32,9 @@ public sealed class Notification : BaseEntity
         if (deduplicationKey.Length > 191)
             throw new ArgumentException("Khóa chống trùng tối đa 191 ký tự.");
 
+        if (actionPath?.Trim().Length > 200)
+            throw new ArgumentException("Đường dẫn thao tác tối đa 200 ký tự.");
+
         if (type is not ("NHAC_HAN" or "QUA_HAN" or "PHAN_HOI" or "HE_THONG"))
             throw new ArgumentException("Loại thông báo không hợp lệ.");
 
@@ -42,6 +46,7 @@ public sealed class Notification : BaseEntity
         FeedbackId = feedbackId;
         ResearchPlanId = researchPlanId;
         ScientificProductId = scientificProductId;
+        ActionPath = string.IsNullOrWhiteSpace(actionPath) ? null : actionPath.Trim();
 
         Channel = "IN_APP";
         DeliveryStatus = "CHO_GUI";
@@ -54,6 +59,7 @@ public sealed class Notification : BaseEntity
     public long? FeedbackId { get; private set; }
     public long? ResearchPlanId { get; private set; }
     public long? ScientificProductId { get; private set; }
+    public string? ActionPath { get; private set; }
 
     public string Type { get; private set; } = string.Empty;
     public string Content { get; private set; } = string.Empty;

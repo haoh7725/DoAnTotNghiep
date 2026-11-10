@@ -25,6 +25,7 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [tab, setTab] = useState('overview')
   const [productToOpen, setProductToOpen] = useState<number | null>(null)
+  const [reviewProductToOpen, setReviewProductToOpen] = useState<number | null>(null)
   const [unreadCount, setUnreadCount] = useState(0)
   const [lookups, setLookups] = useState<Lookups | null>(null)
   const [lookupError, setLookupError] = useState('')
@@ -160,6 +161,16 @@ export default function App() {
     try { await api('/auth/logout', 'POST'); setUser(null); setLookups(null); setTab('overview') }
     catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }
+  function openNotificationAction(actionPath: string) {
+    const [destination, rawId] = actionPath.split(':')
+    const id = Number(rawId) || null
+    if (destination === 'products') { setProductToOpen(id); setTab('products') }
+    else if (destination === 'product-reviews') { setReviewProductToOpen(id); setTab('product-reviews') }
+    else if (destination === 'research-targets' && canViewResearchTargets) setTab('research-targets')
+    else if (destination === 'research-plans') setTab('research-plans')
+    else if (destination === 'my-targets') setTab('my-targets')
+    else if (destination === 'evaluations') setTab('evaluations')
+  }
   if (loading) return <main className="loading" role="status">Đang kiểm tra phiên đăng nhập…</main>
   if (connectionError && !user) {
     return (
@@ -233,7 +244,7 @@ export default function App() {
         ) && (
             <button
               className={tab === 'product-reviews' ? 'active' : ''}
-              onClick={() => setTab('product-reviews')}
+              onClick={() => { setReviewProductToOpen(null); setTab('product-reviews') }}
             >
               Sản phẩm chờ duyệt
             </button>
@@ -305,7 +316,7 @@ export default function App() {
         onOpenProduct={id => { setProductToOpen(id); setTab('products') }}
       />}
       {tab === 'notifications' && (
-        <Notifications onUnreadCountChange={setUnreadCount} />
+        <Notifications onUnreadCountChange={setUnreadCount} onOpenAction={openNotificationAction} />
       )}
       {tab === 'products' && <ProductWorkspace user={user} initialProductId={productToOpen} />}
       {tab === 'product-reviews' &&
@@ -313,7 +324,7 @@ export default function App() {
           ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'QUAN_TRI']
             .includes(r.role)
         ) && (
-          <ProductReviewWorkspace user={user} />
+          <ProductReviewWorkspace user={user} initialProductId={reviewProductToOpen} />
         )
       }
       {tab === 'evaluations' && <Evaluations user={user} lookups={lookups} />}

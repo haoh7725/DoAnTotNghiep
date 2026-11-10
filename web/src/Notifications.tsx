@@ -12,6 +12,7 @@ export type Notification = {
   researchPlanItemId: number | null
   researchPlanId: number | null
   scientificProductId: number | null
+  actionPath: string | null
   scheduledAt: string
   sentAt: string | null
   readAt: string | null
@@ -22,6 +23,7 @@ type NotificationFilter = 'all' | 'unread' | 'read'
 
 type NotificationsProps = {
   onUnreadCountChange?: (count: number) => void
+  onOpenAction?: (actionPath: string) => void
 }
 
 function formatDate(value: string) {
@@ -39,6 +41,7 @@ function formatDate(value: string) {
 
 export default function Notifications({
   onUnreadCountChange,
+  onOpenAction,
 }: NotificationsProps) {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [filter, setFilter] = useState<NotificationFilter>('all')
@@ -128,6 +131,11 @@ export default function Notifications({
     } finally {
       setBusy(false)
     }
+  }
+
+  async function openNotification(item: Notification) {
+    if (!item.isRead) await markAsRead(item.id)
+    if (item.actionPath) onOpenAction?.(item.actionPath)
   }
 
   const unreadCount = notifications.filter(item => !item.isRead).length
@@ -278,16 +286,28 @@ export default function Notifications({
                   </div>
                 </div>
 
-                {!item.isRead && (
-                  <button
-                    type="button"
-                    className="notification-mark-read"
-                    disabled={busy}
-                    onClick={() => void markAsRead(item.id)}
-                  >
-                    Đánh dấu đã đọc
-                  </button>
-                )}
+                <div className="notification-actions">
+                  {item.actionPath && (
+                    <button
+                      type="button"
+                      className="notification-open"
+                      disabled={busy}
+                      onClick={() => void openNotification(item)}
+                    >
+                      Mở nội dung
+                    </button>
+                  )}
+                  {!item.isRead && (
+                    <button
+                      type="button"
+                      className="notification-mark-read"
+                      disabled={busy}
+                      onClick={() => void markAsRead(item.id)}
+                    >
+                      Đánh dấu đã đọc
+                    </button>
+                  )}
+                </div>
               </article>
             ))}
           </div>

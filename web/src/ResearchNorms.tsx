@@ -5,6 +5,7 @@ import { api } from './api'
 import type { AcademicYear } from './api'
 
 import type { Lecturer } from './Lecturers'
+import { useAutoReveal } from './useAutoReveal'
 
 type Paged<T> = {
   items: T[]
@@ -45,6 +46,7 @@ export function ResearchNorms({ academicYears, canEdit }: Props) {
   const [lecturerLoading, setLecturerLoading] = useState(false)
   const [lecturerError, setLecturerError] = useState('')
   const [selectedLecturer, setSelectedLecturer] = useState<Lecturer | null>(null)
+  const formRef = useAutoReveal<HTMLFormElement>(showForm, editing?.id ?? 'new')
 
   useEffect(() => {
     let active = true
@@ -228,6 +230,8 @@ export function ResearchNorms({ academicYears, canEdit }: Props) {
 
           {showForm && (
             <form
+              ref={formRef}
+              className="auto-reveal-target"
               key={editing?.id ?? 'new'}
               onSubmit={saveNorm}
             >

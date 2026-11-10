@@ -27,6 +27,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddScoped<WorkflowNotificationDispatcher>();
 
 var jwt = JwtOptions.FromConfiguration(builder.Configuration);
 builder.Services
