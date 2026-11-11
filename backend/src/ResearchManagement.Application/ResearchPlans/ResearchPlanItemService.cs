@@ -73,8 +73,8 @@ public sealed class ResearchPlanItemService(
             throw new BusinessRuleException(
                 "Kế hoạch đã đăng ký nên không thể thêm nội dung.");
         }
-        if (await productTypes.GetByIdAsync(request.ProductTypeId, cancellationToken) is null)
-            throw new NotFoundException("Không tìm thấy loại sản phẩm khoa học.");
+        if (await productTypes.GetByIdAsync(request.ProductTypeId, cancellationToken) is not { IsActive: true })
+            throw new BusinessRuleException("Nhóm sản phẩm không tồn tại hoặc đã ngừng dùng.");
         if (request.Deadline.HasValue && plan.Deadline.HasValue && request.Deadline.Value > plan.Deadline.Value)
             throw new BusinessRuleException("Hạn nội dung không được sau hạn chung của kế hoạch.");
 

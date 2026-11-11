@@ -104,6 +104,8 @@ public sealed class ProductsController(
                            {
                                item.Id,
                                item.Name,
+                               item.ProductTypeId,
+                               ProductTypeCode = type.Code,
                                ProductTypeName = type.Name,
                                AcademicYearCode = year.Code,
                                item.Status
@@ -163,6 +165,10 @@ public sealed class ProductsController(
         return Ok(targets);
     }
 
+    [HttpGet("api/products/publication-options")]
+    public async Task<IActionResult> PublicationOptions(CancellationToken ct) => Ok(await db.JournalConferences
+        .AsNoTracking().OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.Type }).ToListAsync(ct));
+
     // GET /api/research-plan-items/{itemId}/products
     [HttpGet("api/research-plan-items/{itemId:long}/products")]
     public async Task<ActionResult<IReadOnlyList<ProductSummaryResponse>>> GetByPlanItem(
@@ -180,6 +186,7 @@ public sealed class ProductsController(
         CancellationToken cancellationToken)
     {
         request.ResearchPlanItemId = itemId;
+        await ValidateClassification(itemId, request.ClassificationId, cancellationToken);
         var result = await productService.CreateAsync(request, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
@@ -200,8 +207,21 @@ public sealed class ProductsController(
         [FromBody] UpdateProductRequest request,
         CancellationToken cancellationToken)
     {
+        var existingProduct = await db.Products.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
+        await ValidateClassification(existingProduct.ResearchPlanItemId, request.ClassificationId, cancellationToken, existingProduct.ClassificationId);
         var result = await productService.UpdateAsync(id, request, cancellationToken);
         return Ok(result);
+    }
+
+    private async Task ValidateClassification(long itemId, long? classificationId, CancellationToken ct, long? existingId = null)
+    {
+        var item = await db.ResearchPlanItems.AsNoTracking().SingleOrDefaultAsync(x => x.Id == itemId, ct)
+            ?? throw new NotFoundException("Không tìm thấy nội dung kế hoạch.");
+        if (!classificationId.HasValue) return; // Hồ sơ cũ và mobile cũ vẫn được đọc/cập nhật.
+        if (!await db.ProductClassifications.AnyAsync(x => x.Id == classificationId && x.ProductTypeId == item.ProductTypeId &&
+            (x.IsActive || x.Id == existingId), ct))
+            throw new BusinessRuleException("Phân loại không thuộc nhóm sản phẩm hoặc đã ngừng dùng.");
     }
 
     // PATCH /api/products/{id}/article-progress

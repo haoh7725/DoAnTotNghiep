@@ -3,13 +3,14 @@ import type { FormEvent } from 'react'
 import { api, apiForm } from './api'
 import type { Profile } from './api'
 import './Products.css'
+import type { Classification } from './ProductTaxonomy'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Summary = { id: number; researchPlanItemId: number; title: string; articleStatus: string | null; status: string; scoreEquivalent: number | null; updatedAt: string; createdAt: string }
 type CoAuthor = { id: number; lecturerId: number; lecturerFullName: string; lecturerCode: string | null; displayOrder: number; authorRole: string }
 type Evidence = { id: number; originalFileName: string; fileSizeBytes: number; description: string | null; uploadedAt: string }
-type Product = Summary & { submittedByLecturerId: number; submittedByLecturerFullName: string; description: string | null; publicationInfo: string | null; publishedDate: string | null; journalIndex: string | null; journalClassification: string | null; projectLevel: string | null; researchTargetId: number | null; journalConferenceId: number | null; coAuthors: CoAuthor[]; evidences: Evidence[] }
-type PlanItem = { id: number; name: string; productTypeName: string; academicYearCode: string; status: string }
+type Product = Summary & { productTypeId: number; productTypeCode: string; submittedByLecturerId: number; submittedByLecturerFullName: string; description: string | null; publicationInfo: string | null; publishedDate: string | null; journalIndex: string | null; journalClassification: string | null; projectLevel: string | null; researchTargetId: number | null; journalConferenceId: number | null; externalAuthorCount: number; classificationId: number | null; coAuthors: CoAuthor[]; evidences: Evidence[] }
+type PlanItem = { id: number; name: string; productTypeId: number; productTypeCode: string; productTypeName: string; academicYearCode: string; status: string }
 type LecturerOption = { id: number; fullName: string; code: string; departmentName: string }
 type AvailableTarget = { id: number; academicYearId: number; academicYearCode: string; allocatedArticleCount: number; journalConferenceId: number | null; journalConferenceName: string | null; deadline: string | null; status: string }
 type ReviewHistory = { id: number; productId: number; actorAccountId: number; actorUsername: string; fromStatus: string; toStatus: string; comment: string | null; occurredAt: string }
@@ -293,7 +294,7 @@ function CreateProduct({ onCreated }: { onCreated: (id: number) => void }) {
     const target = targets.find(x => x.id === targetId)
     setBusy(true); setError('')
     try {
-      const body = { ...formBody(f, itemId), journalConferenceId: target?.journalConferenceId ?? null }
+      const body = { ...formBody(f, itemId), journalConferenceId: target?.journalConferenceId ?? (Number(f.get('journalConferenceId')) || null) }
       const p = await api<Product>(`/research-plan-items/${itemId}/products`, 'POST', body)
       onCreated(p.id)
     }
@@ -460,8 +461,8 @@ function ProductDetail({ id, user, allowProgressUpdate = false, onBack }: { id: 
               <div><dt>Trạng thái bài viết</dt><dd>{p.articleStatus ? article[p.articleStatus] : '—'}</dd></div>
               <div><dt>Ngày công bố</dt><dd>{p.publishedDate ?? '—'}</dd></div>
               <div><dt>Nơi công bố</dt><dd>{p.publicationInfo ?? '—'}</dd></div>
-              <div><dt>Chỉ số tạp chí</dt><dd>{p.journalIndex ?? '—'}</dd></div>
-              <div><dt>Phân loại tạp chí</dt><dd>{p.journalClassification ?? '—'}</dd></div>
+              <div><dt>Chỉ mục công bố</dt><dd>{p.journalIndex ?? '—'}</dd></div>
+              <div><dt>Phân hạng công bố</dt><dd>{p.journalClassification ?? '—'}</dd></div>
               <div><dt>Cấp đề tài</dt><dd>{p.projectLevel ?? '—'}</dd></div>
             </dl>
             {p.description && <p>{p.description}</p>}
@@ -731,8 +732,8 @@ function SnapshotPanel({ productId }: { productId: number }) {
                     <div><dt>Trạng thái bài viết</dt><dd>{s.articleStatus ? article[s.articleStatus] : '—'}</dd></div>
                     <div><dt>Ngày công bố</dt><dd>{s.publishedDate ?? '—'}</dd></div>
                     <div><dt>Nơi công bố</dt><dd>{s.publicationInfo ?? '—'}</dd></div>
-                    <div><dt>Chỉ số tạp chí</dt><dd>{s.journalIndex ?? '—'}</dd></div>
-                    <div><dt>Phân loại tạp chí</dt><dd>{s.journalClassification ?? '—'}</dd></div>
+                    <div><dt>Chỉ mục công bố</dt><dd>{s.journalIndex ?? '—'}</dd></div>
+                    <div><dt>Phân hạng công bố</dt><dd>{s.journalClassification ?? '—'}</dd></div>
                     <div><dt>Cấp đề tài</dt><dd>{s.projectLevel ?? '—'}</dd></div>
                     {s.description && <div className="wide"><dt>Mô tả</dt><dd>{s.description}</dd></div>}
                   </dl>
@@ -751,14 +752,25 @@ function ProductForm({ product, onSubmit, busy, error, planItems, targets }: {
   busy: boolean; error: string; planItems?: PlanItem[]; targets?: AvailableTarget[]
 }) {
   const [selectedPlanItemId, setSelectedPlanItemId] = useState('')
+  const [classifications, setClassifications] = useState<Classification[]>([])
+  const [publicationOptions, setPublicationOptions] = useState<{ id: number; name: string; type: string }[]>([])
+  const [catalogError, setCatalogError] = useState('')
+  const [selectedClassification, setSelectedClassification] = useState(String(product?.classificationId ?? ''))
+  useEffect(() => {
+    Promise.all([api<Classification[]>('/product-classifications'), api<{ id: number; name: string; type: string }[]>('/products/publication-options')])
+      .then(([c, p]) => { setClassifications(c); setPublicationOptions(p) }).catch(e => setCatalogError(e.message))
+  }, [])
   const selectedPlan = planItems?.find(x => x.id === Number(selectedPlanItemId))
-  const isArticle = selectedPlan?.productTypeName.trim().toLocaleLowerCase('vi-VN') === 'bài báo'
-  const isProject = selectedPlan?.productTypeName.trim().toLocaleLowerCase('vi-VN') === 'đề tài'
+  const productPlan = selectedPlan ?? planItems?.find(x => x.id === product?.researchPlanItemId)
+  const classOptions = classifications.filter(c => (c.isActive || c.id === product?.classificationId) && c.productTypeId === (productPlan?.productTypeId ?? product?.productTypeId))
+  const isArticle = (productPlan?.productTypeCode ?? product?.productTypeCode) === 'BAI_BAO'
+  const isProject = (productPlan?.productTypeCode ?? product?.productTypeCode) === 'DE_TAI'
   return <form onSubmit={onSubmit}>
     {error && <p className="alert">{error}</p>}
+    {catalogError && <p className="alert" role="alert">Không tải được danh mục quy đổi: {catalogError}</p>}
     <div className="form-grid">
       {planItems && <><label className="wide">1. Nội dung đã cam kết trong kế hoạch
-        <select name="researchPlanItemId" required value={selectedPlanItemId} onChange={e => setSelectedPlanItemId(e.target.value)}>
+        <select name="researchPlanItemId" required value={selectedPlanItemId} onChange={e => { setSelectedPlanItemId(e.target.value); setSelectedClassification('') }}>
           <option value="">Chọn nội dung kế hoạch</option>
           {planItems.map(x => <option value={x.id} key={x.id}>{x.academicYearCode} · {x.productTypeName} · {x.name}</option>)}
         </select>
@@ -774,6 +786,12 @@ function ProductForm({ product, onSubmit, busy, error, planItems, targets }: {
         </select>
         {targets?.length === 0 && <small className="muted">Bạn chưa được giao chỉ tiêu bài báo; vẫn có thể lưu sản phẩm và tự liên kết sau.</small>}
       </label>}</>}
+      <label className="wide">Phân loại dùng để quy đổi<select name="classificationId" required={classOptions.length > 0 && !product} value={selectedClassification} onChange={e => setSelectedClassification(e.target.value)}>
+        <option value="" disabled={!!product?.classificationId}>{classOptions.length ? 'Chọn phân loại phù hợp với minh chứng' : 'Nhóm chưa có phân loại / hồ sơ cũ'}</option>
+        {classOptions.map(c => <option value={c.id} key={c.id}>{c.name}</option>)}
+      </select><small className="muted">QLKH kiểm tra phân loại và minh chứng trước khi công nhận. Chọn phân loại không tự động công nhận giờ/điểm.</small></label>
+      {!product && <label className="wide">Nơi công bố trong danh mục (nếu có)<select name="journalConferenceId" defaultValue=""><option value="">Không áp dụng / chưa có trong danh mục</option>{publicationOptions.map(p => <option key={p.id} value={p.id}>{p.type === 'TAP_CHI' ? 'Tạp chí' : 'Hội nghị'} · {p.name}</option>)}</select><small className="muted">Nếu chỉ tiêu đã quy định nơi công bố, hệ thống dùng nơi công bố của chỉ tiêu.</small></label>}
+      <label>Số tác giả ngoài trường<input name="externalAuthorCount" type="number" min="0" max="10000" required defaultValue={product?.externalAuthorCount ?? 0} /><small className="muted">Không tính lại các đồng tác giả đã chọn từ danh sách giảng viên.</small></label>
       <label className="wide">{planItems ? '3. Tên sản phẩm thực tế' : 'Tên sản phẩm'}<input name="title" required minLength={3} maxLength={500} defaultValue={product?.title} /></label>
       {(isArticle || !planItems) && <label>Trạng thái bài viết
         <select name="articleStatus" defaultValue={product?.articleStatus ?? ''}>
@@ -781,10 +799,10 @@ function ProductForm({ product, onSubmit, busy, error, planItems, targets }: {
           {Object.entries(article).filter(([v]) => v !== 'DA_NHAN_DANG').map(([v, n]) => <option value={v} key={v}>{n}</option>)}
         </select>
       </label>}
-      {(isArticle || !planItems) && <label>Ngày công bố<input type="date" name="publishedDate" defaultValue={product?.publishedDate ?? ''} /></label>}
+      <label>{isArticle ? 'Ngày công bố' : 'Ngày công bố / công nhận / nghiệm thu'}<input type="date" name="publishedDate" defaultValue={product?.publishedDate ?? ''} /><small className="muted">Dùng để xác định quy định còn hiệu lực tại thời điểm công trình được công nhận.</small></label>
       <label>Nơi công bố / đơn vị cấp<input name="publicationInfo" maxLength={500} defaultValue={product?.publicationInfo ?? ''} /></label>
-      {(isArticle || !planItems) && <label>Chỉ số tạp chí<input name="journalIndex" maxLength={100} placeholder="Scopus, WoS…" defaultValue={product?.journalIndex ?? ''} /></label>}
-      {(isArticle || !planItems) && <label>Phân loại tạp chí<input name="journalClassification" maxLength={100} placeholder="Q1, Q2…" defaultValue={product?.journalClassification ?? ''} /></label>}
+      {(isArticle || !planItems) && <label>Chỉ mục công bố<input name="journalIndex" maxLength={100} placeholder="Scopus, WoS…" defaultValue={product?.journalIndex ?? ''} /></label>}
+      {(isArticle || !planItems) && <label>Phân hạng công bố<input name="journalClassification" maxLength={100} placeholder="Q1, Q2…" defaultValue={product?.journalClassification ?? ''} /></label>}
       {(isProject || !planItems) && <label>Cấp đề tài<input name="projectLevel" maxLength={100} placeholder="Trường, Bộ, Nhà nước…" defaultValue={product?.projectLevel ?? ''} /></label>}
       <label className="wide">Mô tả<textarea name="description" rows={4} defaultValue={product?.description ?? ''} /></label>
     </div>
@@ -883,6 +901,8 @@ function formBody(f: FormData, researchPlanItemId?: number) {
     ...(researchPlanItemId ? { researchPlanItemId } : {}),
     ...(researchPlanItemId ? { researchTargetId } : {}),
     title: text('title'), description: text('description'),
+    classificationId: Number(f.get('classificationId')) || null,
+    externalAuthorCount: Number(f.get('externalAuthorCount')) || 0,
     publicationInfo: text('publicationInfo'), publishedDate: text('publishedDate'),
     articleStatus: text('articleStatus'), journalIndex: text('journalIndex'),
     journalClassification: text('journalClassification'), projectLevel: text('projectLevel'),

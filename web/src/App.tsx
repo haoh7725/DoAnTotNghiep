@@ -268,7 +268,7 @@ export default function App() {
             className={tab === 'journal-conferences' ? 'active' : ''}
             onClick={() => setTab('journal-conferences')}
           >
-            Danh mục tạp chí/hội nghị
+            Nơi công bố bài báo
           </button>
         )}
         {manager && !executive && <button className={tab === 'reports' ? 'active' : ''} onClick={() => setTab('reports')}>Thống kê kết quả</button>}
@@ -347,7 +347,7 @@ export default function App() {
       {tab === 'journal-conferences' && (
         canViewJournalConferences
           ? <JournalConferences canEdit={canEditJournalConferences} />
-          : <p role="alert">Bạn không có quyền xem danh mục tạp chí/hội nghị.</p>
+          : <p role="alert">Bạn không có quyền xem danh mục nơi công bố bài báo.</p>
       )}
       {tab === 'admin' && (administrator ? <AdminPanel currentAccountId={user.id} onChanged={() => setRetry(x => x + 1)} /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
       {tab === 'conversion-rules' && (canManageConversionRules ? <ConversionRules /> : <p role="alert">Chỉ Phòng QLKH hoặc quản trị viên được cấu hình quy định quy đổi.</p>)}

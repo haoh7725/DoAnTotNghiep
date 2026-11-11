@@ -6,6 +6,8 @@ namespace ResearchManagement.Application.Products.Models;
 
 public sealed class CreateProductRequest
 {
+    public long? ClassificationId { get; set; }
+    [Range(0, 10000)] public int ExternalAuthorCount { get; set; }
     [Required]
     public long ResearchPlanItemId { get; set; }
 
@@ -28,6 +30,8 @@ public sealed class CreateProductRequest
 
 public sealed class UpdateProductRequest
 {
+    public long? ClassificationId { get; set; }
+    [Range(0, 10000)] public int? ExternalAuthorCount { get; set; }
     [Required, StringLength(500, MinimumLength = 3)]
     public string Title { get; set; } = string.Empty;
 
@@ -134,7 +138,11 @@ public sealed record ProductResponse(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     IReadOnlyList<CoAuthorResponse> CoAuthors,
-    IReadOnlyList<EvidenceResponse> Evidences);
+    IReadOnlyList<EvidenceResponse> Evidences,
+    int ExternalAuthorCount = 0,
+    long? ClassificationId = null,
+    long ProductTypeId = 0,
+    string ProductTypeCode = "");
 
 public sealed record ProductSummaryResponse(
     long Id,

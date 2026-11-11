@@ -142,7 +142,7 @@ export default function JournalConferences({ canEdit }: Props) {
     if (!canEdit || saving) return
 
     if (!form.name.trim()) {
-      setError('Vui lòng nhập tên tạp chí/hội nghị.')
+      setError('Vui lòng nhập tên nơi công bố (tạp chí hoặc hội nghị).')
       return
     }
 
@@ -170,8 +170,8 @@ export default function JournalConferences({ canEdit }: Props) {
       setEditingId(null)
       setMessage(
         isEditing
-          ? 'Cập nhật danh mục thành công.'
-          : 'Thêm danh mục thành công.'
+          ? 'Cập nhật nơi công bố thành công.'
+          : 'Thêm nơi công bố thành công.'
       )
       await loadItems()
     } catch (err) {
@@ -184,17 +184,17 @@ export default function JournalConferences({ canEdit }: Props) {
   return (
     <section>
       <p className="eyebrow">QUẢN LÝ NGHIÊN CỨU KHOA HỌC</p>
-      <h1>Danh mục tạp chí/hội nghị</h1>
+      <h1>Nơi công bố bài báo</h1>
       <p>
-        Quản lý thông tin tạp chí, hội nghị khoa học và phân loại
-        phục vụ hoạt động nghiên cứu.
+        Quản lý nơi công bố bài báo. Admin và Phòng QLKH có thể nhập thêm tên tạp chí hoặc hội nghị mới.
+        Nhóm sản phẩm và phân loại tính giờ/điểm được quản lý riêng trong Quy định quy đổi.
       </p>
 
       {message && <p role="status">{message}</p>}
       {error && <p role="alert" style={{ color: '#b42318' }}>{error}</p>}
 
       <div className="card" style={{ marginTop: 24 }}>
-        <h3>Danh sách tạp chí và hội nghị</h3>
+        <h3>Danh sách nơi công bố</h3>
 
         <div
           style={{
@@ -206,31 +206,31 @@ export default function JournalConferences({ canEdit }: Props) {
         >
           <input
             type="search"
-            placeholder="Tìm theo tên..."
+            placeholder="Tìm tên tạp chí hoặc hội nghị..."
             value={keyword}
             onChange={event => setKeyword(event.target.value)}
-            aria-label="Tìm kiếm danh mục"
+            aria-label="Tìm kiếm nơi công bố"
           />
 
           <select
             value={filterType}
             onChange={event => setFilterType(event.target.value)}
-            aria-label="Lọc loại danh mục"
+            aria-label="Lọc hình thức công bố"
           >
-            <option value="">Tất cả</option>
+            <option value="">Tất cả hình thức công bố</option>
             <option value="TAP_CHI">Tạp chí</option>
             <option value="HOI_NGHI">Hội nghị</option>
           </select>
 
           {canEdit && (
             <button type="button" onClick={startCreate}>
-              + Thêm danh mục
+              + Thêm nơi công bố
             </button>
           )}
         </div>
 
         {loading ? (
-          <p>Đang tải danh mục...</p>
+          <p>Đang tải nơi công bố...</p>
         ) : items.length === 0 ? (
           <p>Không tìm thấy tạp chí hoặc hội nghị phù hợp.</p>
         ) : (
@@ -238,11 +238,11 @@ export default function JournalConferences({ canEdit }: Props) {
             <table style={{ width: '100%' }}>
               <thead>
                 <tr>
-                  <th>Tên</th>
-                  <th>Loại</th>
+                  <th>Tên nơi công bố</th>
+                  <th>Hình thức công bố</th>
                   <th>ISSN</th>
-                  <th>Chỉ số</th>
-                  <th>Phân loại</th>
+                  <th>Chỉ mục tham khảo</th>
+                  <th>Phân hạng tham khảo</th>
                   <th>Ghi chú</th>
                   {canEdit && <th>Thao tác</th>}
                 </tr>
@@ -274,13 +274,13 @@ export default function JournalConferences({ canEdit }: Props) {
       {canEdit && showForm && (
         <div ref={formRef} className="card auto-reveal-target" style={{ marginTop: 20 }}>
           <h3>
-            {editingId === null ? 'Thêm danh mục mới' : 'Sửa danh mục'}
+            {editingId === null ? 'Thêm nơi công bố' : 'Sửa nơi công bố'}
           </h3>
 
           <form onSubmit={saveItem}>
             <div style={{ display: 'grid', gap: 14 }}>
               <label>
-                Tên tạp chí/hội nghị *
+                Tên nơi công bố (tạp chí hoặc hội nghị) *
                 <input
                   value={form.name}
                   maxLength={300}
@@ -290,7 +290,7 @@ export default function JournalConferences({ canEdit }: Props) {
               </label>
 
               <label>
-                Loại *
+                Hình thức công bố *
                 <select
                   value={form.type}
                   onChange={event =>
@@ -300,7 +300,7 @@ export default function JournalConferences({ canEdit }: Props) {
                   <option value="TAP_CHI">Tạp chí</option>
                   <option value="HOI_NGHI">Hội nghị</option>
                 </select>
-                <small className="muted">Danh mục nơi công bố chỉ gồm Tạp chí và Hội nghị. Đề tài, sách, chứng nhận được chọn ở loại nội dung trong Kế hoạch NCKH.</small>
+                <small className="muted">Tạp chí và Hội nghị là hình thức nơi công bố, không phải toàn bộ nhóm sản phẩm NCKH. Bạn tự nhập tên nơi công bố ở ô phía trên.</small>
               </label>
 
               <label>
@@ -313,7 +313,7 @@ export default function JournalConferences({ canEdit }: Props) {
               </label>
 
               <label>
-                Chỉ số
+                Chỉ mục tham khảo
                 <input
                   value={form.index}
                   maxLength={100}
@@ -323,11 +323,11 @@ export default function JournalConferences({ canEdit }: Props) {
               </label>
 
               <label>
-                Phân loại
+                Phân hạng tham khảo
                 <input
                   value={form.classification}
                   maxLength={100}
-                  placeholder="Ví dụ: Q1, Q2"
+                  placeholder="Ví dụ: Q1, Q2; cần kiểm tra năm áp dụng"
                   onChange={event =>
                     updateField('classification', event.target.value)
                   }
@@ -345,7 +345,7 @@ export default function JournalConferences({ canEdit }: Props) {
 
               <div style={{ display: 'flex', gap: 10 }}>
                 <button type="submit" disabled={saving}>
-                  {saving ? 'Đang lưu...' : 'Lưu danh mục'}
+                  {saving ? 'Đang lưu...' : 'Lưu nơi công bố'}
                 </button>
                 <button
                   type="button"

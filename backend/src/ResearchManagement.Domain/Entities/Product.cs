@@ -61,6 +61,13 @@ public sealed class Product : BaseEntity
     public string? ProjectLevel { get; private set; }
     public long? JournalConferenceId { get; private set; }
     public long? ResearchTargetId { get; private set; }
+    public int ExternalAuthorCount { get; private set; }
+    public long? ClassificationId { get; set; }
+    public void SetExternalAuthorCount(int count)
+    {
+        if (count < 0 || count > 10000) throw new ArgumentOutOfRangeException(nameof(count));
+        ExternalAuthorCount = count;
+    }
 
     public string Status { get; private set; } = ProductStatuses.Draft;
 

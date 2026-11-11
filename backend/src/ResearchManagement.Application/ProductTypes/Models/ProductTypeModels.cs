@@ -19,4 +19,4 @@ public sealed class UpdateProductTypeRequest
     public string Name { get; set; } = string.Empty;
 }
 
-public sealed record ProductTypeResponse(long Id, string Code, string Name);
+public sealed record ProductTypeResponse(long Id, string Code, string Name, bool IsActive = true);

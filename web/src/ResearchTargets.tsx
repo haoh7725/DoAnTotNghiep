@@ -504,7 +504,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
             )}
 
             <label>
-              Tạp chí/hội nghị liên kết (không bắt buộc)
+              Nơi công bố bài báo liên kết (không bắt buộc)
               <select name="journalConferenceId" defaultValue={editingTarget?.journalConferenceId ?? ''}>
                 <option value="">-- Chỉ tiêu chung --</option>
                 {catalog.map(x => <option key={x.id} value={x.id}>{x.type === 'TAP_CHI' ? 'Tạp chí' : 'Hội nghị'} — {x.name}</option>)}

@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <Content Include="DemoEvidence\*.pdf" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <EmbeddedResource Include="..\..\..\infra\database\15_conversion_sharing.sql" LogicalName="ConversionSharingMigration.sql" />
   </ItemGroup>
 
 </Project>
