@@ -48,7 +48,21 @@ public sealed class ResearchProgressController(
             AllocatedArticles = x.AllocatedArticleCount, ApprovedArticles = approved.GetValueOrDefault(x.DepartmentId),
             CompletionPercent = x.AllocatedArticleCount == 0 ? 0m : Math.Round(approved.GetValueOrDefault(x.DepartmentId) * 100m / x.AllocatedArticleCount, 2),
             IsCompleted = approved.GetValueOrDefault(x.DepartmentId) >= x.AllocatedArticleCount }).ToList();
-        var totalApproved = units.Sum(x => x.ApprovedArticles);
+        var visibleDepartmentIds = allocations.Select(x => x.DepartmentId).ToList();
+        // Một bài có đồng tác giả ở nhiều bộ môn chỉ được tính một lần trong tổng toàn khoa.
+        var totalApproved = await (from product in db.Products.AsNoTracking()
+                                   join item in db.ResearchPlanItems.AsNoTracking() on product.ResearchPlanItemId equals item.Id
+                                   join type in db.ProductTypes.AsNoTracking() on item.ProductTypeId equals type.Id
+                                   where product.ResearchTargetId == targetId && type.Code == "BAI_BAO" &&
+                                       product.Status == "DA_DUYET" && product.ArticleStatus == "DA_XUAT_BAN" &&
+                                       db.LecturerTargetAllocations.Any(personal =>
+                                           (personal.LecturerId == product.SubmittedByLecturerId ||
+                                            db.ProductCoAuthors.Any(author => author.ProductId == product.Id && author.LecturerId == personal.LecturerId)) &&
+                                           db.ResearchTargetAllocations.Any(allocation =>
+                                               allocation.Id == personal.DepartmentAllocationId &&
+                                               allocation.ResearchTargetId == targetId &&
+                                               visibleDepartmentIds.Contains(allocation.DepartmentId)))
+                                   select product.Id).Distinct().CountAsync(ct);
         var visibleTarget = canViewWholeFaculty ? target.AssignedArticleCount : units.Sum(x => x.AllocatedArticles);
         return Ok(new { target.Id, AssignedArticleCount = visibleTarget, target.Status, ApprovedArticles = totalApproved,
             CompletionPercent = visibleTarget == 0 ? 0m : Math.Round(totalApproved * 100m / visibleTarget, 2),
@@ -190,17 +204,17 @@ public sealed class ResearchProgressController(
 
         if (plan != null)
         {
-            // Tính cả sản phẩm đứng tên chính và sản phẩm có giảng viên là đồng tác giả,
-            // thống nhất với cách đánh giá, quy đổi cuối năm.
+            // Tiến độ kế hoạch cá nhân chỉ tính sản phẩm thuộc chính kế hoạch đó.
+            // Đồng tác giả ở kế hoạch của người khác vẫn được tính khi đánh giá cuối năm,
+            // nhưng không làm tăng tỷ lệ hoàn thành cam kết cá nhân tại đây.
             var query =
                 from product in db.Products.AsNoTracking()
                 join item in db.ResearchPlanItems.AsNoTracking()
                     on product.ResearchPlanItemId equals item.Id
                 join productPlan in db.ResearchPlans.AsNoTracking()
                     on item.ResearchPlanId equals productPlan.Id
-                where productPlan.AcademicYearId == academicYearId
-                    && (product.SubmittedByLecturerId == lecturer.Id ||
-                        db.ProductCoAuthors.Any(author => author.ProductId == product.Id && author.LecturerId == lecturer.Id))
+                where productPlan.Id == plan.Id
+                    && product.SubmittedByLecturerId == lecturer.Id
                     && product.Status == "DA_DUYET"
                 select product.Id;
 

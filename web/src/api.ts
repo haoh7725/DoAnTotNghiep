@@ -4,6 +4,10 @@ export type Faculty = { id: number; code: string; name: string }
 export type Department = Faculty & { facultyId: number }
 export type AcademicYear = { id: number; code: string; startDate: string; endDate: string }
 export type Lookups = { faculties: Faculty[]; departments: Department[]; academicYears: AcademicYear[] }
+export const preferredAcademicYear = (years: AcademicYear[], today = new Date()) => {
+  const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  return years.find(year => year.startDate.slice(0, 10) <= date && year.endDate.slice(0, 10) >= date) ?? years[0]
+}
 export const roleNames: Record<string, string> = {
   QUAN_TRI: 'Quản trị viên', GIANG_VIEN: 'Giảng viên', TRUONG_BO_MON: 'Trưởng bộ môn',
   TRUONG_KHOA: 'Trưởng khoa', PHONG_QLKH: 'Phòng quản lý khoa học', BAN_GIAM_HIEU: 'Ban giám hiệu',

@@ -20,6 +20,7 @@ public sealed class ApplicationDbContext(
     public DbSet<ResearchPlan> ResearchPlans => Set<ResearchPlan>();
     public DbSet<ResearchPlanItem> ResearchPlanItems => Set<ResearchPlanItem>();
     public DbSet<ProgressHistory> ProgressHistories => Set<ProgressHistory>();
+    public DbSet<ResearchPlanHistory> ResearchPlanHistories => Set<ResearchPlanHistory>();
 
     // Notifications and reminders
     public DbSet<Notification> Notifications => Set<Notification>();

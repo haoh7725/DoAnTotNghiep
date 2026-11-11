@@ -12,7 +12,7 @@ public sealed class ResearchNorm : BaseEntity
         long academicYearId,
         decimal requiredHours,
         string? basis,
-        decimal requiredPoints = 100m)
+        decimal requiredPoints = 0m)
     {
         if (requiredHours < 0)
         {
@@ -43,7 +43,7 @@ public sealed class ResearchNorm : BaseEntity
     public void Update(
         decimal requiredHours,
         string? basis,
-        decimal requiredPoints = 100m)
+        decimal requiredPoints = 0m)
     {
         if (requiredHours < 0)
         {

@@ -34,4 +34,11 @@ public interface INotificationRepository
         string channel,
         string deduplicationKey,
         CancellationToken cancellationToken);
+
+    Task<bool> ExistsLegacyReminderAsync(
+        long recipientAccountId,
+        string channel,
+        string legacyDeduplicationKey,
+        string deadlineText,
+        CancellationToken cancellationToken);
 }

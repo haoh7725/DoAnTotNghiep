@@ -1,5 +1,5 @@
 ALTER TABLE nckh.dinh_muc_nckh
-    ADD COLUMN IF NOT EXISTS so_diem_dinh_muc NUMERIC(12,4) NOT NULL DEFAULT 100;
+    ADD COLUMN IF NOT EXISTS so_diem_dinh_muc NUMERIC(12,4) NOT NULL DEFAULT 0;
 
 DO $$
 BEGIN

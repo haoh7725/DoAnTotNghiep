@@ -71,6 +71,9 @@ Get-Content -Raw -Encoding UTF8 infra/database/08_target_workflow.sql | docker e
 Get-Content -Raw -Encoding UTF8 infra/database/09_lecturer_target_allocations.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 Get-Content -Raw -Encoding UTF8 infra/database/10_conversion_priority.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 Get-Content -Raw -Encoding UTF8 infra/database/11_emulation_classification_and_target_reminders.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 infra/database/12_business_rule_hardening.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 infra/database/13_norm_points_default.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 infra/database/14_research_plan_history.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 ```
 
 Nếu đã đổi tên database hoặc user trong `.env`, thay `research_management` và

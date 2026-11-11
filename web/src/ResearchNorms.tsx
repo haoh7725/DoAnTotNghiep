@@ -375,7 +375,7 @@ export function ResearchNorms({ academicYears, canEdit }: Props) {
                   type="number"
                   min="0"
                   step="any"
-                  defaultValue={editing?.requiredPoints ?? 100}
+                  defaultValue={editing?.requiredPoints ?? 0}
                   required
                 />
                 <small className="muted">Dùng để tính tỷ lệ xếp loại khi sản phẩm được quy đổi theo điểm.</small>

@@ -10,6 +10,8 @@ using ResearchManagement.Domain.Constants;
 using ResearchManagement.Domain.Entities;
 using ResearchManagement.Infrastructure.Persistence;
 using ResearchManagement.Api.Infrastructure;
+using System.Globalization;
+using System.Text;
 
 namespace ResearchManagement.Api.Controllers;
 
@@ -105,11 +107,11 @@ public sealed class EvaluationsController(
                 });
             foreach (var rule in matched)
             {
-                var role = product.AuthorRole ?? "DONG_TAC_GIA";
+                var role = NormalizeAuthorRole(product.AuthorRole ?? "DONG_TAC_GIA");
                 var coefficients = await db.AuthorConversionCoefficients.AsNoTracking()
                     .Where(x => x.ConversionRuleId == rule.Id).ToListAsync(ct);
                 var coefficient = coefficients.Count == 0 ? 1m :
-                    coefficients.FirstOrDefault(x => x.AuthorRole.ToUpper() == role)?.Coefficient;
+                    coefficients.FirstOrDefault(x => NormalizeAuthorRole(x.AuthorRole) == role)?.Coefficient;
                 if (!coefficient.HasValue)
                     throw new BusinessRuleException(
                         $"Quy định {rule.Code} chưa cấu hình hệ số cho vai trò tác giả '{role}' của sản phẩm '{product.Product.Title}'.");
@@ -122,6 +124,23 @@ public sealed class EvaluationsController(
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return CreatedAtAction(nameof(Detail), new { id = evaluation.Id }, await ToDetail(evaluation, ct));
+    }
+
+    private static string NormalizeAuthorRole(string value)
+    {
+        var decomposed = value.Trim().Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder();
+        foreach (var character in decomposed)
+            if (CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
+                builder.Append(char.IsLetterOrDigit(character) ? char.ToUpperInvariant(character) : '_');
+        var normalized = string.Join('_', builder.ToString().Split('_', StringSplitOptions.RemoveEmptyEntries));
+        return normalized switch
+        {
+            "DONG_TAC_GIA" => "DONG_TAC_GIA",
+            "TAC_GIA_LIEN_HE" => "TAC_GIA_LIEN_HE",
+            "TAC_GIA_CHINH" => "TAC_GIA_CHINH",
+            _ => normalized
+        };
     }
 
     [HttpPost("{id:long}/finalize"), Authorize(Policy = Policies.ResearchOffice)]
@@ -216,8 +235,10 @@ public sealed class EvaluationsController(
         decimal? pointPercent = norm.RequiredPoints > 0
             ? decimal.Round(totals.Points * 100m / norm.RequiredPoints, 2)
             : null;
-        var usePoints = pointPercent.HasValue && (!hourPercent.HasValue || pointPercent.Value > hourPercent.Value);
-        var percent = usePoints ? pointPercent!.Value : hourPercent!.Value;
+        var usePointsOnly = pointPercent.HasValue && !hourPercent.HasValue;
+        var useBoth = pointPercent.HasValue && hourPercent.HasValue;
+        var percent = useBoth ? Math.Min(hourPercent!.Value, pointPercent!.Value)
+            : usePointsOnly ? pointPercent!.Value : hourPercent!.Value;
         var rules = await db.EmulationClassificationRules.AsNoTracking()
             .Where(x => x.AcademicYearId == evaluation.AcademicYearId)
             .OrderByDescending(x => x.MinimumPercent).ThenBy(x => x.SortOrder).ToListAsync(ct);
@@ -228,10 +249,13 @@ public sealed class EvaluationsController(
         var basis = rule is null
             ? "Không đạt ngưỡng thấp nhất của quy chế xếp loại."
             : $"Đạt ngưỡng {rule.Name} từ {rule.MinimumPercent:0.##}% theo quy chế năm học.";
-        var calculation = usePoints
+        var calculation = useBoth
+            ? $"giờ NCKH: {totals.Hours:0.####}/{norm.RequiredHours:0.####} giờ và điểm NCKH: {totals.Points:0.####}/{norm.RequiredPoints:0.####} điểm"
+            : usePointsOnly
             ? $"điểm NCKH: {totals.Points:0.####}/{norm.RequiredPoints:0.####} điểm"
             : $"giờ NCKH: {totals.Hours:0.####}/{norm.RequiredHours:0.####} giờ";
-        return (name, $"Tự động theo tỷ lệ đạt cao hơn giữa giờ và điểm; căn cứ {calculation} ({percent:0.##}%). {basis}");
+        var policy = useBoth ? "tỷ lệ thấp hơn để bảo đảm đạt đồng thời định mức giờ và điểm" : "định mức được cấu hình";
+        return (name, $"Tự động theo {policy}; căn cứ {calculation} ({percent:0.##}%). {basis}");
     }
 
     private async Task<EvaluationSummaryResponse> ToSummary(Evaluation e, CancellationToken ct)

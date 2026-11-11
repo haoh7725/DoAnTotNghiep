@@ -5,12 +5,12 @@ public sealed record CreateResearchNormRequest(
     long AcademicYearId,
     decimal RequiredHours,
     string? Basis,
-    decimal RequiredPoints = 100m);
+    decimal RequiredPoints = 0m);
 
 public sealed record UpdateResearchNormRequest(
     decimal RequiredHours,
     string? Basis,
-    decimal RequiredPoints = 100m);
+    decimal RequiredPoints = 0m);
 
 public sealed record ResearchNormResponse(
     long Id,

@@ -7,6 +7,8 @@ using ResearchManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using ResearchManagement.Api.Infrastructure;
 using ResearchManagement.Api.Authorization;
+using ResearchManagement.Application.Auth.Abstractions;
+using ResearchManagement.Domain.Entities;
 
 namespace ResearchManagement.Api.Controllers;
 
@@ -16,6 +18,7 @@ namespace ResearchManagement.Api.Controllers;
 public sealed class ResearchPlansController(
     ResearchPlanService researchPlanService,
     ApplicationDbContext db,
+    ICurrentUser currentUser,
     WorkflowNotificationDispatcher workflowNotifications) : ControllerBase
 {
     [HttpGet]
@@ -113,22 +116,62 @@ public sealed class ResearchPlansController(
     [HttpPost("{id:long}/reopen")]
     [Authorize(Policy = Policies.ResearchOffice)]
     public async Task<ActionResult<ResearchPlanResponse>> Reopen(
-        long id,
+        long id, [FromBody] ReopenPlanRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await researchPlanService.ReopenAsync(id, cancellationToken);
-        var ownerAccountId = await db.Lecturers.AsNoTracking()
-            .Where(x => x.Id == result.LecturerId)
-            .Select(x => x.AccountId)
-            .SingleAsync(cancellationToken);
-        await workflowNotifications.QueueForAccountAsync(
-            ownerAccountId,
-            "Phòng QLKH đã mở lại kế hoạch NCKH để bạn điều chỉnh. Vui lòng cập nhật và đăng ký lại.",
-            $"RESEARCH_PLAN_REOPENED:{result.Id}:{Guid.NewGuid():N}",
-            "research-plans",
-            null,
-            cancellationToken);
-        await db.SaveChangesAsync(cancellationToken);
+        var reason = request.Reason?.Trim();
+        if (string.IsNullOrWhiteSpace(reason) || reason.Length > 1000)
+            throw new BusinessRuleException("Phải nhập lý do mở lại kế hoạch (tối đa 1000 ký tự).");
+        var strategy = db.Database.CreateExecutionStrategy();
+        var result = await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+            var previousStatus = await db.ResearchPlans.AsNoTracking()
+                .Where(x => x.Id == id).Select(x => x.Status).SingleOrDefaultAsync(cancellationToken)
+                ?? throw new NotFoundException("Không tìm thấy kế hoạch NCKH.");
+            var reopened = await researchPlanService.ReopenAsync(id, cancellationToken);
+            db.ResearchPlanHistories.Add(new ResearchPlanHistory(
+                reopened.Id,
+                currentUser.Id ?? throw new ForbiddenException("Không xác định được tài khoản."),
+                previousStatus,
+                reopened.Status,
+                reason));
+            var ownerAccountId = await db.Lecturers.AsNoTracking()
+                .Where(x => x.Id == reopened.LecturerId)
+                .Select(x => x.AccountId)
+                .SingleAsync(cancellationToken);
+            await workflowNotifications.QueueForAccountAsync(
+                ownerAccountId,
+                $"Phòng QLKH đã mở lại kế hoạch NCKH để bạn điều chỉnh. Lý do: {reason}",
+                $"RESEARCH_PLAN_REOPENED:{reopened.Id}:{Guid.NewGuid():N}",
+                "research-plans",
+                null,
+                cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return reopened;
+        });
         return Ok(result);
     }
+
+    [HttpGet("{id:long}/history")]
+    public async Task<IActionResult> History(long id, CancellationToken cancellationToken)
+    {
+        var access = await (from plan in db.ResearchPlans.AsNoTracking()
+                            join lecturer in db.Lecturers.AsNoTracking() on plan.LecturerId equals lecturer.Id
+                            join department in db.Departments.AsNoTracking() on lecturer.DepartmentId equals department.Id
+                            where plan.Id == id
+                            select new { lecturer.AccountId, department.FacultyId, DepartmentId = department.Id })
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy kế hoạch NCKH.");
+        if (access.AccountId != currentUser.Id && !currentUser.CanAccess(access.FacultyId, access.DepartmentId))
+            throw new ForbiddenException("Không có quyền xem lịch sử kế hoạch này.");
+        return Ok(await db.ResearchPlanHistories.AsNoTracking()
+            .Where(x => x.ResearchPlanId == id)
+            .OrderByDescending(x => x.OccurredAt)
+            .Select(x => new { x.Id, x.ActorAccountId, x.FromStatus, x.ToStatus, x.Reason, x.OccurredAt })
+            .ToListAsync(cancellationToken));
+    }
+
+    public sealed record ReopenPlanRequest(string? Reason);
 }

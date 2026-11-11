@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { api } from './api'
+import { api, preferredAcademicYear } from './api'
 import type { Lookups, Profile } from './api'
 import type { Lecturer } from './Lecturers'
 import './Evaluations.css'
@@ -26,7 +26,7 @@ function YearSelect({ lookups, value, onChange }: { lookups: Lookups | null; val
 
 function MyEvaluation({ lookups }: { lookups: Lookups | null }) {
   const [year, setYear] = useState(''); const [data, setData] = useState<Detail | null>(null); const [error, setError] = useState(''); const [loading, setLoading] = useState(false)
-  useEffect(() => { if (!year && lookups?.academicYears.length) setYear(String(lookups.academicYears[0].id)) }, [lookups, year])
+  useEffect(() => { if (!year && lookups?.academicYears.length) setYear(String(preferredAcademicYear(lookups.academicYears).id)) }, [lookups, year])
   async function load() { if (!year) return; setLoading(true); setError(''); setData(null); try { setData(await api<Detail>(`/evaluations/me?academicYearId=${year}`)) } catch (e) { setError((e as Error).message) } finally { setLoading(false) } }
   useEffect(() => { if (year) void load() }, [year]) // eslint-disable-line react-hooks/exhaustive-deps
   return <><p className="eyebrow">ĐÁNH GIÁ THI ĐUA</p><h1>Kết quả đánh giá của tôi</h1><p className="muted">Kết quả chỉ hiển thị sau khi Phòng Quản lý khoa học chốt.</p>{!lookups?.academicYears.length ? <p className="alert" role="alert">Chưa có năm học. Vui lòng liên hệ quản trị viên để cấu hình năm học trước.</p> : <section className="panel evaluation-filter"><YearSelect lookups={lookups} value={year} onChange={setYear} /><button className="primary" disabled={!year || loading} onClick={load}>{loading ? 'Đang tải…' : 'Xem kết quả'}</button></section>}{error && <p className="alert" role="alert">{error}</p>}{data && <EvaluationDetail data={data} />}</>
@@ -34,7 +34,7 @@ function MyEvaluation({ lookups }: { lookups: Lookups | null }) {
 
 function ReadOnlyEvaluationResults({ lookups }: { lookups: Lookups | null }) {
   const [year, setYear] = useState(''); const [rows, setRows] = useState<Summary[]>([]); const [lecturers, setLecturers] = useState<Lecturer[]>([]); const [detail, setDetail] = useState<Detail | null>(null); const [error, setError] = useState(''); const [loading, setLoading] = useState(false)
-  useEffect(() => { if (!year && lookups?.academicYears.length) setYear(String(lookups.academicYears[0].id)) }, [lookups, year])
+  useEffect(() => { if (!year && lookups?.academicYears.length) setYear(String(preferredAcademicYear(lookups.academicYears).id)) }, [lookups, year])
   useEffect(() => { let active = true; api<Paged<Lecturer>>('/lecturers?page=1&pageSize=100').then(x => { if (active) setLecturers(x.items) }).catch(e => { if (active) setError((e as Error).message) }); return () => { active = false } }, [])
   async function load() { if (!year) return; setLoading(true); setError(''); try { setRows(await api<Summary[]>(`/evaluations?academicYearId=${year}`)) } catch (e) { setError((e as Error).message) } finally { setLoading(false) } }
   useEffect(() => { if (year) void load() }, [year]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -46,7 +46,7 @@ function ReadOnlyEvaluationResults({ lookups }: { lookups: Lookups | null }) {
 
 function EvaluationManagement({ lookups }: { lookups: Lookups | null }) {
   const [year, setYear] = useState(''); const [rows, setRows] = useState<Summary[]>([]); const [lecturers, setLecturers] = useState<Lecturer[]>([]); const [selected, setSelected] = useState(''); const [detail, setDetail] = useState<Detail | null>(null); const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const [busy, setBusy] = useState(false); const [revision, setRevision] = useState(0)
-  useEffect(() => { if (!year && lookups?.academicYears.length) setYear(String(lookups.academicYears[0].id)) }, [lookups, year])
+  useEffect(() => { if (!year && lookups?.academicYears.length) setYear(String(preferredAcademicYear(lookups.academicYears).id)) }, [lookups, year])
   useEffect(() => { let active = true; api<Paged<Lecturer>>('/lecturers?page=1&pageSize=100').then(x => { if (active) setLecturers(x.items) }).catch(e => { if (active) setError((e as Error).message) }); return () => { active = false } }, [])
   useEffect(() => { if (!year) return; let active = true; setLoading(true); setError(''); api<Summary[]>(`/evaluations?academicYearId=${year}`).then(x => { if (active) setRows(x) }).catch(e => { if (active) setError((e as Error).message) }).finally(() => { if (active) setLoading(false) }); return () => { active = false } }, [year, revision])
   const lecturerMap = useMemo(() => new Map(lecturers.map(x => [x.id, x])), [lecturers])

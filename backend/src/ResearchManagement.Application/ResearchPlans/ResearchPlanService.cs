@@ -2,6 +2,8 @@ using ResearchManagement.Application.Auth.Abstractions;
 using ResearchManagement.Application.Common;
 using ResearchManagement.Application.ResearchPlans.Abstractions;
 using ResearchManagement.Application.ResearchPlans.Models;
+using ResearchManagement.Application.ProductTypes.Abstractions;
+using ResearchManagement.Application.ResearchTargetAllocations.Abstractions;
 using ResearchManagement.Domain.Entities;
 
 namespace ResearchManagement.Application.ResearchPlans;
@@ -10,6 +12,8 @@ public sealed class ResearchPlanService(
     IResearchPlanRepository researchPlans,
     IResearchPlanItemRepository planItems,
     ILecturerAccessRepository lecturerAccess,
+    ILecturerTargetAllocationRepository lecturerAllocations,
+    IProductTypeRepository productTypes,
     ICurrentUser currentUser)
 {
     public async Task<ResearchPlanResponse> CreateAsync(
@@ -144,6 +148,19 @@ public sealed class ResearchPlanService(
         var committedTotal = items.Sum(x => x.CommittedQuantity);
         if (committedTotal != plan.CommittedProductCount)
             throw new BusinessRuleException("Tổng số lượng trong các nội dung phải bằng số sản phẩm cam kết của kế hoạch.");
+
+        var committedArticles = 0;
+        foreach (var item in items)
+        {
+            var type = await productTypes.GetByIdAsync(item.ProductTypeId, cancellationToken)
+                ?? throw new NotFoundException("Không tìm thấy loại sản phẩm của nội dung kế hoạch.");
+            if (type.Code == "BAI_BAO") committedArticles += item.CommittedQuantity;
+        }
+        var allocatedArticles = await lecturerAllocations.GetTotalAllocatedArticleCountAsync(
+            plan.LecturerId, plan.AcademicYearId, cancellationToken);
+        if (committedArticles < allocatedArticles)
+            throw new BusinessRuleException(
+                $"Cam kết bài báo không được thấp hơn {allocatedArticles} bài đã được phân công.");
 
         plan.Submit();
 

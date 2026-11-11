@@ -3,7 +3,9 @@ using System.ComponentModel.DataAnnotations;
 namespace ResearchManagement.Api.Contracts;
 
 public sealed record ConversionCriterionRequest([Required] string Field, [Required] string Operator, string? StringValue, decimal? NumericValue);
-public sealed record AuthorCoefficientRequest([Required, StringLength(100)] string AuthorRole, [Range(0, double.MaxValue)] decimal Coefficient);
+public sealed record AuthorCoefficientRequest(
+    [Required, RegularExpression("^(TAC_GIA_CHINH|DONG_TAC_GIA|TAC_GIA_LIEN_HE)$")] string AuthorRole,
+    [Range(0, double.MaxValue)] decimal Coefficient);
 public sealed record ConversionRuleRequest(
     [Range(1, long.MaxValue)] long ProductTypeId,
     [Required, StringLength(50)] string Code,

@@ -832,7 +832,10 @@ function CoAuthors({ product, user, onChanged }: { product: Product; user: Profi
           </option>)}
         </select>
         <input name="displayOrder" type="number" min="1" required defaultValue="1" />
-        <input name="authorRole" required maxLength={100} defaultValue="DONG_TAC_GIA" />
+        <select name="authorRole" required defaultValue="DONG_TAC_GIA">
+          <option value="DONG_TAC_GIA">Đồng tác giả</option>
+          <option value="TAC_GIA_LIEN_HE">Tác giả liên hệ</option>
+        </select>
         <button>Thêm</button>
       </form>
     )}
