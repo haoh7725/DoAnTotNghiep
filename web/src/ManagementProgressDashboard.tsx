@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { api } from './api'
+import { api, preferredAcademicYear } from './api'
 import type { Lookups } from './api'
 import './Reports.css'
 
@@ -47,7 +47,9 @@ export function ManagementProgressDashboard({ lookups, onOpenTargets }: {
         if (!active) return
         const available = data.filter(target => target.status !== 'DA_HUY')
         setTargets(available)
-        const currentYearId = lookups?.academicYears[0]?.id
+        const currentYearId = lookups?.academicYears.length
+          ? preferredAcademicYear(lookups.academicYears).id
+          : undefined
         const preferred = available.find(target => target.academicYearId === currentYearId && target.status === 'DA_KHOA')
           ?? available.find(target => target.status === 'DA_KHOA')
           ?? available[0]

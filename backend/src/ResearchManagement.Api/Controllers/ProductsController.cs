@@ -49,16 +49,26 @@ public sealed class ProductsController(
                          role.Scope == "BO_MON" &&
                          role.FacultyId == department.FacultyId &&
                          role.DepartmentId == department.Id &&
-                         product.Status == "NOP") ||
+                         product.Status == "NOP" &&
+                         !db.RoleAssignments.Any(ownerRole => ownerRole.AccountId == lecturer.AccountId &&
+                             ownerRole.Role == Roles.DepartmentHead)) ||
 
                         (role.Role == "TRUONG_KHOA" &&
                          role.Scope == "KHOA" &&
                          role.FacultyId == department.FacultyId &&
-                         product.Status == "TRUONG_BO_MON_DUYET") ||
+                         ((product.Status == "NOP" &&
+                           db.RoleAssignments.Any(ownerRole => ownerRole.AccountId == lecturer.AccountId &&
+                               ownerRole.Role == Roles.DepartmentHead)) ||
+                          (product.Status == "TRUONG_BO_MON_DUYET" &&
+                           !db.RoleAssignments.Any(ownerRole => ownerRole.AccountId == lecturer.AccountId &&
+                               ownerRole.Role == Roles.FacultyDean)))) ||
 
                         (role.Role == "PHONG_QLKH" &&
                          role.Scope == "TOAN_TRUONG" &&
-                         (product.Status == "TRUONG_KHOA_DUYET" ||
+                         ((product.Status == "TRUONG_BO_MON_DUYET" &&
+                           db.RoleAssignments.Any(ownerRole => ownerRole.AccountId == lecturer.AccountId &&
+                               ownerRole.Role == Roles.FacultyDean)) ||
+                          product.Status == "TRUONG_KHOA_DUYET" ||
                           product.Status == "PHONG_QLKH_DUYET"))
                     ))
             orderby product.UpdatedAt
@@ -202,7 +212,13 @@ public sealed class ProductsController(
         [FromBody] UpdateArticleProgressRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await productService.UpdateArticleProgressAsync(id, request, cancellationToken);
+        var result = await ExecuteInTransactionAsync(async () =>
+        {
+            var updated = await productService.UpdateArticleProgressAsync(id, request, cancellationToken);
+            await QueueCurrentReviewerAsync(updated, "Tiến độ bài viết vừa được tác giả cập nhật", cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
+            return updated;
+        }, cancellationToken);
         return Ok(result);
     }
 
@@ -221,18 +237,23 @@ public sealed class ProductsController(
     public async Task<ActionResult<ProductResponse>> Submit(
         long id, CancellationToken cancellationToken)
     {
-        var result = await productService.SubmitAsync(id, cancellationToken);
-        var unit = await ProductUnitAsync(result.SubmittedByLecturerId, cancellationToken);
-        await workflowNotifications.QueueForRoleAsync(
-            Roles.DepartmentHead,
-            $"Sản phẩm '{result.Title}' vừa được giảng viên gửi duyệt. Vui lòng kiểm tra và xét duyệt.",
-            $"PRODUCT_SUBMITTED:{result.Id}",
-            $"product-reviews:{result.Id}",
-            unit.FacultyId,
-            unit.DepartmentId,
-            result.Id,
-            cancellationToken);
-        await db.SaveChangesAsync(cancellationToken);
+        var result = await ExecuteInTransactionAsync(async () =>
+        {
+            var submitted = await productService.SubmitAsync(id, cancellationToken);
+            var unit = await ProductUnitAsync(submitted.SubmittedByLecturerId, cancellationToken);
+            var ownerIsDepartmentHead = await OwnerHasRoleAsync(submitted.SubmittedByLecturerId, Roles.DepartmentHead, cancellationToken);
+            await workflowNotifications.QueueForRoleAsync(
+                ownerIsDepartmentHead ? Roles.FacultyDean : Roles.DepartmentHead,
+                $"Sản phẩm '{submitted.Title}' vừa được giảng viên gửi duyệt. Vui lòng kiểm tra và xét duyệt.",
+                $"PRODUCT_SUBMITTED:{submitted.Id}",
+                $"product-reviews:{submitted.Id}",
+                unit.FacultyId,
+                ownerIsDepartmentHead ? null : unit.DepartmentId,
+                submitted.Id,
+                cancellationToken);
+            await db.SaveChangesAsync(cancellationToken);
+            return submitted;
+        }, cancellationToken);
         return Ok(result);
     }
 
@@ -248,33 +269,43 @@ public sealed class ProductsController(
             .Select(x => new { x.Status, x.SubmittedByLecturerId })
             .SingleOrDefaultAsync(cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
-        var result = await productService.ReviewAsync(id, request, cancellationToken);
-
-        if (request.Action.Trim().Equals("APPROVE", StringComparison.OrdinalIgnoreCase))
+        var result = await ExecuteInTransactionAsync(async () =>
         {
-            var unit = await ProductUnitAsync(before.SubmittedByLecturerId, cancellationToken);
-            if (result.Status == ProductStatuses.DepartmentHeadApproved)
-                await workflowNotifications.QueueForRoleAsync(Roles.FacultyDean,
-                    $"Sản phẩm '{result.Title}' đã được Trưởng bộ môn duyệt và đang chờ Trưởng khoa xét duyệt.",
-                    $"PRODUCT_WAIT_DEAN:{result.Id}", $"product-reviews:{result.Id}",
-                    unit.FacultyId, unit.DepartmentId, result.Id, cancellationToken);
-            else if (result.Status == ProductStatuses.FacultyDeanApproved)
-                await workflowNotifications.QueueForRoleAsync(Roles.ResearchOffice,
-                    $"Sản phẩm '{result.Title}' đã được Trưởng khoa duyệt và đang chờ Phòng QLKH thẩm định, công nhận.",
-                    $"PRODUCT_WAIT_OFFICE:{result.Id}", $"product-reviews:{result.Id}",
-                    unit.FacultyId, unit.DepartmentId, result.Id, cancellationToken);
-            else if (result.Status == ProductStatuses.Approved)
+            var reviewed = await productService.ReviewAsync(id, request, cancellationToken);
+            if (request.Action.Trim().Equals("APPROVE", StringComparison.OrdinalIgnoreCase))
             {
-                var ownerAccountId = await db.Lecturers.AsNoTracking()
-                    .Where(x => x.Id == before.SubmittedByLecturerId)
-                    .Select(x => x.AccountId)
-                    .SingleAsync(cancellationToken);
-                await workflowNotifications.QueueForAccountAsync(ownerAccountId,
-                    $"Sản phẩm '{result.Title}' đã được Phòng QLKH công nhận hoàn tất.",
-                    $"PRODUCT_APPROVED:{result.Id}", $"products:{result.Id}", result.Id, cancellationToken);
+                var unit = await ProductUnitAsync(before.SubmittedByLecturerId, cancellationToken);
+                if (reviewed.Status == ProductStatuses.DepartmentHeadApproved)
+                {
+                    var ownerIsDean = await OwnerHasRoleAsync(before.SubmittedByLecturerId, Roles.FacultyDean, cancellationToken);
+                    await workflowNotifications.QueueForRoleAsync(ownerIsDean ? Roles.ResearchOffice : Roles.FacultyDean,
+                        ownerIsDean
+                            ? $"Sản phẩm '{reviewed.Title}' của Trưởng khoa đã qua bước bộ môn và đang chờ Phòng QLKH thẩm định."
+                            : $"Sản phẩm '{reviewed.Title}' đã được Trưởng bộ môn duyệt và đang chờ Trưởng khoa xét duyệt.",
+                        ownerIsDean ? $"PRODUCT_WAIT_OFFICE:{reviewed.Id}" : $"PRODUCT_WAIT_DEAN:{reviewed.Id}",
+                        $"product-reviews:{reviewed.Id}", unit.FacultyId,
+                        ownerIsDean ? null : unit.DepartmentId, reviewed.Id, cancellationToken);
+                }
+                else if (reviewed.Status == ProductStatuses.FacultyDeanApproved)
+                    await workflowNotifications.QueueForRoleAsync(Roles.ResearchOffice,
+                        $"Sản phẩm '{reviewed.Title}' đã được Trưởng khoa duyệt và đang chờ Phòng QLKH thẩm định, công nhận.",
+                        $"PRODUCT_WAIT_OFFICE:{reviewed.Id}", $"product-reviews:{reviewed.Id}",
+                        unit.FacultyId, unit.DepartmentId, reviewed.Id, cancellationToken);
+                else if (reviewed.Status == ProductStatuses.Approved)
+                {
+                    var authorAccountIds = await db.Lecturers.AsNoTracking()
+                        .Where(x => x.Id == before.SubmittedByLecturerId ||
+                            db.ProductCoAuthors.Any(a => a.ProductId == reviewed.Id && a.LecturerId == x.Id))
+                        .Select(x => x.AccountId).Distinct().ToListAsync(cancellationToken);
+                    foreach (var accountId in authorAccountIds)
+                        await workflowNotifications.QueueForAccountAsync(accountId,
+                            $"Sản phẩm '{reviewed.Title}' đã được Phòng QLKH công nhận hoàn tất.",
+                            $"PRODUCT_APPROVED:{reviewed.Id}", $"products:{reviewed.Id}", reviewed.Id, cancellationToken);
+                }
+                await db.SaveChangesAsync(cancellationToken);
             }
-            await db.SaveChangesAsync(cancellationToken);
-        }
+            return reviewed;
+        }, cancellationToken);
         return Ok(result);
     }
 
@@ -312,5 +343,49 @@ public sealed class ProductsController(
                           select new { department.FacultyId, DepartmentId = department.Id })
             .SingleAsync(ct);
         return (unit.FacultyId, unit.DepartmentId);
+    }
+
+    private Task<bool> OwnerHasRoleAsync(long lecturerId, string role, CancellationToken ct) =>
+        db.Lecturers.AsNoTracking().AnyAsync(lecturer => lecturer.Id == lecturerId &&
+            db.RoleAssignments.Any(assignment => assignment.AccountId == lecturer.AccountId && assignment.Role == role), ct);
+
+    private async Task QueueCurrentReviewerAsync(ProductResponse product, string action, CancellationToken ct)
+    {
+        var unit = await ProductUnitAsync(product.SubmittedByLecturerId, ct);
+        string? role = null;
+        long? departmentId = unit.DepartmentId;
+        if (product.Status == ProductStatuses.Submitted)
+        {
+            var ownerIsDepartmentHead = await OwnerHasRoleAsync(product.SubmittedByLecturerId, Roles.DepartmentHead, ct);
+            role = ownerIsDepartmentHead ? Roles.FacultyDean : Roles.DepartmentHead;
+            if (ownerIsDepartmentHead) departmentId = null;
+        }
+        else if (product.Status == ProductStatuses.DepartmentHeadApproved)
+        {
+            var ownerIsDean = await OwnerHasRoleAsync(product.SubmittedByLecturerId, Roles.FacultyDean, ct);
+            role = ownerIsDean ? Roles.ResearchOffice : Roles.FacultyDean;
+            departmentId = null;
+        }
+        else if (product.Status is ProductStatuses.FacultyDeanApproved or ProductStatuses.ResearchOfficeApproved)
+        {
+            role = Roles.ResearchOffice;
+            departmentId = null;
+        }
+        if (role is null) return;
+        await workflowNotifications.QueueForRoleAsync(role,
+            $"{action}: '{product.Title}'.", $"ARTICLE_PROGRESS:{product.Id}:{product.ArticleStatus}:{product.UpdatedAt.UtcTicks}",
+            $"product-reviews:{product.Id}", unit.FacultyId, departmentId, product.Id, ct);
+    }
+
+    private async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> action, CancellationToken ct)
+    {
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            var result = await action();
+            await transaction.CommitAsync(ct);
+            return result;
+        });
     }
 }

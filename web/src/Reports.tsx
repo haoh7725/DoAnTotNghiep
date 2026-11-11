@@ -12,7 +12,7 @@ import {
   Pie,
   Cell,
 } from 'recharts'
-import { api } from './api'
+import { api, preferredAcademicYear } from './api'
 import type { Lookups } from './api'
 import './Reports.css'
 
@@ -33,7 +33,7 @@ export function ResearchReports({ lookups, executive = false }: { lookups: Looku
   const [report, setReport] = useState<Report | null>(null); const [error, setError] = useState(''); const [loading, setLoading] = useState(false)
   const [appliedQuery, setAppliedQuery] = useState('')
   const [trends, setTrends] = useState<Trend[]>([]); const [trendLoading, setTrendLoading] = useState(false)
-  useEffect(() => { if (!year && lookups?.academicYears.length) setYear(String(lookups.academicYears[0].id)) }, [lookups, year])
+  useEffect(() => { if (!year && lookups?.academicYears.length) setYear(String(preferredAcademicYear(lookups.academicYears).id)) }, [lookups, year])
   const departments = useMemo(() => (lookups?.departments ?? []).filter(x => !faculty || x.facultyId === Number(faculty)), [lookups, faculty])
   const query = () => { const q = new URLSearchParams({ academicYearId: year }); if (faculty) q.set('facultyId', faculty); if (department) q.set('departmentId', department); if (rank.trim()) q.set('academicRank', rank.trim()); if (degree.trim()) q.set('degree', degree.trim()); return q }
   async function load() { if (!year) return; const currentQuery = query().toString(); setLoading(true); setError(''); try { setReport(await api<Report>(`/reports/research-results?${currentQuery}`)); setAppliedQuery(currentQuery) } catch (x) { setError((x as Error).message) } finally { setLoading(false) } }

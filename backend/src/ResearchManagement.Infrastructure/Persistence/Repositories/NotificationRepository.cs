@@ -94,4 +94,19 @@ public sealed class NotificationRepository(ApplicationDbContext db)
                 && x.DeduplicationKey == deduplicationKey,
             cancellationToken);
     }
+
+    public Task<bool> ExistsLegacyReminderAsync(
+        long recipientAccountId,
+        string channel,
+        string legacyDeduplicationKey,
+        string deadlineText,
+        CancellationToken cancellationToken)
+    {
+        return db.Notifications.AnyAsync(
+            x => x.RecipientAccountId == recipientAccountId &&
+                 x.Channel == channel &&
+                 x.DeduplicationKey == legacyDeduplicationKey &&
+                 x.Content.Contains(deadlineText),
+            cancellationToken);
+    }
 }

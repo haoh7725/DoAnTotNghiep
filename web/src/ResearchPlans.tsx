@@ -1,8 +1,9 @@
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { api } from './api'
+import { api, preferredAcademicYear } from './api'
 import type { AcademicYear } from './api'
+import { Toast } from './Toast'
 import { useAutoReveal } from './useAutoReveal'
 
 type Lecturer = {
@@ -93,6 +94,7 @@ export function ResearchPlans({ academicYears }: Props) {
     const [progressDifficulty, setProgressDifficulty] = useState('')
     const itemEditRef = useAutoReveal<HTMLFormElement>(editingItem !== null, editingItem?.id)
     const planEditRef = useAutoReveal<HTMLFormElement>(editingPlan, plan?.id)
+    const itemCreateRef = useRef<HTMLFormElement>(null)
 
     useEffect(() => {
         let active = true
@@ -115,7 +117,7 @@ export function ResearchPlans({ academicYears }: Props) {
 
     useEffect(() => {
         if (academicYears.length && !yearId) {
-            setYearId(String(academicYears[0].id))
+            setYearId(String(preferredAcademicYear(academicYears).id))
         }
     }, [academicYears, yearId])
 
@@ -234,7 +236,14 @@ export function ResearchPlans({ academicYears }: Props) {
             setPlan(result)
             setMessage('Đăng ký kế hoạch thành công.')
         } catch (e) {
-            setError((e as Error).message)
+            const detail = (e as Error).message
+            setError(detail)
+            if (detail.toLocaleLowerCase('vi-VN').includes('ít nhất một nội dung')) {
+                window.requestAnimationFrame(() => {
+                    itemCreateRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                    itemCreateRef.current?.querySelector<HTMLElement>('select, input')?.focus({ preventScroll: true })
+                })
+            }
         } finally {
             setBusy(false)
         }
@@ -462,8 +471,8 @@ export function ResearchPlans({ academicYears }: Props) {
                 Lập kế hoạch và theo dõi tiến độ nghiên cứu theo năm học.
             </p>
 
-            {error && <p className="alert" role="alert">{error}</p>}
-            {message && <p role="status">{message}</p>}
+            <Toast message={error} kind="error" onClose={() => setError('')} />
+            <Toast message={message} kind="success" onClose={() => setMessage('')} />
 
             <section className="panel plan-year-filter">
                 <div>
@@ -549,7 +558,7 @@ export function ResearchPlans({ academicYears }: Props) {
                         <h2>Nội dung kế hoạch</h2>
 
                         {plan.status === 'NHAP' && (
-                            <form onSubmit={createItem}>
+                            <form ref={itemCreateRef} onSubmit={createItem}>
                                 <h3>Thêm nội dung nghiên cứu</h3>
 
                                 <label>

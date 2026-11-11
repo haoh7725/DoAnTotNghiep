@@ -37,6 +37,18 @@ public sealed class ReminderService(
             if (exists)
                 continue;
 
+            // Tương thích khóa cũ (chưa có ngày hạn): không gửi lại ngay sau khi
+            // nâng cấp nếu thông báo cũ đã nhắc đúng mốc hạn hiện tại. Nếu hạn đã
+            // được gia hạn, ngày trong nội dung khác nên hệ thống vẫn nhắc mốc mới.
+            var legacyExists = await notifications.ExistsLegacyReminderAsync(
+                item.RecipientAccountId,
+                "IN_APP",
+                $"{type}:{item.DeduplicationKey}",
+                item.Deadline.ToString("dd/MM/yyyy"),
+                cancellationToken);
+            if (legacyExists)
+                continue;
+
             var content = type == "QUA_HAN"
                 ? $"{item.ItemName} đã quá hạn ngày {item.Deadline:dd/MM/yyyy}. Vui lòng cập nhật tiến độ."
                 : $"{item.ItemName} sắp đến hạn ngày {item.Deadline:dd/MM/yyyy}. Vui lòng kiểm tra tiến độ.";

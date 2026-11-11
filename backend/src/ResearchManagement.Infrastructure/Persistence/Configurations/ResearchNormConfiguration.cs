@@ -32,7 +32,7 @@ public sealed class ResearchNormConfiguration
         builder.Property(x => x.RequiredPoints)
             .HasColumnName("so_diem_dinh_muc")
             .HasPrecision(12, 4)
-            .HasDefaultValue(100m)
+            .HasDefaultValue(0m)
             .IsRequired();
 
         builder.Property(x => x.Basis)

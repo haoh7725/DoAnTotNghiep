@@ -75,14 +75,14 @@ public sealed class AddCoAuthorRequest
 
     [Range(1, int.MaxValue)]
     public int DisplayOrder { get; set; } = 1;
-    [Required, StringLength(100)] public string AuthorRole { get; set; } = "DONG_TAC_GIA";
+    [Required, RegularExpression("^(DONG_TAC_GIA|TAC_GIA_LIEN_HE)$")] public string AuthorRole { get; set; } = "DONG_TAC_GIA";
 }
 
 public sealed class UpdateCoAuthorRequest
 {
     [Range(1, int.MaxValue)]
     public int DisplayOrder { get; set; }
-    [Required, StringLength(100)] public string AuthorRole { get; set; } = "DONG_TAC_GIA";
+    [Required, RegularExpression("^(DONG_TAC_GIA|TAC_GIA_LIEN_HE)$")] public string AuthorRole { get; set; } = "DONG_TAC_GIA";
 }
 
 // ──── Responses ───────────────────────────────────────────────────────────────

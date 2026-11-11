@@ -27,6 +27,8 @@ public sealed class ProductService(
     IProductTypeRepository productTypes,
     INotificationRepository notifications,
     ILecturerRepository lecturers,
+    IAccountRepository accounts,
+    TimeProvider clock,
     ICurrentUser currentUser)
 {
     // ──── Chuyển trạng thái hợp lệ khi APPROVE ───────────────────────────────
@@ -256,9 +258,16 @@ public sealed class ProductService(
 
         var status = ToStoredArticleStatus(request.ArticleStatus)
             ?? throw new BusinessRuleException("Trạng thái bài viết không hợp lệ.");
+        var oldStatus = product.ArticleStatus;
+        var oldRank = ArticleProgressRank(oldStatus);
+        var newRank = ArticleProgressRank(status);
+        if (product.Status is not (ProductStatuses.Draft or ProductStatuses.Returned) && newRank < oldRank)
+            throw new BusinessRuleException("Sản phẩm đã gửi duyệt chỉ được cập nhật tiến độ theo chiều tiến lên.");
         if (status == "DA_XUAT_BAN" && !request.PublishedDate.HasValue)
             throw new BusinessRuleException("Bài viết đã xuất bản phải có ngày công bố.");
-        if (request.PublishedDate.HasValue && request.PublishedDate.Value > DateOnly.FromDateTime(DateTime.UtcNow))
+        var vietnamNow = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(
+            clock.GetUtcNow(), OperatingSystem.IsWindows() ? "SE Asia Standard Time" : "Asia/Ho_Chi_Minh");
+        if (request.PublishedDate.HasValue && request.PublishedDate.Value > DateOnly.FromDateTime(vietnamNow.DateTime))
             throw new BusinessRuleException("Ngày công bố không được nằm trong tương lai.");
 
         try
@@ -269,6 +278,12 @@ public sealed class ProductService(
         {
             throw new BusinessRuleException(ex.Message);
         }
+        await reviewHistories.AddAsync(new ReviewHistory(
+            product.Id,
+            GetCurrentAccountId(),
+            product.Status,
+            product.Status,
+            $"Cập nhật tiến độ bài viết: {ToPublicArticleStatus(oldStatus) ?? "chưa cập nhật"} → {ToPublicArticleStatus(status)}."), cancellationToken);
         await products.SaveChangesAsync(cancellationToken);
 
         var coAuthorList = await coAuthors.GetByProductIdAsync(id, cancellationToken);
@@ -315,9 +330,12 @@ public sealed class ProductService(
         if (action is not ("APPROVE" or "REJECT"))
             throw new BusinessRuleException("Hành động xét duyệt phải là APPROVE hoặc REJECT.");
 
-        // Kiểm tra trạng thái có thể duyệt không
-        if (!ApproverRoleForStatus.TryGetValue(product.Status, out var requiredRole))
-            throw new BusinessRuleException($"Sản phẩm ở trạng thái '{product.Status}' không thể xét duyệt.");
+        var owner = await lecturers.GetByIdAsync(product.SubmittedByLecturerId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy giảng viên nộp sản phẩm.");
+        var ownerAccount = await accounts.GetByIdAsync(owner.AccountId, cancellationToken)
+            ?? throw new NotFoundException("Không tìm thấy tài khoản của giảng viên nộp sản phẩm.");
+        var ownerRoles = ownerAccount.RoleAssignments.Select(x => x.Role).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var (requiredRole, approvalStatus) = ApprovalStep(product.Status, ownerRoles);
 
         // Kiểm tra vai trò người duyệt
         if (!currentUser.IsInRole(requiredRole) && !currentUser.IsInRole(Roles.Admin))
@@ -330,13 +348,11 @@ public sealed class ProductService(
             throw new ForbiddenException("Bạn không có quyền xét duyệt sản phẩm ngoài đơn vị được phân công.");
 
         if (request.ScoreEquivalent.HasValue &&
-            product.Status is not (ProductStatuses.FacultyDeanApproved or ProductStatuses.ResearchOfficeApproved) &&
+            requiredRole != Roles.ResearchOffice &&
             !currentUser.IsInRole(Roles.Admin))
             throw new BusinessRuleException("Chỉ Phòng QLKH được nhập điểm quy đổi ở bước duyệt cuối.");
 
         var actorId = GetCurrentAccountId();
-        var owner = await lecturers.GetByIdAsync(product.SubmittedByLecturerId, cancellationToken)
-            ?? throw new NotFoundException("Không tìm thấy giảng viên nộp sản phẩm.");
         var authorAccountIds = new HashSet<long> { owner.AccountId };
         foreach (var coAuthor in await coAuthors.GetByProductIdAsync(product.Id, cancellationToken))
         {
@@ -350,7 +366,7 @@ public sealed class ProductService(
 
         if (action == "APPROVE")
         {
-            var nextStatus = ApproveTransitions[product.Status];
+            var nextStatus = approvalStatus;
             if (nextStatus == ProductStatuses.Approved)
                 await EnsureReadyForFinalApprovalAsync(product, cancellationToken);
             product.Approve(nextStatus, request.ScoreEquivalent);
@@ -396,6 +412,32 @@ public sealed class ProductService(
 
     private long GetCurrentAccountId() =>
         currentUser.Id ?? throw new AuthenticationFailedException("Không xác định được người dùng hiện tại.");
+
+    private static (string RequiredRole, string NextStatus) ApprovalStep(
+        string status, IReadOnlySet<string> ownerRoles)
+    {
+        // Trưởng bộ môn không tự duyệt bước của mình: chuyển thẳng cho Trưởng khoa.
+        if (status == ProductStatuses.Submitted && ownerRoles.Contains(Roles.DepartmentHead))
+            return (Roles.FacultyDean, ProductStatuses.FacultyDeanApproved);
+
+        // Trưởng khoa không tự duyệt bước của mình: chuyển thẳng cho Phòng QLKH.
+        if (status == ProductStatuses.DepartmentHeadApproved && ownerRoles.Contains(Roles.FacultyDean))
+            return (Roles.ResearchOffice, ProductStatuses.Approved);
+
+        if (!ApproverRoleForStatus.TryGetValue(status, out var requiredRole) ||
+            !ApproveTransitions.TryGetValue(status, out var nextStatus))
+            throw new BusinessRuleException($"Sản phẩm ở trạng thái '{status}' không thể xét duyệt.");
+        return (requiredRole, nextStatus);
+    }
+
+    private static int ArticleProgressRank(string? status) => status switch
+    {
+        "DANG_VIET" => 0,
+        "DANG_PHAN_BIEN" => 1,
+        "DA_NHAN_DANG" or "DA_NHAN_XET" => 2,
+        "DA_XUAT_BAN" => 3,
+        _ => -1
+    };
 
     private static void EnsureEditable(Product product)
     {

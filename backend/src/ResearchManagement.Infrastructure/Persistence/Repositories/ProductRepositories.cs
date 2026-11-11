@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using ResearchManagement.Application.Products.Abstractions;
 using ResearchManagement.Domain.Entities;
 
@@ -39,19 +40,30 @@ public sealed class ProductRepository(ApplicationDbContext db) : IProductReposit
             return;
         }
 
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        foreach (var history in histories.OrderBy(h => h.ProductId))
+        IDbContextTransaction? ownedTransaction = null;
+        if (db.Database.CurrentTransaction is null)
+            ownedTransaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        try
         {
-            // Serialize version allocation for this product across concurrent requests.
-            await db.Database.ExecuteSqlInterpolatedAsync(
-                $"SELECT pg_advisory_xact_lock({history.ProductId})", cancellationToken);
-            var product = db.Products.Local.Single(p => p.Id == history.ProductId);
-            var version = await db.ProductSnapshots.Where(s => s.ProductId == product.Id)
-                .MaxAsync(s => (int?)s.Version, cancellationToken) ?? 0;
-            db.ProductSnapshots.Add(new ProductSnapshot(product, history.ActorAccountId, version + 1));
+            foreach (var history in histories.OrderBy(h => h.ProductId))
+            {
+                // Serialize version allocation for this product across concurrent requests.
+                await db.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_advisory_xact_lock({history.ProductId})", cancellationToken);
+                var product = db.Products.Local.Single(p => p.Id == history.ProductId);
+                var version = await db.ProductSnapshots.Where(s => s.ProductId == product.Id)
+                    .MaxAsync(s => (int?)s.Version, cancellationToken) ?? 0;
+                db.ProductSnapshots.Add(new ProductSnapshot(product, history.ActorAccountId, version + 1));
+            }
+            await db.SaveChangesAsync(cancellationToken);
+            if (ownedTransaction is not null)
+                await ownedTransaction.CommitAsync(cancellationToken);
         }
-        await db.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        finally
+        {
+            if (ownedTransaction is not null)
+                await ownedTransaction.DisposeAsync();
+        }
     }
 }
 

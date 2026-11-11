@@ -258,6 +258,7 @@ function PlanReopenSection({ lecturer, lookups }: { lecturer: Lecturer; lookups:
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [reason, setReason] = useState('')
   const years = lookups?.academicYears ?? []
 
   useEffect(() => {
@@ -271,9 +272,11 @@ function PlanReopenSection({ lecturer, lookups }: { lecturer: Lecturer; lookups:
   }, [lecturer.id, yearId])
 
   async function reopen() {
-    if (!plan || !confirm('Mở lại kế hoạch để giảng viên chỉnh sửa? Giảng viên phải đăng ký lại sau khi hoàn tất.')) return
+    if (!plan) return
+    if (!reason.trim()) { setError('Vui lòng nhập lý do mở lại kế hoạch.'); return }
+    if (!confirm('Mở lại kế hoạch để giảng viên chỉnh sửa? Giảng viên phải đăng ký lại sau khi hoàn tất.')) return
     setBusy(true); setError('')
-    try { setPlan(await api<PlanSummary>(`/research-plans/${plan.id}/reopen`, 'POST')) }
+    try { setPlan(await api<PlanSummary>(`/research-plans/${plan.id}/reopen`, 'POST', { reason: reason.trim() })); setReason('') }
     catch (e) { setError((e as Error).message) }
     finally { setBusy(false) }
   }
@@ -284,7 +287,7 @@ function PlanReopenSection({ lecturer, lookups }: { lecturer: Lecturer; lookups:
     <label>Năm học<select value={yearId} onChange={e => setYearId(e.target.value)}><option value="">Chọn năm học</option>{years.map(year => <option key={year.id} value={year.id}>{year.code}</option>)}</select></label>
     {loading ? <p>Đang kiểm tra kế hoạch…</p> : yearId && !plan ? <p className="empty">Giảng viên chưa có kế hoạch trong năm học này.</p> : plan && <div className="section-top">
       <p><strong>{plan.committedProductCount}</strong> sản phẩm cam kết · Trạng thái: <strong>{plan.status === 'DA_DANG_KY' ? 'Đã đăng ký' : 'Đang chỉnh sửa'}</strong></p>
-      {plan.status === 'DA_DANG_KY' && <button className="primary" disabled={busy} onClick={() => void reopen()}>{busy ? 'Đang mở…' : 'Mở lại kế hoạch'}</button>}
+      {plan.status === 'DA_DANG_KY' && <div><label>Lý do mở lại<textarea rows={3} maxLength={1000} value={reason} onChange={e => setReason(e.target.value)} required /></label><button className="primary" disabled={busy} onClick={() => void reopen()}>{busy ? 'Đang mở…' : 'Mở lại kế hoạch'}</button></div>}
     </div>}
   </section>
 }

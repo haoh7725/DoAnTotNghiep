@@ -19,7 +19,7 @@ public sealed class ProductCoAuthor : BaseEntity
         ProductId = productId;
         LecturerId = lecturerId;
         DisplayOrder = displayOrder;
-        AuthorRole = authorRole.Trim().ToUpperInvariant();
+        AuthorRole = NormalizeAuthorRole(authorRole);
     }
 
     /// <summary>FK → san_pham.id</summary>
@@ -35,6 +35,14 @@ public sealed class ProductCoAuthor : BaseEntity
     public void Update(int displayOrder, string authorRole)
     {
         DisplayOrder = displayOrder;
-        AuthorRole = authorRole.Trim().ToUpperInvariant();
+        AuthorRole = NormalizeAuthorRole(authorRole);
+    }
+
+    private static string NormalizeAuthorRole(string authorRole)
+    {
+        var normalized = authorRole.Trim().ToUpperInvariant();
+        if (normalized is not ("DONG_TAC_GIA" or "TAC_GIA_LIEN_HE"))
+            throw new ArgumentException("Vai trò đồng tác giả không hợp lệ.", nameof(authorRole));
+        return normalized;
     }
 }

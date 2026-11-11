@@ -54,6 +54,8 @@ public static class DemoDataSeeder
             await EnsureUnitManagersAsync(db, passwordService, cancellationToken);
             await EnsureLargeReportEvaluationsAsync(db, existingMarker.Id, cancellationToken);
             await EnsureOperationalDemoDataAsync(db, existingMarker.Id, cancellationToken);
+            await EnsureUncommittedDemoLecturerAsync(db, passwordService, cancellationToken);
+            await EnsureUncommittedNguyenAnhThuAsync(db, passwordService, cancellationToken);
             await supplementTransaction.CommitAsync(cancellationToken);
             logger.LogInformation("Đã kiểm tra và bổ sung dữ liệu mẫu còn thiếu.");
             return;
@@ -326,6 +328,8 @@ public static class DemoDataSeeder
             await EnsureUnitManagersAsync(db, passwordService, cancellationToken);
             await EnsureLargeReportEvaluationsAsync(db, researchOffice.Id, cancellationToken);
             await EnsureOperationalDemoDataAsync(db, researchOffice.Id, cancellationToken);
+            await EnsureUncommittedDemoLecturerAsync(db, passwordService, cancellationToken);
+            await EnsureUncommittedNguyenAnhThuAsync(db, passwordService, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             logger.LogInformation("Đã tạo dữ liệu mẫu nghiệp vụ thành công.");
         }
@@ -1159,6 +1163,402 @@ public static class DemoDataSeeder
         profile.UpdateDetails(JsonSerializer.Serialize(
             details,
             new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+    }
+
+    /// <summary>
+    /// Giảng viên dành riêng cho kịch bản demo luồng tạo mới năm 2026-2027.
+    /// Có đầy đủ hồ sơ khoa học nhưng cố ý chưa tạo kế hoạch/cam kết để người demo
+    /// bắt đầu nghiệp vụ ngay từ bước đăng ký kế hoạch đầu năm.
+    /// </summary>
+    private static async Task EnsureUncommittedDemoLecturerAsync(
+        ApplicationDbContext db,
+        IPasswordService passwordService,
+        CancellationToken cancellationToken)
+    {
+        const string username = "demo.gv2026";
+        const string lecturerCode = "DEMO2026";
+
+        var account = await db.Accounts
+            .Include(x => x.RoleAssignments)
+            .SingleOrDefaultAsync(x => x.Username == username, cancellationToken);
+
+        if (account is null)
+        {
+            account = new Account(
+                username,
+                string.Empty,
+                "ThS. Nguyễn Hoài Phương",
+                "hoaiphuong.demo@huit.edu.vn");
+            account.SetPasswordHash(passwordService.Hash(account, DefaultPassword));
+            account.AddRole(new RoleAssignment(Roles.Lecturer, Scopes.Personal));
+            db.Accounts.Add(account);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        else if (!account.RoleAssignments.Any(x => x.Role == Roles.Lecturer))
+        {
+            account.AddRole(new RoleAssignment(Roles.Lecturer, Scopes.Personal));
+        }
+
+        var softwareDepartmentId = await db.Departments
+            .Where(x => x.Code == "CNPM")
+            .Select(x => x.Id)
+            .SingleAsync(cancellationToken);
+
+        var lecturer = await db.Lecturers
+            .SingleOrDefaultAsync(x => x.AccountId == account.Id, cancellationToken);
+        if (lecturer is null)
+        {
+            lecturer = new Lecturer(
+                softwareDepartmentId,
+                account.Id,
+                lecturerCode,
+                "ThS. Nguyễn Hoài Phương",
+                new DateOnly(1991, 4, 18),
+                "NỮ",
+                "hoaiphuong.demo@huit.edu.vn",
+                "0909122026",
+                null,
+                "THẠC SĨ",
+                "Giảng viên");
+            db.Lecturers.Add(lecturer);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        var profile = await db.ScientificProfiles
+            .SingleOrDefaultAsync(x => x.LecturerId == lecturer.Id, cancellationToken);
+        if (profile is null)
+        {
+            profile = new ScientificProfile(
+                lecturer.Id,
+                "Kỹ thuật phần mềm; kiểm thử phần mềm; phân tích dữ liệu",
+                "Kỹ thuật phần mềm và công nghệ giáo dục",
+                "Tự động hóa kiểm thử; phân tích học tập; ứng dụng trí tuệ nhân tạo trong giáo dục",
+                "Giảng viên Bộ môn Công nghệ phần mềm, tham gia nghiên cứu và chuyển giao các giải pháp số phục vụ đào tạo đại học.",
+                DateTimeOffset.UtcNow);
+            db.ScientificProfiles.Add(profile);
+        }
+
+        var details = new ScientificProfileDetails
+        {
+            BirthPlace = "Thành phố Hồ Chí Minh",
+            Hometown = "Tỉnh Đồng Nai",
+            Ethnicity = "Kinh",
+            HighestDegreeYear = 2018,
+            HighestDegreeCountry = "Việt Nam",
+            WorkUnit = "Khoa Công nghệ Thông tin, Trường Đại học Công Thương Thành phố Hồ Chí Minh",
+            ContactAddress = "140 Lê Trọng Tấn, phường Tây Thạnh, Thành phố Hồ Chí Minh",
+            OfficePhone = "028 3816 3319",
+            IdentityNumber = "079191020026",
+            IdentityIssuedDate = new DateOnly(2021, 6, 15),
+            IdentityIssuedPlace = "Cục Cảnh sát quản lý hành chính về trật tự xã hội",
+            Education =
+            [
+                new EducationEntry
+                {
+                    Level = "DAI_HOC", TrainingMode = "Chính quy",
+                    Institution = "Trường Đại học Công nghệ Thông tin, ĐHQG TP.HCM",
+                    Specialization = "Kỹ thuật phần mềm", Country = "Việt Nam", GraduationYear = 2013
+                },
+                new EducationEntry
+                {
+                    Level = "THAC_SI", TrainingMode = "Chính quy",
+                    Institution = "Trường Đại học Bách khoa, ĐHQG TP.HCM",
+                    Specialization = "Khoa học máy tính", Country = "Việt Nam", GraduationYear = 2018,
+                    ThesisTitle = "Mô hình kiểm thử tự động cho các hệ thống thông tin giáo dục"
+                }
+            ],
+            Languages =
+            [
+                new LanguageEntry
+                {
+                    Name = "Tiếng Anh",
+                    Proficiency = "Bậc 4/6 theo Khung năng lực ngoại ngữ Việt Nam"
+                }
+            ],
+            Employment =
+            [
+                new EmploymentEntry
+                {
+                    FromDate = new DateOnly(2014, 9, 1), ToDate = new DateOnly(2018, 8, 31),
+                    Organization = "Công ty TNHH Giải pháp Phần mềm Giáo dục",
+                    Position = "Kỹ sư kiểm thử phần mềm"
+                },
+                new EmploymentEntry
+                {
+                    FromDate = new DateOnly(2018, 9, 1), ToDate = new DateOnly(2026, 11, 11),
+                    Organization = "Trường Đại học Công Thương Thành phố Hồ Chí Minh",
+                    Position = "Giảng viên Bộ môn Công nghệ phần mềm"
+                }
+            ],
+            ResearchProjects =
+            [
+                new ResearchProjectEntry
+                {
+                    Title = "Hệ thống hỗ trợ kiểm thử tự động cho cổng dịch vụ sinh viên",
+                    StartYear = 2022, EndYear = 2023, Level = "Cấp trường", Responsibility = "Thành viên"
+                },
+                new ResearchProjectEntry
+                {
+                    Title = "Phân tích dữ liệu học tập phục vụ cảnh báo sớm kết quả học vụ",
+                    StartYear = 2024, EndYear = 2026, Level = "Cấp trường", Responsibility = "Thành viên chính"
+                }
+            ],
+            Publications =
+            [
+                new PublicationEntry
+                {
+                    Title = "A Test Automation Framework for University Information Systems",
+                    Year = 2024, Journal = "International Conference on Information Technology"
+                },
+                new PublicationEntry
+                {
+                    Title = "Ứng dụng phân tích dữ liệu trong cảnh báo sớm kết quả học tập",
+                    Year = 2025, Journal = "Tạp chí Khoa học và Công nghệ"
+                }
+            ],
+            DeclarationPlace = "Thành phố Hồ Chí Minh",
+            DeclarationDate = new DateOnly(2026, 11, 11)
+        };
+        profile.UpdateDetails(JsonSerializer.Serialize(
+            details,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+
+        var academicYearId = await db.AcademicYears
+            .Where(x => x.Code == "2026-2027")
+            .Select(x => x.Id)
+            .SingleAsync(cancellationToken);
+        if (!await db.ResearchNorms.AnyAsync(x =>
+                x.LecturerId == lecturer.Id && x.AcademicYearId == academicYearId,
+                cancellationToken))
+        {
+            db.ResearchNorms.Add(new ResearchNorm(
+                lecturer.Id, academicYearId, 200m,
+                "Định mức NCKH giảng viên năm học 2026-2027", 100m));
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Hồ sơ giảng viên có tên đăng nhập và thông tin giống dữ liệu vận hành thật,
+    /// nhưng chưa lập kế hoạch/cam kết năm học để phục vụ kiểm thử lặp lại.
+    /// </summary>
+    private static async Task EnsureUncommittedNguyenAnhThuAsync(
+        ApplicationDbContext db,
+        IPasswordService passwordService,
+        CancellationToken cancellationToken)
+    {
+        const string username = "gv.nguyenanhthu";
+
+        var account = await db.Accounts
+            .Include(x => x.RoleAssignments)
+            .SingleOrDefaultAsync(x => x.Username == username, cancellationToken);
+        if (account is null)
+        {
+            account = new Account(
+                username,
+                string.Empty,
+                "ThS. Nguyễn Anh Thư",
+                "nguyenanhthu@huit.edu.vn");
+            account.SetPasswordHash(passwordService.Hash(account, DefaultPassword));
+            account.AddRole(new RoleAssignment(Roles.Lecturer, Scopes.Personal));
+            db.Accounts.Add(account);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        else if (!account.RoleAssignments.Any(x => x.Role == Roles.Lecturer))
+        {
+            account.AddRole(new RoleAssignment(Roles.Lecturer, Scopes.Personal));
+        }
+
+        var softwareDepartmentId = await db.Departments
+            .Where(x => x.Code == "CNPM")
+            .Select(x => x.Id)
+            .SingleAsync(cancellationToken);
+        var lecturer = await db.Lecturers
+            .SingleOrDefaultAsync(x => x.AccountId == account.Id, cancellationToken);
+        if (lecturer is null)
+        {
+            lecturer = new Lecturer(
+                softwareDepartmentId,
+                account.Id,
+                "CNTT009",
+                "ThS. Nguyễn Anh Thư",
+                new DateOnly(1990, 10, 22),
+                "NỮ",
+                "nguyenanhthu@huit.edu.vn",
+                "0918221090",
+                null,
+                "THẠC SĨ",
+                "Giảng viên");
+            db.Lecturers.Add(lecturer);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        var profile = await db.ScientificProfiles
+            .SingleOrDefaultAsync(x => x.LecturerId == lecturer.Id, cancellationToken);
+        if (profile is null)
+        {
+            profile = new ScientificProfile(
+                lecturer.Id,
+                "Kỹ thuật phần mềm; thiết kế trải nghiệm người dùng; kiểm thử phần mềm; phân tích yêu cầu",
+                "Kỹ thuật phần mềm, hệ thống thông tin và công nghệ giáo dục",
+                "Phát triển phần mềm hướng người dùng; tự động hóa kiểm thử; quản lý yêu cầu; chuyển đổi số giáo dục",
+                "Giảng viên Bộ môn Công nghệ phần mềm; chủ nhiệm và thành viên các đề tài về trải nghiệm người dùng, quản lý yêu cầu và bảo đảm chất lượng phần mềm; có công bố hội nghị và tạp chí trong nước, quốc tế.",
+                DateTimeOffset.UtcNow);
+            db.ScientificProfiles.Add(profile);
+        }
+        else
+        {
+            profile.Update(
+                "Kỹ thuật phần mềm; thiết kế trải nghiệm người dùng; kiểm thử phần mềm; phân tích yêu cầu",
+                "Kỹ thuật phần mềm, hệ thống thông tin và công nghệ giáo dục",
+                "Phát triển phần mềm hướng người dùng; tự động hóa kiểm thử; quản lý yêu cầu; chuyển đổi số giáo dục",
+                "Giảng viên Bộ môn Công nghệ phần mềm; chủ nhiệm và thành viên các đề tài về trải nghiệm người dùng, quản lý yêu cầu và bảo đảm chất lượng phần mềm; có công bố hội nghị và tạp chí trong nước, quốc tế.",
+                DateTimeOffset.UtcNow);
+        }
+
+        var details = new ScientificProfileDetails
+        {
+            BirthPlace = "Tỉnh Bình Dương",
+            Hometown = "Tỉnh Bình Dương",
+            Ethnicity = "Kinh",
+            HighestDegreeYear = 2017,
+            HighestDegreeCountry = "Việt Nam",
+            WorkUnit = "Khoa Công nghệ Thông tin, Trường Đại học Công Thương Thành phố Hồ Chí Minh",
+            ContactAddress = "140 Lê Trọng Tấn, phường Tây Thạnh, Thành phố Hồ Chí Minh",
+            OfficePhone = "028 3816 3319",
+            HomePhone = "0274 382 2026",
+            Fax = "028 3816 3320",
+            IdentityNumber = "074190010009",
+            IdentityIssuedDate = new DateOnly(2021, 8, 12),
+            IdentityIssuedPlace = "Cục Cảnh sát quản lý hành chính về trật tự xã hội",
+            Education =
+            [
+                new EducationEntry
+                {
+                    Level = "DAI_HOC", TrainingMode = "Chính quy",
+                    Institution = "Trường Đại học Công nghệ Thông tin, ĐHQG TP.HCM",
+                    Specialization = "Kỹ thuật phần mềm", Country = "Việt Nam", GraduationYear = 2012
+                },
+                new EducationEntry
+                {
+                    Level = "THAC_SI", TrainingMode = "Chính quy",
+                    Institution = "Trường Đại học Khoa học Tự nhiên, ĐHQG TP.HCM",
+                    Specialization = "Công nghệ thông tin", Country = "Việt Nam", GraduationYear = 2017,
+                    ThesisTitle = "Phương pháp đánh giá khả dụng cho hệ thống thông tin trên nền tảng web"
+                }
+            ],
+            Languages =
+            [
+                new LanguageEntry
+                {
+                    Name = "Tiếng Anh",
+                    Proficiency = "Bậc 4/6 theo Khung năng lực ngoại ngữ Việt Nam"
+                },
+                new LanguageEntry
+                {
+                    Name = "Tiếng Nhật",
+                    Proficiency = "JLPT N3"
+                }
+            ],
+            Employment =
+            [
+                new EmploymentEntry
+                {
+                    FromDate = new DateOnly(2012, 9, 1), ToDate = new DateOnly(2016, 8, 31),
+                    Organization = "Công ty Cổ phần Giải pháp Công nghệ Việt",
+                    Position = "Chuyên viên phân tích và kiểm thử phần mềm"
+                },
+                new EmploymentEntry
+                {
+                    FromDate = new DateOnly(2016, 9, 1), ToDate = new DateOnly(2021, 8, 31),
+                    Organization = "Trường Đại học Công Thương Thành phố Hồ Chí Minh",
+                    Position = "Giảng viên Bộ môn Công nghệ phần mềm"
+                },
+                new EmploymentEntry
+                {
+                    FromDate = new DateOnly(2021, 9, 1), ToDate = new DateOnly(2026, 11, 11),
+                    Organization = "Trường Đại học Công Thương Thành phố Hồ Chí Minh",
+                    Position = "Giảng viên; thành viên nhóm nghiên cứu Kỹ thuật phần mềm và Chuyển đổi số"
+                }
+            ],
+            ResearchProjects =
+            [
+                new ResearchProjectEntry
+                {
+                    Title = "Khung đánh giá trải nghiệm người dùng cho cổng thông tin đào tạo",
+                    StartYear = 2021, EndYear = 2022, Level = "Cấp trường", Responsibility = "Chủ nhiệm đề tài"
+                },
+                new ResearchProjectEntry
+                {
+                    Title = "Hệ thống quản lý yêu cầu phần mềm hỗ trợ chuyển đổi số trong trường đại học",
+                    StartYear = 2024, EndYear = 2026, Level = "Cấp trường", Responsibility = "Thành viên chính"
+                },
+                new ResearchProjectEntry
+                {
+                    Title = "Nghiên cứu áp dụng kiểm thử tự động cho các hệ thống thông tin quản lý đào tạo",
+                    StartYear = 2020, EndYear = 2021, Level = "Cấp khoa", Responsibility = "Chủ nhiệm đề tài"
+                },
+                new ResearchProjectEntry
+                {
+                    Title = "Nền tảng thu thập phản hồi người học hỗ trợ cải tiến chất lượng dịch vụ số",
+                    StartYear = 2023, EndYear = 2024, Level = "Cấp trường", Responsibility = "Thư ký khoa học"
+                }
+            ],
+            Publications =
+            [
+                new PublicationEntry
+                {
+                    Title = "A Usability Evaluation Model for University Web Portals",
+                    Year = 2023, Journal = "International Conference on Information Systems"
+                },
+                new PublicationEntry
+                {
+                    Title = "Mô hình quản lý yêu cầu phần mềm trong các dự án chuyển đổi số giáo dục",
+                    Year = 2025, Journal = "Tạp chí Khoa học và Công nghệ"
+                },
+                new PublicationEntry
+                {
+                    Title = "Automated Regression Testing for Student Information Systems",
+                    Year = 2024, Journal = "International Conference on Software Engineering and Information Systems"
+                },
+                new PublicationEntry
+                {
+                    Title = "Đánh giá khả dụng của cổng thông tin đào tạo theo hướng tiếp cận lấy người dùng làm trung tâm",
+                    Year = 2022, Journal = "Tạp chí Khoa học Giáo dục Việt Nam"
+                },
+                new PublicationEntry
+                {
+                    Title = "A Requirements Traceability Approach for Digital Transformation Projects",
+                    Year = 2021, Journal = "Journal of Information Systems and Technology"
+                },
+                new PublicationEntry
+                {
+                    Title = "Ứng dụng kiểm thử dựa trên mô hình trong phát triển phần mềm quản lý đại học",
+                    Year = 2020, Journal = "Kỷ yếu Hội nghị FAIR"
+                }
+            ],
+            DeclarationPlace = "Thành phố Hồ Chí Minh",
+            DeclarationDate = new DateOnly(2026, 11, 11)
+        };
+        profile.UpdateDetails(JsonSerializer.Serialize(
+            details,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+
+        var academicYearId = await db.AcademicYears
+            .Where(x => x.Code == "2026-2027")
+            .Select(x => x.Id)
+            .SingleAsync(cancellationToken);
+        if (!await db.ResearchNorms.AnyAsync(x =>
+                x.LecturerId == lecturer.Id && x.AcademicYearId == academicYearId,
+                cancellationToken))
+        {
+            db.ResearchNorms.Add(new ResearchNorm(
+                lecturer.Id, academicYearId, 200m,
+                "Định mức NCKH giảng viên năm học 2026-2027", 100m));
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
     }
 
     /// <summary>Tạo kết quả chốt cho năm hiện hành để dashboard/báo cáo có quy mô tương xứng.</summary>
