@@ -24,6 +24,9 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(x => x.ProjectLevel).HasColumnName("cap_de_tai").HasMaxLength(100);
         builder.Property(x => x.JournalConferenceId).HasColumnName("tap_chi_hoi_nghi_id");
         builder.Property(x => x.ResearchTargetId).HasColumnName("chi_tieu_id");
+        builder.Property(x => x.ExternalAuthorCount).HasColumnName("so_tac_gia_ngoai_truong");
+        builder.Property(x => x.ClassificationId).HasColumnName("phan_loai_id");
+        builder.HasOne<ProductClassification>().WithMany().HasForeignKey(x => x.ClassificationId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(x => x.Status).HasColumnName("trang_thai").HasMaxLength(30).IsRequired();
         builder.Property(x => x.ScoreEquivalent).HasColumnName("diem_quy_doi").HasPrecision(5, 2);
         builder.Property(x => x.CreatedAt).HasColumnName("tao_luc").HasColumnType("timestamptz").IsRequired();

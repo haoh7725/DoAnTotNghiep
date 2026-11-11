@@ -984,9 +984,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               _formatDate(p['publishedDate'] as String?),
             ),
             DetailRow('Nơi công bố', p['publicationInfo'] as String?),
-            DetailRow('Chỉ số tạp chí', p['journalIndex'] as String?),
+            DetailRow('Chỉ mục công bố', p['journalIndex'] as String?),
             DetailRow(
-              'Phân loại tạp chí',
+              'Phân hạng công bố',
               p['journalClassification'] as String?,
             ),
             DetailRow('Cấp đề tài', p['projectLevel'] as String?),
@@ -1269,11 +1269,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           s['publicationInfo'] as String?,
                         ),
                         DetailRow(
-                          'Chỉ số tạp chí',
+                          'Chỉ mục công bố',
                           s['journalIndex'] as String?,
                         ),
                         DetailRow(
-                          'Phân loại tạp chí',
+                          'Phân hạng công bố',
                           s['journalClassification'] as String?,
                         ),
                         DetailRow('Cấp đề tài', s['projectLevel'] as String?),

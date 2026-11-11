@@ -18,6 +18,7 @@ public sealed class ProductType : BaseEntity
 
     public string Code { get; private set; } = string.Empty;
     public string Name { get; private set; } = string.Empty;
+    public bool IsActive { get; set; } = true;
 
     public void Rename(string name) => Name = name;
 }

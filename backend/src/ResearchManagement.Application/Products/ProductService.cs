@@ -162,6 +162,8 @@ public sealed class ProductService(
             request.ProjectLevel,
             request.JournalConferenceId,
             request.ResearchTargetId);
+        product.SetExternalAuthorCount(request.ExternalAuthorCount);
+        product.ClassificationId = request.ClassificationId;
 
         if (planItem.Status == "CHUA_THUC_HIEN")
             planItem.UpdateProgress("DANG_THUC_HIEN", planItem.Result, planItem.DifficultyProposal);
@@ -236,6 +238,8 @@ public sealed class ProductService(
         await EnsureOwnerOrAdminAsync(product, cancellationToken);
         product.Update(request.Title, request.Description, request.PublicationInfo, request.PublishedDate,
             ToStoredArticleStatus(request.ArticleStatus), request.JournalIndex, request.JournalClassification, request.ProjectLevel);
+        if (request.ExternalAuthorCount.HasValue) product.SetExternalAuthorCount(request.ExternalAuthorCount.Value);
+        if (request.ClassificationId.HasValue) product.ClassificationId = request.ClassificationId;
 
         await products.SaveChangesAsync(cancellationToken);
 
@@ -494,6 +498,8 @@ public sealed class ProductService(
         // Lấy tên tác giả chính
         var ownerLecturer = await lecturers.GetByIdAsync(product.SubmittedByLecturerId, cancellationToken);
         var ownerName = ownerLecturer?.FullName ?? string.Empty;
+        var responseItem = await planItems.GetByIdAsync(product.ResearchPlanItemId, cancellationToken);
+        var responseType = responseItem is null ? null : await productTypes.GetByIdAsync(responseItem.ProductTypeId, cancellationToken);
 
         // Enrich đồng tác giả
         var coAuthorResponses = new List<CoAuthorResponse>();
@@ -531,7 +537,11 @@ public sealed class ProductService(
             product.CreatedAt,
             product.UpdatedAt,
             coAuthorResponses,
-            evidenceResponses);
+            evidenceResponses,
+            product.ExternalAuthorCount,
+            product.ClassificationId,
+            responseItem?.ProductTypeId ?? 0,
+            responseType?.Code ?? "");
     }
 
     private static ProductSummaryResponse ToSummary(Product p) =>

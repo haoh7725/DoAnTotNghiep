@@ -141,6 +141,13 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+await using (var schemaScope = app.Services.CreateAsyncScope())
+{
+    var schemaDb = schemaScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await using var migrationStream = typeof(Program).Assembly.GetManifestResourceStream("ConversionSharingMigration.sql")!;
+    using var migrationReader = new StreamReader(migrationStream);
+    await schemaDb.Database.ExecuteSqlRawAsync(await migrationReader.ReadToEndAsync());
+}
 await AdminSeeder.SeedAdminAsync(app.Services);
 if (app.Environment.IsDevelopment())
 {

@@ -51,5 +51,5 @@ public sealed class ProductTypeService(IProductTypeRepository productTypes)
         await productTypes.GetByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy loại sản phẩm.");
 
-    private static ProductTypeResponse ToResponse(ProductType p) => new(p.Id, p.Code, p.Name);
+    private static ProductTypeResponse ToResponse(ProductType p) => new(p.Id, p.Code, p.Name, p.IsActive);
 }

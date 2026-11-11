@@ -76,6 +76,15 @@ public sealed class EvaluationsController(
         db.Evaluations.Add(evaluation);
         await db.SaveChangesAsync(ct);
 
+        var missingDate = await (from p in db.Products.AsNoTracking()
+            join item in db.ResearchPlanItems.AsNoTracking() on p.ResearchPlanItemId equals item.Id
+            join plan in db.ResearchPlans.AsNoTracking() on item.ResearchPlanId equals plan.Id
+            where plan.AcademicYearId == request.AcademicYearId && p.Status == ProductStatuses.Approved && !p.PublishedDate.HasValue &&
+                (p.SubmittedByLecturerId == lecturer.Id || db.ProductCoAuthors.Any(a => a.ProductId == p.Id && a.LecturerId == lecturer.Id))
+            select p.Title).FirstOrDefaultAsync(ct);
+        if (missingDate is not null)
+            throw new BusinessRuleException($"Sản phẩm '{missingDate}' thiếu ngày công bố/công nhận để xác định hiệu lực quy định. Vui lòng bổ sung trước khi đánh giá.");
+
         var products = await (from p in db.Products.AsNoTracking()
                               join item in db.ResearchPlanItems.AsNoTracking() on p.ResearchPlanItemId equals item.Id
                               join plan in db.ResearchPlans.AsNoTracking() on item.ResearchPlanId equals plan.Id
@@ -91,34 +100,49 @@ public sealed class EvaluationsController(
         {
             var date = product.Product.PublishedDate!.Value;
             var rules = await db.ConversionRules.AsNoTracking()
-                .Where(x => x.ProductTypeId == product.ProductTypeId && x.EffectiveFrom <= date &&
+                .Where(x => x.ProductTypeId == product.ProductTypeId &&
+                    x.ClassificationId == product.Product.ClassificationId && x.EffectiveFrom <= date &&
                     (!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= date))
                 .OrderByDescending(x => x.Version).ToListAsync(ct);
             var criteria = await db.ConversionCriteria.AsNoTracking()
                 .Where(x => rules.Select(r => r.Id).Contains(x.ConversionRuleId)).ToListAsync(ct);
-            var matched = rules.Where(r => criteria.Where(c => c.ConversionRuleId == r.Id).All(c => Matches(c, product.Product)))
+            var publicationKind = product.Product.JournalConferenceId.HasValue
+                ? await db.JournalConferences.Where(x => x.Id == product.Product.JournalConferenceId).Select(x => x.Type).SingleOrDefaultAsync(ct)
+                : null;
+            var matched = rules.Where(r => criteria.Where(c => c.ConversionRuleId == r.Id).All(c =>
+                    c.Field == "HINH_THUC_CONG_BO" ? Compare(publicationKind, c.StringValue, c.Operator) : Matches(c, product.Product)))
                 .GroupBy(r => r.Unit)
                 .Select(group =>
                 {
-                    var selected = group.OrderByDescending(x => x.Priority).ThenByDescending(x => x.Version).ThenBy(x => x.Id).First();
-                    if (group.Count(x => x.Priority == selected.Priority && x.Version == selected.Version) > 1)
+                    var candidates = group.Any(x => x.ClassificationId.HasValue) ? group.Where(x => x.ClassificationId.HasValue) : group;
+                    var selected = candidates.OrderByDescending(x => x.Priority).ThenByDescending(x => x.Version).ThenBy(x => x.Id).First();
+                    if (candidates.Count(x => x.Priority == selected.Priority && x.Version == selected.Version) > 1)
                         throw new BusinessRuleException($"Có nhiều quy định cùng ưu tiên cho đơn vị {group.Key}. Vui lòng cấu hình lại độ ưu tiên.");
                     return selected;
-                });
+                }).ToList();
+            if (matched.Count == 0)
+                throw new BusinessRuleException($"Sản phẩm '{product.Product.Title}' chưa có quy định quy đổi phù hợp và còn hiệu lực. Vui lòng cấu hình trước khi đánh giá.");
             foreach (var rule in matched)
             {
                 var role = NormalizeAuthorRole(product.AuthorRole ?? "DONG_TAC_GIA");
                 var coefficients = await db.AuthorConversionCoefficients.AsNoTracking()
                     .Where(x => x.ConversionRuleId == rule.Id).ToListAsync(ct);
-                var coefficient = coefficients.Count == 0 ? 1m :
+                decimal? coefficient = coefficients.Count == 0 ? 1m :
                     coefficients.FirstOrDefault(x => NormalizeAuthorRole(x.AuthorRole) == role)?.Coefficient;
+                var totalAuthors = 1 + product.Product.ExternalAuthorCount + await db.ProductCoAuthors
+                    .Where(x => x.ProductId == product.Product.Id && x.LecturerId != product.Product.SubmittedByLecturerId)
+                    .Select(x => x.LecturerId).Distinct().CountAsync(ct);
+                if (rule.AuthorSharingMode == "CHIA_136")
+                    coefficient = ConversionRule.SharedCoefficient(product.Product.SubmittedByLecturerId == lecturer.Id, totalAuthors);
                 if (!coefficient.HasValue)
                     throw new BusinessRuleException(
                         $"Quy định {rule.Code} chưa cấu hình hệ số cho vai trò tác giả '{role}' của sản phẩm '{product.Product.Title}'.");
                 db.EvaluationConversionDetails.Add(new EvaluationConversionDetail(evaluation.Id, lecturer.Id,
                     request.AcademicYearId, product.Product.Id, product.ProductTypeId, rule.Id, rule.ConversionValue,
                     coefficient.Value, rule.Unit,
-                    $"Quy định {rule.Code} phiên bản {rule.Version}; {role} hệ số {coefficient.Value:0.######}"));
+                    $"Quy định {rule.Code} phiên bản {rule.Version}; {role}; " +
+                    (rule.AuthorSharingMode == "CHIA_136" ? $"chia 1/3 cho tác giả chính và 2/3 cho {totalAuthors} tác giả (gồm người ngoài trường); " : "") +
+                    $"hệ số {coefficient.Value:0.######}; căn cứ {rule.LegalBasis}"));
             }
         }
         await db.SaveChangesAsync(ct);

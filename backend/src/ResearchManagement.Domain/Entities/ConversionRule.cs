@@ -22,6 +22,20 @@ public sealed class ConversionRule : BaseEntity
     public DateOnly EffectiveFrom { get; private set; }
     public DateOnly? EffectiveTo { get; private set; }
     public string LegalBasis { get; private set; } = string.Empty;
+    public string AuthorSharingMode { get; private set; } = "HE_SO";
+    public long? ClassificationId { get; set; }
+
+    public void SetAuthorSharingMode(string mode)
+    {
+        if (mode is not ("HE_SO" or "CHIA_136")) throw new ArgumentException("Cách chia tác giả không hợp lệ.");
+        AuthorSharingMode = mode;
+    }
+
+    public static decimal SharedCoefficient(bool isMainAuthor, int totalAuthors)
+    {
+        if (totalAuthors < 1) throw new ArgumentOutOfRangeException(nameof(totalAuthors));
+        return (isMainAuthor ? 1m / 3m : 0m) + 2m / (3m * totalAuthors);
+    }
 
     public void Update(long productTypeId, string code, int version, string name, string conditionDescription,
         decimal conversionValue, string unit, int priority, string authorRuleDescription, DateOnly effectiveFrom,

@@ -1,6 +1,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 COPY backend/ ./backend/
+COPY infra/database/15_conversion_sharing.sql ./infra/database/15_conversion_sharing.sql
 RUN dotnet restore backend/ResearchManagement.slnx
 RUN dotnet publish backend/src/ResearchManagement.Api/ResearchManagement.Api.csproj -c Release -o /app/publish --no-restore
 

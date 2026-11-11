@@ -58,6 +58,7 @@ public sealed class ProductTypeConfiguration : IEntityTypeConfiguration<ProductT
         builder.Property(x => x.Id).HasColumnName("id");
         builder.Property(x => x.Code).HasColumnName("ma_loai").HasMaxLength(30).IsRequired();
         builder.Property(x => x.Name).HasColumnName("ten_loai").HasMaxLength(100).IsRequired();
+        builder.Property(x => x.IsActive).HasColumnName("dang_su_dung");
         builder.HasIndex(x => x.Code).IsUnique();
     }
 }

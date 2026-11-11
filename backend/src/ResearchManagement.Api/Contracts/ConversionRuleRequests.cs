@@ -20,4 +20,6 @@ public sealed record ConversionRuleRequest(
     DateOnly? EffectiveTo,
     [Required, StringLength(512)] string LegalBasis,
     List<ConversionCriterionRequest> Criteria,
-    List<AuthorCoefficientRequest> AuthorCoefficients);
+    List<AuthorCoefficientRequest> AuthorCoefficients,
+    [RegularExpression("^(HE_SO|CHIA_136)$")] string AuthorSharingMode = "HE_SO",
+    long? ClassificationId = null);

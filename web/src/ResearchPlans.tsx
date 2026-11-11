@@ -49,6 +49,7 @@ type ProductType = {
     id: number
     code: string
     name: string
+    isActive: boolean
 }
 const progressLabels: Record<string, string> = {
     CHUA_THUC_HIEN: 'Chưa thực hiện',
@@ -579,7 +580,7 @@ export function ResearchPlans({ academicYears }: Props) {
                                                 : 'Chọn loại sản phẩm khoa học'}
                                         </option>
 
-                                        {productTypes.map(type => (
+                                        {productTypes.filter(type => type.isActive).map(type => (
                                             <option key={type.id} value={type.id}>
                                                 {type.name}
                                             </option>
