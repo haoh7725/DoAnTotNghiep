@@ -456,8 +456,10 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
 
                       final hasEvaluation =
                           data['hasFinalizedEvaluation'] == true;
-                      final requiredHours = (data['requiredHours'] as num?)
-                          ?.toDouble();
+                      final isPoints = data['evaluationUnit'] == 'DIEM';
+                      final isLegacy = data['evaluationUnit'] == 'LEGACY';
+                      final requiredValue = (data[isPoints ? 'requiredPoints' : 'requiredHours'] as num?)?.toDouble();
+                      final unitLabel = isPoints ? 'điểm' : 'giờ';
                       final percent = (data['completionPercent'] as num?)
                           ?.toDouble();
 
@@ -475,14 +477,11 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              const Text(
-                                'Mức hoàn thành định mức giờ NCKH '
-                                'theo kết quả đã chốt',
-                              ),
+                              Text(isLegacy ? 'Kết quả theo quy chế trước đây' : 'Mức hoàn thành định mức $unitLabel NCKH theo kết quả đã chốt'),
                               const SizedBox(height: 16),
                               Text(
                                 'Định mức: '
-                                '${_number(requiredHours)} giờ',
+                                '${_number(requiredValue)} $unitLabel',
                               ),
                               if (!hasEvaluation)
                                 const Padding(
@@ -523,14 +522,11 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
                                     minHeight: 12,
                                   ),
                                   const SizedBox(height: 8),
-                                  const Text(
-                                    'Tỷ lệ = giờ đã ghi nhận / '
-                                    'định mức giờ × 100%.',
-                                  ),
+                                  Text('Tỷ lệ = $unitLabel đã ghi nhận / định mức $unitLabel × 100%.'),
                                 ] else
                                   Text(
-                                    requiredHours == null
-                                        ? 'Chưa được giao định mức giờ.'
+                                    isLegacy ? 'Kết quả cũ được giữ nguyên; xem căn cứ xếp loại trong kết quả thi đua.' : requiredValue == null
+                                        ? 'Chưa được giao định mức $unitLabel.'
                                         : 'Định mức bằng 0; '
                                               'không tính phần trăm.',
                                   ),

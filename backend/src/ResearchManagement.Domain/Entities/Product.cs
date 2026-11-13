@@ -9,6 +9,25 @@ namespace ResearchManagement.Domain.Entities;
 /// </summary>
 public sealed class Product : BaseEntity
 {
+    public string? WorkIdentifier { get; private set; }
+
+    public void SetWorkIdentifier(string? value)
+    {
+        value = value?.Trim();
+        foreach (var prefix in new[] { "https://doi.org/", "http://doi.org/", "https://dx.doi.org/", "doi:" })
+            if (value?.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) == true)
+                value = value[prefix.Length..].Trim();
+        WorkIdentifier = string.IsNullOrWhiteSpace(value) ? null : value.ToLowerInvariant();
+    }
+
+    public void CorrectMissingRecognitionDate(DateOnly date)
+    {
+        if (Status != ProductStatuses.Approved || PublishedDate.HasValue)
+            throw new InvalidOperationException("Chỉ được bổ sung ngày cho sản phẩm đã duyệt đang thiếu ngày công nhận.");
+        PublishedDate = date;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
     private Product() { }
 
     public Product(
@@ -148,6 +167,20 @@ public sealed class Product : BaseEntity
             throw new InvalidOperationException("Sản phẩm đã liên kết với chỉ tiêu.");
         ResearchTargetId = researchTargetId;
         JournalConferenceId = journalConferenceId;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void SetJournalConference(long? journalConferenceId)
+    {
+        JournalConferenceId = journalConferenceId;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void UnlinkTarget()
+    {
+        if (Status is not (ProductStatuses.Draft or ProductStatuses.Returned))
+            throw new InvalidOperationException("Chỉ được bỏ liên kết chỉ tiêu khi sản phẩm còn nháp hoặc được trả lại.");
+        ResearchTargetId = null;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 

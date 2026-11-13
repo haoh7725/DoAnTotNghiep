@@ -15,6 +15,7 @@ public sealed class EvaluationConfiguration : IEntityTypeConfiguration<Evaluatio
         b.Property(x => x.Attempt).HasColumnName("lan_danh_gia");
         b.Property(x => x.EvaluatorAccountId).HasColumnName("nguoi_danh_gia_id");
         b.Property(x => x.Status).HasColumnName("trang_thai").HasMaxLength(10);
+        b.Property(x => x.EvaluationUnit).HasColumnName("don_vi_danh_gia").HasMaxLength(10);
         b.Property(x => x.Classification).HasColumnName("xep_loai").HasMaxLength(100);
         b.Property(x => x.ClassificationBasis).HasColumnName("can_cu_xep_loai");
         b.Property(x => x.LecturerCodeSnapshot).HasColumnName("ma_giang_vien_anh_chup").HasMaxLength(30);

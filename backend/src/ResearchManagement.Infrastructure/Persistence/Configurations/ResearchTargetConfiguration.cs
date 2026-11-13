@@ -31,6 +31,8 @@ public sealed class ResearchTargetConfiguration
         builder.Property(x => x.Deadline)
             .HasColumnName("han_hoan_thanh");
         builder.Property(x => x.JournalConferenceId).HasColumnName("tap_chi_hoi_nghi_id");
+        builder.Property(x => x.ProductTypeId).HasColumnName("loai_san_pham_id").IsRequired();
+        builder.HasOne<ProductType>().WithMany().HasForeignKey(x => x.ProductTypeId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(x => x.Status).HasColumnName("trang_thai").HasMaxLength(30).IsRequired();
         builder.Property(x => x.AssignedByAccountId).HasColumnName("nguoi_giao_id");
         builder.Property(x => x.AcceptedByAccountId).HasColumnName("nguoi_tiep_nhan_id");

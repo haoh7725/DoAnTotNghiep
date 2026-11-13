@@ -36,11 +36,14 @@ public sealed class ResearchTargetService(
     {
         if (request.AssignedArticleCount <= 0)
             throw new BusinessRuleException("Số bài được giao phải lớn hơn 0.");
+        if (request.ProductTypeId <= 0)
+            throw new BusinessRuleException("Phải chọn loại sản phẩm cho chỉ tiêu.");
 
         var existing =
             await researchTargets.GetByFacultyAndAcademicYearAsync(
                 request.FacultyId,
                 request.AcademicYearId,
+                request.ProductTypeId,
                 request.JournalConferenceId,
                 cancellationToken);
 
@@ -53,7 +56,8 @@ public sealed class ResearchTargetService(
             request.AcademicYearId,
             request.AssignedArticleCount,
             request.Deadline,
-            request.JournalConferenceId);
+            request.JournalConferenceId,
+            request.ProductTypeId);
         researchTarget.MarkAssigned(currentUser.Id ?? throw new ForbiddenException("Không xác định được tài khoản giao chỉ tiêu."));
 
         await researchTargets.AddAsync(researchTarget, cancellationToken);
@@ -76,6 +80,8 @@ public sealed class ResearchTargetService(
         if (request.AssignedArticleCount <= 0)
             throw new BusinessRuleException("Số bài được giao phải lớn hơn 0.");
 
+        if (request.ProductTypeId <= 0) throw new BusinessRuleException("Phải chọn loại sản phẩm cho chỉ tiêu.");
+
         var allocatedTotal = (await allocations.GetByResearchTargetIdAsync(id, cancellationToken))
             .Sum(x => x.AllocatedArticleCount);
         if (request.AssignedArticleCount < allocatedTotal)
@@ -84,7 +90,8 @@ public sealed class ResearchTargetService(
         researchTarget.Update(
             request.AssignedArticleCount,
             request.Deadline,
-            request.JournalConferenceId);
+            request.JournalConferenceId,
+            request.ProductTypeId);
 
         await researchTargets.SaveChangesAsync(cancellationToken);
 
@@ -98,6 +105,7 @@ public sealed class ResearchTargetService(
             researchTarget.Id,
             researchTarget.FacultyId,
             researchTarget.AcademicYearId,
+            researchTarget.ProductTypeId ?? throw new BusinessRuleException("Chỉ tiêu chưa có loại sản phẩm."),
             researchTarget.AssignedArticleCount,
             researchTarget.Deadline,
             researchTarget.JournalConferenceId,

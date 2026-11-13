@@ -6,6 +6,7 @@ namespace ResearchManagement.Application.Products.Models;
 
 public sealed class CreateProductRequest
 {
+    [StringLength(255)] public string? WorkIdentifier { get; set; }
     public long? ClassificationId { get; set; }
     [Range(0, 10000)] public int ExternalAuthorCount { get; set; }
     [Required]
@@ -30,6 +31,9 @@ public sealed class CreateProductRequest
 
 public sealed class UpdateProductRequest
 {
+    public long? JournalConferenceId { get; set; }
+    public bool UpdateJournalConference { get; set; }
+    [StringLength(255)] public string? WorkIdentifier { get; set; }
     public long? ClassificationId { get; set; }
     [Range(0, 10000)] public int? ExternalAuthorCount { get; set; }
     [Required, StringLength(500, MinimumLength = 3)]
@@ -70,6 +74,12 @@ public sealed class ReviewProductRequest
     /// <summary>Điểm quy đổi — chỉ Phòng QLKH nhập khi duyệt cuối.</summary>
     [Range(0, 999.99)]
     public decimal? ScoreEquivalent { get; set; }
+
+    // Phòng QLKH dùng ở bước duyệt cuối để xác nhận bài đã xuất bản.
+    [RegularExpression("^(DANG_VIET|DANG_PHAN_BIEN|DA_NHAN_XET|DA_NHAN_DANG|DA_XUAT_BAN)$")]
+    public string? ArticleStatus { get; set; }
+    public DateOnly? PublishedDate { get; set; }
+    [StringLength(500)] public string? PublicationInfo { get; set; }
 }
 
 public sealed class AddCoAuthorRequest
@@ -142,7 +152,7 @@ public sealed record ProductResponse(
     int ExternalAuthorCount = 0,
     long? ClassificationId = null,
     long ProductTypeId = 0,
-    string ProductTypeCode = "");
+    string ProductTypeCode = "", string? WorkIdentifier = null, string? RequiredReviewRole = null, bool CanReview = false, bool CanEdit = false);
 
 public sealed record ProductSummaryResponse(
     long Id,

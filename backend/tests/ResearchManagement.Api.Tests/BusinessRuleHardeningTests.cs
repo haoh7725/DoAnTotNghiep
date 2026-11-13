@@ -1,10 +1,27 @@
 using ResearchManagement.Domain.Constants;
 using ResearchManagement.Domain.Entities;
+using ResearchManagement.Application.Common;
+using ResearchManagement.Application.Products;
 
 namespace ResearchManagement.Api.Tests;
 
 public sealed class BusinessRuleHardeningTests
 {
+    [Fact]
+    public void New_article_progress_starts_at_writing_and_requires_evidence_for_next_step()
+    {
+        Assert.Equal(0, ArticleProgressPolicy.Rank(null));
+        Assert.Throws<BusinessRuleException>(() => ArticleProgressPolicy.ValidateTransition("DANG_VIET", "DANG_PHAN_BIEN", 0));
+        ArticleProgressPolicy.ValidateTransition("DANG_VIET", "DANG_PHAN_BIEN", 1);
+    }
+
+    [Fact]
+    public void Article_progress_cannot_skip_or_move_back()
+    {
+        Assert.Throws<BusinessRuleException>(() => ArticleProgressPolicy.ValidateTransition("DANG_VIET", "DA_NHAN_XET", 1));
+        Assert.Throws<BusinessRuleException>(() => ArticleProgressPolicy.ValidateTransition("DA_NHAN_XET", "DANG_PHAN_BIEN", 1));
+    }
+
     [Fact]
     public void Article_progress_can_change_after_submission_without_unlocking_content()
     {

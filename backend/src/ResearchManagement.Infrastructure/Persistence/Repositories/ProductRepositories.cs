@@ -7,6 +7,21 @@ namespace ResearchManagement.Infrastructure.Persistence.Repositories;
 
 public sealed class ProductRepository(ApplicationDbContext db) : IProductRepository
 {
+    public async Task<bool> HasDuplicateWorkAsync(Product product, CancellationToken ct)
+    {
+        var normalizedTitle = System.Text.RegularExpressions.Regex.Replace(product.Title.Trim(), @"\s+", " ").ToLowerInvariant();
+        var candidates = await (from other in db.Products
+                join item in db.ResearchPlanItems on other.ResearchPlanItemId equals item.Id
+                where other.Id != product.Id &&
+                    (product.WorkIdentifier != null && other.WorkIdentifier == product.WorkIdentifier ||
+                     (product.WorkIdentifier == null || other.WorkIdentifier == null) &&
+                     other.Status == "DA_DUYET" && product.PublishedDate != null && other.PublishedDate == product.PublishedDate &&
+                     db.ResearchPlanItems.Any(own => own.Id == product.ResearchPlanItemId && own.ProductTypeId == item.ProductTypeId))
+                select new { other.WorkIdentifier, other.Title }).ToListAsync(ct);
+        return candidates.Any(other => product.WorkIdentifier != null && other.WorkIdentifier == product.WorkIdentifier ||
+            System.Text.RegularExpressions.Regex.Replace(other.Title.Trim(), @"\s+", " ").ToLowerInvariant() == normalizedTitle);
+    }
+
     public Task<int> CountByTargetAndLecturerAsync(long targetId, long lecturerId, CancellationToken cancellationToken) =>
         db.Products.CountAsync(p => p.ResearchTargetId == targetId && p.SubmittedByLecturerId == lecturerId, cancellationToken);
 

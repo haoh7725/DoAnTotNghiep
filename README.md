@@ -2,6 +2,8 @@
 
 Đồ án tốt nghiệp gồm Web React, Mobile Flutter và backend ASP.NET Core REST API dùng chung PostgreSQL.
 
+Quy tắc công nhận sản phẩm, chuyển cấp xét duyệt, chống kê khai trùng và ghi nhận theo năm công bố/nghiệm thu được mô tả tại [Quy tắc nghiệp vụ và kiểm thử](docs/QUY_TAC_NGHIEP_VU_VA_KIEM_THU.md).
+
 ## Cấu trúc
 
 - `backend/`: ASP.NET Core Web API, Entity Framework Core và Npgsql.
@@ -74,6 +76,11 @@ Get-Content -Raw -Encoding UTF8 infra/database/11_emulation_classification_and_t
 Get-Content -Raw -Encoding UTF8 infra/database/12_business_rule_hardening.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 Get-Content -Raw -Encoding UTF8 infra/database/13_norm_points_default.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 Get-Content -Raw -Encoding UTF8 infra/database/14_research_plan_history.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 infra/database/15_conversion_sharing.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 infra/database/16_research_product_taxonomy.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 infra/database/17_product_business_rules.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 infra/database/18_project_requirements.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 infra/database/19_target_consistency.sql | docker exec -i research-management-postgres psql -U postgres -d research_management -v ON_ERROR_STOP=1
 ```
 
 Nếu đã đổi tên database hoặc user trong `.env`, thay `research_management` và

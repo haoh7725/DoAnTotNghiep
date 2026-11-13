@@ -14,6 +14,7 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(x => x.Id).HasColumnName("id");
         builder.Property(x => x.ResearchPlanItemId).HasColumnName("noi_dung_ke_hoach_id").IsRequired();
         builder.Property(x => x.SubmittedByLecturerId).HasColumnName("giang_vien_id").IsRequired();
+        builder.Property(x => x.WorkIdentifier).HasColumnName("ma_cong_trinh").HasMaxLength(255);
         builder.Property(x => x.Title).HasColumnName("tieu_de").HasMaxLength(500).IsRequired();
         builder.Property(x => x.Description).HasColumnName("mo_ta");
         builder.Property(x => x.PublicationInfo).HasColumnName("thong_tin_xuat_ban").HasMaxLength(500);

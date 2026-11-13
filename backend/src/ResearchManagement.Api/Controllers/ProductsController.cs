@@ -1,3 +1,4 @@
+using ResearchManagement.Application.ResearchTargets;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ResearchManagement.Application.Products;
@@ -26,66 +27,33 @@ public sealed class ProductsController(
         var accountId = currentUser.Id
             ?? throw new ForbiddenException("Không xác định được tài khoản.");
 
-        var query =
-            from product in db.Products.AsNoTracking()
-            join lecturer in db.Lecturers
-                on product.SubmittedByLecturerId equals lecturer.Id
-            join department in db.Departments
-                on lecturer.DepartmentId equals department.Id
-            where
-                (
-                    product.Status == "NOP" ||
-                    product.Status == "TRUONG_BO_MON_DUYET" ||
-                    product.Status == "TRUONG_KHOA_DUYET" ||
-                    product.Status == "PHONG_QLKH_DUYET"
-                )
-                && db.RoleAssignments.Any(role =>
-                    role.AccountId == accountId &&
-                    (
-                        (role.Role == "QUAN_TRI" &&
-                         role.Scope == "TOAN_TRUONG") ||
-
-                        (role.Role == "TRUONG_BO_MON" &&
-                         role.Scope == "BO_MON" &&
-                         role.FacultyId == department.FacultyId &&
-                         role.DepartmentId == department.Id &&
-                         product.Status == "NOP" &&
-                         !db.RoleAssignments.Any(ownerRole => ownerRole.AccountId == lecturer.AccountId &&
-                             ownerRole.Role == Roles.DepartmentHead)) ||
-
-                        (role.Role == "TRUONG_KHOA" &&
-                         role.Scope == "KHOA" &&
-                         role.FacultyId == department.FacultyId &&
-                         ((product.Status == "NOP" &&
-                           db.RoleAssignments.Any(ownerRole => ownerRole.AccountId == lecturer.AccountId &&
-                               ownerRole.Role == Roles.DepartmentHead)) ||
-                          (product.Status == "TRUONG_BO_MON_DUYET" &&
-                           !db.RoleAssignments.Any(ownerRole => ownerRole.AccountId == lecturer.AccountId &&
-                               ownerRole.Role == Roles.FacultyDean)))) ||
-
-                        (role.Role == "PHONG_QLKH" &&
-                         role.Scope == "TOAN_TRUONG" &&
-                         ((product.Status == "TRUONG_BO_MON_DUYET" &&
-                           db.RoleAssignments.Any(ownerRole => ownerRole.AccountId == lecturer.AccountId &&
-                               ownerRole.Role == Roles.FacultyDean)) ||
-                          product.Status == "TRUONG_KHOA_DUYET" ||
-                          product.Status == "PHONG_QLKH_DUYET"))
-                    ))
+        var candidates = await (from product in db.Products.AsNoTracking()
+            join lecturer in db.Lecturers on product.SubmittedByLecturerId equals lecturer.Id
+            join department in db.Departments on lecturer.DepartmentId equals department.Id
+            where product.Status == "NOP" || product.Status == "TRUONG_BO_MON_DUYET" ||
+                product.Status == "TRUONG_KHOA_DUYET" || product.Status == "PHONG_QLKH_DUYET"
             orderby product.UpdatedAt
-            select new
-            {
-                product.Id,
-                product.Title,
-                product.Status,
-                LecturerName = lecturer.FullName,
-                DepartmentName = department.Name
-            };
-
-        return Ok(await query.ToListAsync(cancellationToken));
+            select new { product.Id, product.Title, product.Status, LecturerName = lecturer.FullName,
+                DepartmentName = department.Name, department.FacultyId, DepartmentId = department.Id }).ToListAsync(cancellationToken);
+        var visible = new List<object>();
+        foreach (var candidate in candidates.Where(x => currentUser.CanAccess(x.FacultyId, x.DepartmentId)))
+        {
+            var detail = await productService.GetByIdAsync(candidate.Id, cancellationToken);
+            if (detail.CanReview)
+                visible.Add(new { candidate.Id, candidate.Title, candidate.Status, candidate.LecturerName, candidate.DepartmentName });
+        }
+        return Ok(visible);
     }
     [HttpGet("api/products/mine")]
-    public async Task<ActionResult<IReadOnlyList<ProductSummaryResponse>>> Mine(CancellationToken cancellationToken) =>
-        Ok(await productService.GetMineAsync(cancellationToken));
+    public async Task<ActionResult<IReadOnlyList<ProductSummaryResponse>>> Mine(CancellationToken cancellationToken, [FromQuery] long? academicYearId = null)
+    {
+        var products = await productService.GetMineAsync(cancellationToken);
+        if (!academicYearId.HasValue) return Ok(products);
+        var itemIds = await (from item in db.ResearchPlanItems.AsNoTracking()
+                             join plan in db.ResearchPlans on item.ResearchPlanId equals plan.Id
+                             where plan.AcademicYearId == academicYearId.Value select item.Id).ToListAsync(cancellationToken);
+        return Ok(products.Where(x => itemIds.Contains(x.ResearchPlanItemId)).ToList());
+    }
 
     [HttpGet("api/products/available-plan-items")]
     public async Task<IActionResult> AvailablePlanItems(CancellationToken cancellationToken)
@@ -108,6 +76,7 @@ public sealed class ProductsController(
                                ProductTypeCode = type.Code,
                                ProductTypeName = type.Name,
                                AcademicYearCode = year.Code,
+                               AcademicYearId = year.Id,
                                item.Status
                            }).ToListAsync(cancellationToken);
         return Ok(items);
@@ -152,13 +121,14 @@ public sealed class ProductsController(
         var targets = await (from allocation in db.ResearchTargetAllocations.AsNoTracking()
                              join personal in db.LecturerTargetAllocations.AsNoTracking() on allocation.Id equals personal.DepartmentAllocationId
                              join target in db.ResearchTargets.AsNoTracking() on allocation.ResearchTargetId equals target.Id
+                             join type in db.ProductTypes.AsNoTracking() on target.ProductTypeId equals type.Id
                              join year in db.AcademicYears.AsNoTracking() on target.AcademicYearId equals year.Id
                              join journal in db.JournalConferences.AsNoTracking() on target.JournalConferenceId equals journal.Id into journals
                              from journal in journals.DefaultIfEmpty()
                              where allocation.DepartmentId == lecturer.DepartmentId && personal.LecturerId == lecturer.Id
                                 && target.Status == "DA_KHOA"
                              orderby year.StartDate descending, target.Id descending
-                             select new { target.Id, target.AcademicYearId, AcademicYearCode = year.Code,
+                               select new { target.Id, target.ProductTypeId, ProductTypeCode = type.Code, ProductTypeName = type.Name, target.AcademicYearId, AcademicYearCode = year.Code,
                                  AllocatedArticleCount = personal.AllocatedArticleCount, target.JournalConferenceId,
                                  JournalConferenceName = journal == null ? null : journal.Name,
                                  target.Deadline, target.Status }).ToListAsync(cancellationToken);
@@ -167,7 +137,7 @@ public sealed class ProductsController(
 
     [HttpGet("api/products/publication-options")]
     public async Task<IActionResult> PublicationOptions(CancellationToken ct) => Ok(await db.JournalConferences
-        .AsNoTracking().OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.Type }).ToListAsync(ct));
+        .AsNoTracking().OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.Type, x.Issn, x.Index, x.Classification }).ToListAsync(ct));
 
     // GET /api/research-plan-items/{itemId}/products
     [HttpGet("api/research-plan-items/{itemId:long}/products")]
@@ -186,8 +156,9 @@ public sealed class ProductsController(
         CancellationToken cancellationToken)
     {
         request.ResearchPlanItemId = itemId;
+        await ValidateTargetWindow(request.ResearchTargetId, cancellationToken);
         await ValidateClassification(itemId, request.ClassificationId, cancellationToken);
-        var result = await productService.CreateAsync(request, cancellationToken);
+        var result = await ExecuteInTransactionAsync(() => productService.CreateAsync(request, cancellationToken), cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 
@@ -209,6 +180,8 @@ public sealed class ProductsController(
     {
         var existingProduct = await db.Products.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
+        if (request.UpdateJournalConference && request.JournalConferenceId.HasValue && !await db.JournalConferences.AnyAsync(x => x.Id == request.JournalConferenceId, cancellationToken))
+            throw new BusinessRuleException("Nơi công bố không tồn tại.");
         await ValidateClassification(existingProduct.ResearchPlanItemId, request.ClassificationId, cancellationToken, existingProduct.ClassificationId);
         var result = await productService.UpdateAsync(id, request, cancellationToken);
         return Ok(result);
@@ -248,10 +221,26 @@ public sealed class ProductsController(
     public async Task<ActionResult<ProductResponse>> LinkTarget(
         long id, LinkTargetRequest request, CancellationToken cancellationToken)
     {
-        var result = await productService.LinkTargetAsync(id, request.ResearchTargetId, cancellationToken);
+        await ValidateTargetWindow(request.ResearchTargetId, cancellationToken);
+        var result = await ExecuteInTransactionAsync(() => productService.LinkTargetAsync(id, request.ResearchTargetId, cancellationToken), cancellationToken);
         return Ok(result);
     }
 
+    [HttpDelete("api/products/{id:long}/link-target")]
+    public async Task<ActionResult<ProductResponse>> UnlinkTarget(long id, CancellationToken ct) =>
+        Ok(await productService.UnlinkTargetAsync(id, ct));
+
+    private async Task ValidateTargetWindow(long? targetId, CancellationToken ct)
+    {
+        if (!targetId.HasValue) return;
+        var dates = await (from target in db.ResearchTargets.AsNoTracking()
+                           join year in db.AcademicYears on target.AcademicYearId equals year.Id
+                           where target.Id == targetId select new { year.StartDate, year.EndDate, target.Deadline }).SingleOrDefaultAsync(ct)
+            ?? throw new NotFoundException("Không tìm thấy chỉ tiêu.");
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow,
+            OperatingSystem.IsWindows() ? "SE Asia Standard Time" : "Asia/Ho_Chi_Minh").DateTime);
+        TargetRules.EnsureOpen(today, dates.StartDate, dates.EndDate, dates.Deadline);
+    }
     // POST /api/products/{id}/submit
     [HttpPost("api/products/{id:long}/submit")]
     public async Task<ActionResult<ProductResponse>> Submit(
@@ -260,17 +249,7 @@ public sealed class ProductsController(
         var result = await ExecuteInTransactionAsync(async () =>
         {
             var submitted = await productService.SubmitAsync(id, cancellationToken);
-            var unit = await ProductUnitAsync(submitted.SubmittedByLecturerId, cancellationToken);
-            var ownerIsDepartmentHead = await OwnerHasRoleAsync(submitted.SubmittedByLecturerId, Roles.DepartmentHead, cancellationToken);
-            await workflowNotifications.QueueForRoleAsync(
-                ownerIsDepartmentHead ? Roles.FacultyDean : Roles.DepartmentHead,
-                $"Sản phẩm '{submitted.Title}' vừa được giảng viên gửi duyệt. Vui lòng kiểm tra và xét duyệt.",
-                $"PRODUCT_SUBMITTED:{submitted.Id}",
-                $"product-reviews:{submitted.Id}",
-                unit.FacultyId,
-                ownerIsDepartmentHead ? null : unit.DepartmentId,
-                submitted.Id,
-                cancellationToken);
+            await QueueCurrentReviewerAsync(submitted, "Sản phẩm vừa được gửi duyệt", cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
             return submitted;
         }, cancellationToken);
@@ -294,24 +273,9 @@ public sealed class ProductsController(
             var reviewed = await productService.ReviewAsync(id, request, cancellationToken);
             if (request.Action.Trim().Equals("APPROVE", StringComparison.OrdinalIgnoreCase))
             {
-                var unit = await ProductUnitAsync(before.SubmittedByLecturerId, cancellationToken);
-                if (reviewed.Status == ProductStatuses.DepartmentHeadApproved)
-                {
-                    var ownerIsDean = await OwnerHasRoleAsync(before.SubmittedByLecturerId, Roles.FacultyDean, cancellationToken);
-                    await workflowNotifications.QueueForRoleAsync(ownerIsDean ? Roles.ResearchOffice : Roles.FacultyDean,
-                        ownerIsDean
-                            ? $"Sản phẩm '{reviewed.Title}' của Trưởng khoa đã qua bước bộ môn và đang chờ Phòng QLKH thẩm định."
-                            : $"Sản phẩm '{reviewed.Title}' đã được Trưởng bộ môn duyệt và đang chờ Trưởng khoa xét duyệt.",
-                        ownerIsDean ? $"PRODUCT_WAIT_OFFICE:{reviewed.Id}" : $"PRODUCT_WAIT_DEAN:{reviewed.Id}",
-                        $"product-reviews:{reviewed.Id}", unit.FacultyId,
-                        ownerIsDean ? null : unit.DepartmentId, reviewed.Id, cancellationToken);
-                }
-                else if (reviewed.Status == ProductStatuses.FacultyDeanApproved)
-                    await workflowNotifications.QueueForRoleAsync(Roles.ResearchOffice,
-                        $"Sản phẩm '{reviewed.Title}' đã được Trưởng khoa duyệt và đang chờ Phòng QLKH thẩm định, công nhận.",
-                        $"PRODUCT_WAIT_OFFICE:{reviewed.Id}", $"product-reviews:{reviewed.Id}",
-                        unit.FacultyId, unit.DepartmentId, reviewed.Id, cancellationToken);
-                else if (reviewed.Status == ProductStatuses.Approved)
+                if (reviewed.Status != ProductStatuses.Approved)
+                    await QueueCurrentReviewerAsync(reviewed, "Sản phẩm đang chờ xét duyệt", cancellationToken);
+                else
                 {
                     var authorAccountIds = await db.Lecturers.AsNoTracking()
                         .Where(x => x.Id == before.SubmittedByLecturerId ||
@@ -365,44 +329,31 @@ public sealed class ProductsController(
         return (unit.FacultyId, unit.DepartmentId);
     }
 
-    private Task<bool> OwnerHasRoleAsync(long lecturerId, string role, CancellationToken ct) =>
-        db.Lecturers.AsNoTracking().AnyAsync(lecturer => lecturer.Id == lecturerId &&
-            db.RoleAssignments.Any(assignment => assignment.AccountId == lecturer.AccountId && assignment.Role == role), ct);
-
     private async Task QueueCurrentReviewerAsync(ProductResponse product, string action, CancellationToken ct)
     {
-        var unit = await ProductUnitAsync(product.SubmittedByLecturerId, ct);
-        string? role = null;
-        long? departmentId = unit.DepartmentId;
-        if (product.Status == ProductStatuses.Submitted)
-        {
-            var ownerIsDepartmentHead = await OwnerHasRoleAsync(product.SubmittedByLecturerId, Roles.DepartmentHead, ct);
-            role = ownerIsDepartmentHead ? Roles.FacultyDean : Roles.DepartmentHead;
-            if (ownerIsDepartmentHead) departmentId = null;
-        }
-        else if (product.Status == ProductStatuses.DepartmentHeadApproved)
-        {
-            var ownerIsDean = await OwnerHasRoleAsync(product.SubmittedByLecturerId, Roles.FacultyDean, ct);
-            role = ownerIsDean ? Roles.ResearchOffice : Roles.FacultyDean;
-            departmentId = null;
-        }
-        else if (product.Status is ProductStatuses.FacultyDeanApproved or ProductStatuses.ResearchOfficeApproved)
-        {
-            role = Roles.ResearchOffice;
-            departmentId = null;
-        }
+        var role = product.RequiredReviewRole;
         if (role is null) return;
+        var unit = await ProductUnitAsync(product.SubmittedByLecturerId, ct);
         await workflowNotifications.QueueForRoleAsync(role,
-            $"{action}: '{product.Title}'.", $"ARTICLE_PROGRESS:{product.Id}:{product.ArticleStatus}:{product.UpdatedAt.UtcTicks}",
-            $"product-reviews:{product.Id}", unit.FacultyId, departmentId, product.Id, ct);
+            $"{action}: '{product.Title}'.", $"PRODUCT_REVIEW:{product.Id}:{product.UpdatedAt.UtcTicks}",
+            $"product-reviews:{product.Id}", unit.FacultyId,
+            role == Roles.DepartmentHead ? unit.DepartmentId : null, product.Id, ct);
     }
 
+    public sealed record CorrectRecognitionDateRequest(DateOnly PublishedDate, string Reason);
+
+    [HttpPost("api/products/{id:long}/recognition-date")]
+    [Authorize(Policy = ResearchManagement.Api.Authorization.Policies.ResearchOffice)]
+    public async Task<ActionResult<ProductResponse>> CorrectRecognitionDate(long id,
+        CorrectRecognitionDateRequest request, CancellationToken ct) =>
+        Ok(await ExecuteInTransactionAsync(() => productService.CorrectRecognitionDateAsync(
+            id, request.PublishedDate, request.Reason, ct), ct));
     private async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> action, CancellationToken ct)
     {
         var strategy = db.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
         {
-            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
             var result = await action();
             await transaction.CommitAsync(ct);
             return result;

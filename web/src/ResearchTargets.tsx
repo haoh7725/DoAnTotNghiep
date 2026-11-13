@@ -10,6 +10,7 @@ type Target = {
   id: number
   facultyId: number
   academicYearId: number
+  productTypeId: number
   assignedArticleCount: number
   deadline: string | null
   journalConferenceId: number | null
@@ -47,6 +48,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
   const [targets, setTargets] = useState<Target[]>([])
   const [allocations, setAllocations] = useState<Allocation[]>([])
   const [catalog, setCatalog] = useState<JournalConference[]>([])
+  const [productTypes, setProductTypes] = useState<{ id: number; code: string; name: string; isActive: boolean }[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -107,6 +109,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
   useEffect(() => {
     void loadTargets()
     api<JournalConference[]>('/journal-conferences').then(setCatalog).catch(() => setCatalog([]))
+    api<{ id: number; code: string; name: string; isActive: boolean }[]>('/product-types').then(setProductTypes).catch(() => setProductTypes([]))
   }, [])
 
   useEffect(() => {
@@ -151,7 +154,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
     const count = Number(form.get('assignedArticleCount'))
 
     if (!Number.isInteger(count) || count <= 0) {
-      setError('Số bài chỉ tiêu phải là số nguyên lớn hơn 0.')
+      setError('Số sản phẩm chỉ tiêu phải là số nguyên lớn hơn 0.')
       return
     }
 
@@ -168,11 +171,14 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
       return
     }
 
+    const productTypeId = editingTarget?.productTypeId ?? Number(form.get('productTypeId'))
+    if (!productTypeId) { setError('Phải chọn loại sản phẩm cho chỉ tiêu.'); return }
     const body = editingTarget
-      ? { assignedArticleCount: count, deadline, journalConferenceId: Number(form.get('journalConferenceId')) || null }
+      ? { productTypeId, assignedArticleCount: count, deadline, journalConferenceId: Number(form.get('journalConferenceId')) || null }
       : {
         facultyId: Number(form.get('facultyId')),
         academicYearId,
+        productTypeId,
         assignedArticleCount: count,
         deadline,
         journalConferenceId: Number(form.get('journalConferenceId')) || null,
@@ -208,7 +214,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
     const count = Number(form.get('allocatedArticleCount'))
 
     if (!Number.isInteger(count) || count < 0) {
-      setError('Số bài phân bổ phải là số nguyên không âm.')
+      setError('Số sản phẩm phân bổ phải là số nguyên không âm.')
       return
     }
 
@@ -376,7 +382,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
     if (isFacultyDean) {
       if (target.status === 'CHO_TIEP_NHAN') return 'Tiếp nhận chỉ tiêu do Phòng QLKH giao.'
       if (target.status === 'DA_TIEP_NHAN') return 'Công bố chỉ tiêu để bắt đầu phân bổ xuống các bộ môn.'
-      if (target.status === 'CONG_BO' && remainingAllocation > 0) return `Phân bổ thêm ${remainingAllocation} bài cho các bộ môn trước khi khóa.`
+      if (target.status === 'CONG_BO' && remainingAllocation > 0) return `Phân bổ thêm ${remainingAllocation} sản phẩm cho các bộ môn trước khi khóa.`
       if (target.status === 'CONG_BO') return 'Đã phân bổ đủ. Kiểm tra lần cuối và khóa để chuyển cho Trưởng bộ môn.'
       return 'Phân bổ đã khóa. Trưởng bộ môn sẽ tiếp tục phân công cho giảng viên.'
     }
@@ -390,9 +396,8 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
     <>
       <p className="eyebrow">QUẢN LÝ NGHIÊN CỨU KHOA HỌC</p>
       <h1>Chỉ tiêu và phân bổ NCKH</h1>
-      <p className="muted">
-        Quản lý số bài báo khoa học được giao theo khoa, năm học
-        và phân bổ chỉ tiêu cho từng bộ môn.
+        <p className="muted">
+        Quản lý số lượng sản phẩm NCKH được giao theo loại, khoa, năm học và phân bổ xuống bộ môn.
       </p>
 
       <Toast message={error} kind="error" onClose={() => setError('')} />
@@ -423,8 +428,9 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
               <thead>
                 <tr>
                   <th>Khoa</th>
+                  <th>Loại sản phẩm</th>
                   <th>Năm học</th>
-                  <th>Số bài giao</th>
+                  <th>Số sản phẩm giao</th>
                   <th>Hạn hoàn thành</th>
                   <th>Trạng thái</th>
                   <th>Thao tác</th>
@@ -434,6 +440,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
                 {targets.map(target => (
                   <tr key={target.id}>
                     <td>{facultyName(target.facultyId)}</td>
+                    <td>{productTypes.find(x => x.id === target.productTypeId)?.name ?? 'Sản phẩm'}</td>
                     <td>{yearName(target.academicYearId)}</td>
                     <td>{target.assignedArticleCount}{target.journalConferenceId ? ` · ${catalog.find(x => x.id === target.journalConferenceId)?.name ?? 'Danh mục đã xóa'}` : ''}</td>
                     <td>{target.deadline || 'Chưa quy định'}</td>
@@ -503,8 +510,16 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
               </p>
             )}
 
+            {!editingTarget && <label>
+              Loại sản phẩm
+              <select name="productTypeId" required>
+                <option value="">-- Chọn loại sản phẩm --</option>
+                {productTypes.filter(x => x.isActive).map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </select>
+            </label>}
+
             <label>
-              Nơi công bố bài báo liên kết (không bắt buộc)
+              Nơi công bố liên kết (chỉ áp dụng cho bài báo/hội nghị, không bắt buộc)
               <select name="journalConferenceId" defaultValue={editingTarget?.journalConferenceId ?? ''}>
                 <option value="">-- Chỉ tiêu chung --</option>
                 {catalog.map(x => <option key={x.id} value={x.id}>{x.type === 'TAP_CHI' ? 'Tạp chí' : 'Hội nghị'} — {x.name}</option>)}
@@ -512,7 +527,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
             </label>
 
             <label>
-              Số bài báo được giao
+              Số sản phẩm được giao
               <input
                 name="assignedArticleCount"
                 type="number"
@@ -579,12 +594,12 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
             </p>
             <p>
               <strong>Chỉ tiêu:</strong>{' '}
-              {selectedTarget.assignedArticleCount} bài
+              {selectedTarget.assignedArticleCount} sản phẩm
               {' · '}
-              <strong>Đã phân bổ:</strong> {allocatedTotal} bài
+              <strong>Đã phân bổ:</strong> {allocatedTotal} sản phẩm
               {' · '}
               <strong>{remainingAllocation >= 0 ? 'Còn chưa phân bổ:' : 'Phân bổ vượt chỉ tiêu:'}</strong>{' '}
-              {Math.abs(remainingAllocation)} bài
+              {Math.abs(remainingAllocation)} sản phẩm
             </p>
             <ol className="target-workflow" aria-label="Tiến trình thực hiện chỉ tiêu">
               {[
@@ -617,7 +632,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
             <p className="muted">Tiến độ tổng hợp từ sản phẩm đã được duyệt theo chỉ tiêu đang chọn.</p>
             {progress && <section className="panel" style={{ marginTop: 16 }}>
               <h3>Dashboard tiến độ chỉ tiêu</h3>
-              <p><strong>Toàn khoa:</strong> {progress.approvedArticles}/{progress.assignedArticleCount} bài · {progress.completionPercent}% {progress.isCompleted ? '· Đã hoàn thành' : ''}</p>
+              <p><strong>Toàn khoa:</strong> {progress.approvedArticles}/{progress.assignedArticleCount} sản phẩm · {progress.completionPercent}% {progress.isCompleted ? '· Đã hoàn thành' : ''}</p>
               <div style={{ height: 12, background: '#e5e7eb', borderRadius: 99, overflow: 'hidden', marginBottom: 14 }}><div style={{ height: '100%', width: `${Math.min(progress.completionPercent, 100)}%`, background: progress.isCompleted ? '#15803d' : '#0f766e' }} /></div>
               <div className="table-wrap"><table><thead><tr><th>Bộ môn</th><th>Đã duyệt / chỉ tiêu</th><th>Tỷ lệ</th><th>Biểu đồ</th></tr></thead><tbody>{progress.units.map(unit => <tr key={unit.departmentId}><td>{unit.departmentName}</td><td>{unit.approvedArticles}/{unit.allocatedArticles}</td><td>{unit.completionPercent}% {unit.isCompleted ? '✓' : ''}</td><td style={{ minWidth: 150 }}><div style={{ height: 10, background: '#e5e7eb', borderRadius: 99, overflow: 'hidden' }}><div style={{ height: '100%', width: `${Math.min(unit.completionPercent, 100)}%`, background: unit.isCompleted ? '#15803d' : '#0f766e' }} /></div></td></tr>)}</tbody></table></div>
             </section>}
@@ -630,7 +645,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
             </>}
 
             {targetPanel === 'allocations' && canViewDepartmentAllocations && <>
-            <p className="muted">Phân bổ tổng chỉ tiêu của khoa xuống các bộ môn. Tổng số bài phân bổ không được vượt chỉ tiêu của khoa.</p>
+            <p className="muted">Phân bổ tổng chỉ tiêu của khoa xuống các bộ môn. Tổng số sản phẩm phân bổ không được vượt chỉ tiêu của khoa.</p>
             {allocations.length === 0 ? (
               <p className="muted">Chưa có phân bổ cho chỉ tiêu này.</p>
             ) : (

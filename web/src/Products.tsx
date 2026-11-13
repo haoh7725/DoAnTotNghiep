@@ -9,10 +9,10 @@ import type { Classification } from './ProductTaxonomy'
 type Summary = { id: number; researchPlanItemId: number; title: string; articleStatus: string | null; status: string; scoreEquivalent: number | null; updatedAt: string; createdAt: string }
 type CoAuthor = { id: number; lecturerId: number; lecturerFullName: string; lecturerCode: string | null; displayOrder: number; authorRole: string }
 type Evidence = { id: number; originalFileName: string; fileSizeBytes: number; description: string | null; uploadedAt: string }
-type Product = Summary & { productTypeId: number; productTypeCode: string; submittedByLecturerId: number; submittedByLecturerFullName: string; description: string | null; publicationInfo: string | null; publishedDate: string | null; journalIndex: string | null; journalClassification: string | null; projectLevel: string | null; researchTargetId: number | null; journalConferenceId: number | null; externalAuthorCount: number; classificationId: number | null; coAuthors: CoAuthor[]; evidences: Evidence[] }
-type PlanItem = { id: number; name: string; productTypeId: number; productTypeCode: string; productTypeName: string; academicYearCode: string; status: string }
+type Product = Summary & { workIdentifier: string | null; requiredReviewRole: string | null; canReview: boolean; canEdit: boolean; productTypeId: number; productTypeCode: string; submittedByLecturerId: number; submittedByLecturerFullName: string; description: string | null; publicationInfo: string | null; publishedDate: string | null; journalIndex: string | null; journalClassification: string | null; projectLevel: string | null; researchTargetId: number | null; journalConferenceId: number | null; externalAuthorCount: number; classificationId: number | null; coAuthors: CoAuthor[]; evidences: Evidence[] }
+type PlanItem = { id: number; name: string; productTypeId: number; productTypeCode: string; productTypeName: string; academicYearCode: string; academicYearId: number; status: string }
 type LecturerOption = { id: number; fullName: string; code: string; departmentName: string }
-type AvailableTarget = { id: number; academicYearId: number; academicYearCode: string; allocatedArticleCount: number; journalConferenceId: number | null; journalConferenceName: string | null; deadline: string | null; status: string }
+type AvailableTarget = { id: number; productTypeId: number; productTypeCode: string; productTypeName: string; academicYearId: number; academicYearCode: string; allocatedArticleCount: number; journalConferenceId: number | null; journalConferenceName: string | null; deadline: string | null; status: string }
 type ReviewHistory = { id: number; productId: number; actorAccountId: number; actorUsername: string; fromStatus: string; toStatus: string; comment: string | null; occurredAt: string }
 type ProductSnapshot = { productId: number; version: number; snapshotByAccountId: number; snapshotAt: string; title: string; description: string | null; publicationInfo: string | null; publishedDate: string | null; articleStatus: string | null; journalIndex: string | null; journalClassification: string | null; projectLevel: string | null; status: string }
 type PlagiarismCheck = { id: number; productId: number; evidenceId: number | null; provider: string; status: string; similarityScore: number | null; matchedSourceCount: number | null; totalWords: number | null; creditsUsed: number | null; reportUrl: string | null; errorMessage: string | null; requestedByAccountId: number; createdAt: string; startedAt: string | null; completedAt: string | null }
@@ -29,34 +29,12 @@ const article: Record<string, string> = {
   DANG_VIET: 'Đang viết', DANG_PHAN_BIEN: 'Đang phản biện',
   DA_NHAN_XET: 'Đã nhận xét', DA_NHAN_DANG: 'Đã nhận xét', DA_XUAT_BAN: 'Đã xuất bản',
 }
-// Map role → which status it can approve FROM
-const roleCanApproveFrom: Record<string, string> = {
-  TRUONG_BO_MON: 'NOP',
-  TRUONG_KHOA: 'TRUONG_BO_MON_DUYET',
-  PHONG_QLKH: 'TRUONG_KHOA_DUYET',
-  QUAN_TRI: '', // admin can approve any reviewable status
-}
-const reviewableStatuses = ['NOP', 'TRUONG_BO_MON_DUYET', 'TRUONG_KHOA_DUYET', 'PHONG_QLKH_DUYET']
 
 const editable = (p: Product) => ['NHAP', 'TRA_LAI'].includes(p.status)
 const canManageProductAttachments = (user: Profile | null, p: Product) =>
-  editable(p) && (user?.roles.some(r => r.role === 'GIANG_VIEN') ?? false)
-const canManagerReview = (user: Profile | null, p: Product) => {
-  if (!user) return false
-  if (!reviewableStatuses.includes(p.status)) return false
-  return user.roles.some(r => {
-    if (r.role === 'QUAN_TRI') return true
-    if (r.role === 'PHONG_QLKH' && p.status === 'PHONG_QLKH_DUYET') return true
-    const fromStatus = roleCanApproveFrom[r.role]
-    return fromStatus === p.status
-  })
-}
-// Phòng QLKH thẩm định và công nhận trong một bước; vẫn hỗ trợ trạng thái cũ.
-const needsScore = (user: Profile | null, p: Product) =>
-  ['TRUONG_KHOA_DUYET', 'PHONG_QLKH_DUYET'].includes(p.status) &&
-  user?.roles.some(r => r.role === 'PHONG_QLKH' || r.role === 'QUAN_TRI')
-
-
+  p.canEdit && (user?.roles.some(r => r.role === 'GIANG_VIEN') ?? false)
+const canManagerReview = (user: Profile | null, p: Product) => !!user && p.canReview
+const needsScore = (user: Profile | null, p: Product) => !!user && p.requiredReviewRole === 'PHONG_QLKH'
 type PendingProduct = {
   id: number
   title: string
@@ -213,7 +191,10 @@ export function ProductReviewWorkspace({ user, initialProductId }: { user: Profi
 }
 
 // ── ProductWorkspace (entry) ───────────────────────────────────────────────────
-export function ProductWorkspace({ user, initialProductId }: { user?: Profile | null; initialProductId?: number | null }) {
+export function ProductWorkspace({ user, initialProductId, yearId }: { user?: Profile | null; initialProductId?: number | null; yearId?: string }) {
+  const [query, setQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
   const [items, setItems] = useState<Summary[]>([])
   const [planItems, setPlanItems] = useState<PlanItem[]>([])
   const [selected, setSelected] = useState<number | null>(initialProductId ?? null)
@@ -223,18 +204,18 @@ export function ProductWorkspace({ user, initialProductId }: { user?: Profile | 
 
   useEffect(() => {
     let active = true; setLoading(true); setError('')
-    api<Summary[]>('/products/mine')
+    api<Summary[]>(yearId ? `/products/mine?academicYearId=${yearId}` : '/products/mine')
       .then(x => { if (active) setItems(x) })
       .catch(e => { if (active) setError((e as Error).message) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [revision])
+  }, [revision, yearId])
 
   useEffect(() => {
     api<PlanItem[]>('/products/available-plan-items').then(setPlanItems).catch(() => {
       // Danh sách sản phẩm vẫn dùng được nếu chưa tải được nhãn kế hoạch.
     })
-  }, [revision])
+  }, [revision, yearId])
 
   if (selected !== null)
     return <ProductDetail id={selected} user={user ?? null} allowProgressUpdate onBack={() => { setSelected(null); setRevision(x => x + 1) }} />
@@ -244,21 +225,25 @@ export function ProductWorkspace({ user, initialProductId }: { user?: Profile | 
     <h1>Sản phẩm của tôi</h1>
     <p className="muted">Khai báo sản phẩm thực tế và minh chứng để gửi xét duyệt. Kế hoạch chỉ là phần cam kết đầu năm.</p>
     {error && <p className="alert">{error}</p>}
-    <CreateProduct onCreated={id => { setRevision(x => x + 1); setSelected(id) }} />
+    <CreateProduct yearId={yearId} onCreated={id => { setRevision(x => x + 1); setSelected(id) }} />
     <section className="panel">
-      <h2>Danh sách sản phẩm</h2>
+      <div className="section-top"><h2>Danh sách sản phẩm</h2><span>{items.length} sản phẩm trong năm đang chọn</span></div>
+      <div className="product-filters"><label>Tìm sản phẩm<input value={query} onChange={e => setQuery(e.target.value)} placeholder="Nhập tên công trình" /></label>
+        <label>Loại<select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}><option value="">Tất cả</option>{Array.from(new Map(planItems.map(x => [x.productTypeCode, x.productTypeName]))).map(([code, name]) => <option value={code} key={code}>{name}</option>)}</select></label>
+        <label>Xét duyệt<select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="">Tất cả</option>{Object.entries(workflow).map(([code, name]) => <option value={code} key={code}>{name}</option>)}</select></label>
+      </div>
       {loading ? <p>Đang tải…</p> : <>
         <div className="table-wrap"><table><thead><tr>
-          <th>Tên sản phẩm</th><th>Trạng thái bài viết</th><th>Xét duyệt</th><th>Điểm quy đổi</th><th>Cập nhật</th><th></th>
+          <th>Tên sản phẩm</th><th>Trạng thái bài viết</th><th>Xét duyệt</th><th>Cập nhật</th><th></th>
         </tr></thead><tbody>
-            {items.map(p => <tr key={p.id}>
+            {items.filter(p => p.title.toLocaleLowerCase('vi-VN').includes(query.toLocaleLowerCase('vi-VN')) && (!statusFilter || p.status === statusFilter) && (!typeFilter || planItems.find(x => x.id === p.researchPlanItemId)?.productTypeCode === typeFilter)).map(p => <tr key={p.id}>
               <td><strong>{p.title}</strong><br /><small>{(() => {
                 const plan = planItems.find(item => item.id === p.researchPlanItemId)
                 return plan ? `${plan.productTypeName} · ${plan.name}` : 'Nội dung kế hoạch đã liên kết'
               })()}</small></td>
               <td>{p.articleStatus ? article[p.articleStatus] ?? p.articleStatus : '—'}</td>
               <td><span className={`status-chip status-chip--${p.status.toLowerCase()}`}>{workflow[p.status] ?? p.status}</span></td>
-              <td>{p.scoreEquivalent !== null ? p.scoreEquivalent : '—'}</td>
+
               <td>{new Date(p.updatedAt).toLocaleString('vi-VN')}</td>
               <td><button onClick={() => setSelected(p.id)}>Chi tiết</button></td>
             </tr>)}
@@ -270,7 +255,7 @@ export function ProductWorkspace({ user, initialProductId }: { user?: Profile | 
 }
 
 // ── CreateProduct ──────────────────────────────────────────────────────────────
-function CreateProduct({ onCreated }: { onCreated: (id: number) => void }) {
+function CreateProduct({ onCreated, yearId }: { onCreated: (id: number) => void; yearId?: string }) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -304,10 +289,10 @@ function CreateProduct({ onCreated }: { onCreated: (id: number) => void }) {
 
   return <section className="panel">
     <div className="section-top">
-      <div><h2>Khai báo sản phẩm thực tế</h2><p className="muted product-sub">Bước 1: chọn nội dung đã cam kết trong kế hoạch. Bước 2: nhập sản phẩm và minh chứng để gửi xét duyệt.</p></div>
+      <div><h2>Khai báo sản phẩm thực tế</h2><p className="muted product-sub">Chọn nội dung kế hoạch, lưu thông tin cơ bản rồi bổ sung tác giả và minh chứng.</p></div>
       <button className="primary" onClick={() => setOpen(x => !x)}>{open ? 'Đóng' : '+ Thêm'}</button>
     </div>
-    {open && <ProductForm onSubmit={submit} busy={busy} error={error} planItems={plans} targets={targets} />}
+    {open && <ProductForm onSubmit={submit} busy={busy} error={error} planItems={plans} targets={targets} yearId={yearId} />}
   </section>
 }
 
@@ -391,7 +376,7 @@ function ProductDetail({ id, user, allowProgressUpdate = false, onBack }: { id: 
       <p className="muted">
         <span className={`status-chip status-chip--${p.status.toLowerCase()}`}>{workflow[p.status] ?? p.status}</span>
         {' '}· Tác giả chính: {p.submittedByLecturerFullName}
-        {p.scoreEquivalent !== null && <> · <strong>Điểm quy đổi: {p.scoreEquivalent}</strong></>}
+        {p.scoreEquivalent !== null && <> · <strong>Điểm thẩm định: {p.scoreEquivalent}</strong></>}
       </p>
 
       {/* Tab bar */}
@@ -404,21 +389,32 @@ function ProductDetail({ id, user, allowProgressUpdate = false, onBack }: { id: 
       </div>
 
       {tab === 'info' && <>
-        {p.researchTargetId === null && planItems.some(x => x.id === p.researchPlanItemId && x.productTypeName.trim().toLocaleLowerCase('vi-VN') === 'bài báo') &&
+        {p.researchTargetId === null && planItems.some(x => x.id === p.researchPlanItemId) &&
           <section className="panel">
             <h2>Liên kết với chỉ tiêu được giao</h2>
-            <p className="muted">Chỉ giảng viên tự chọn chỉ tiêu cho bài báo của mình. Sau khi được duyệt và xuất bản, bài liên kết mới tính vào tiến độ chỉ tiêu.</p>
+            <p className="muted">Giảng viên chọn chỉ tiêu đúng loại sản phẩm của mình. Bài báo chỉ được tính sau khi xuất bản; các loại khác được tính khi được công nhận.</p>
             <form onSubmit={linkTarget}>
               <label>Chỉ tiêu
                 <select name="researchTargetId" required defaultValue="">
                   <option value="">Chọn chỉ tiêu phù hợp</option>
-                  {linkTargets.filter(x => x.status === 'DA_KHOA' && x.journalConferenceId === p.journalConferenceId).map(x =>
-                    <option key={x.id} value={x.id}>{x.academicYearCode} · {x.journalConferenceName ?? 'Chỉ tiêu chung'}</option>)}
+                  {linkTargets.filter(x => x.status === 'DA_KHOA' && x.productTypeId === p.productTypeId && (!x.journalConferenceId || !p.journalConferenceId || x.journalConferenceId === p.journalConferenceId)).map(x =>
+                    <option key={x.id} value={x.id}>{x.academicYearCode} · {x.productTypeName} · {x.journalConferenceName ?? 'Chỉ tiêu chung'}</option>)}
                 </select>
               </label>
               <button className="primary" disabled={busy}>Liên kết với chỉ tiêu</button>
             </form>
           </section>}
+        {p.status === 'DA_DUYET' && !p.publishedDate && user?.roles.some(r => ['PHONG_QLKH', 'QUAN_TRI'].includes(r.role)) &&
+          <section className="panel"><h2>Bổ sung ngày công nhận còn thiếu</h2><p className="muted">Chỉ bổ sung ngày còn thiếu và lưu lịch sử. Kết quả đã chốt được giữ nguyên; tạo đánh giá mới để áp dụng kỳ ghi nhận theo ngày này.</p>
+            <form onSubmit={async e => {
+              e.preventDefault(); const f = new FormData(e.currentTarget); setBusy(true); setError('')
+              try { setP(await api<Product>(`/products/${p.id}/recognition-date`, 'POST', { publishedDate: f.get('publishedDate'), reason: f.get('reason') })); setRevision(x => x + 1) }
+              catch (x) { setError((x as Error).message) } finally { setBusy(false) }
+            }}><label>Ngày công bố / nghiệm thu<input type="date" name="publishedDate" required /></label>
+              <label>Lý do bổ sung<textarea name="reason" required maxLength={1000} /></label><button className="primary" disabled={busy}>Bổ sung ngày và lưu lịch sử</button></form>
+          </section>}
+        {p.researchTargetId !== null && p.canEdit && <section className="panel"><h2>Chỉ tiêu đã liên kết</h2><p className="muted">Bài này đang giữ một suất đăng ký. Có thể bỏ liên kết khi còn nháp hoặc bị trả lại để thay bài khác.</p>
+          <button disabled={busy} onClick={async () => { setBusy(true); setError(''); try { setP(await api<Product>(`/products/${p.id}/link-target`, 'DELETE')) } catch (x) { setError((x as Error).message) } finally { setBusy(false) } }}>Bỏ liên kết chỉ tiêu</button></section>}
         {/* Manager review panel */}
         {canManagerReview(user, p) && (
           <ReviewPanel product={p} user={user!} onReviewed={updated => { setP(updated); setRevision(x => x + 1) }} />
@@ -427,16 +423,16 @@ function ProductDetail({ id, user, allowProgressUpdate = false, onBack }: { id: 
         {/* Product info */}
         {editing
           ? <section className="panel">
-            <ProductForm product={p} onSubmit={save} busy={busy} error={error} />
+            <ProductForm product={p} onSubmit={save} busy={busy} error={error} targets={linkTargets} />
             <button disabled={busy} onClick={() => setEditing(false)}>Hủy</button>
           </section>
           : <section className="panel">
             <div className="section-top">
               <h2>Thông tin</h2>
               <div className="actions">
-                {allowProgressUpdate && p.status !== 'DA_DUYET' &&
+                {allowProgressUpdate && p.status !== 'DA_DUYET' && !user?.roles.some(r => r.role === 'GIANG_VIEN') &&
                   <button onClick={() => setEditingProgress(x => !x)}>Cập nhật tiến độ bài viết</button>}
-                {editable(p) && <>
+                {p.canEdit && <>
                   <button onClick={() => setEditing(true)}>Chỉnh sửa nội dung</button>
                   <button className="primary" disabled={busy} onClick={submitProduct}>Gửi duyệt</button>
                 </>}
@@ -458,8 +454,9 @@ function ProductDetail({ id, user, allowProgressUpdate = false, onBack }: { id: 
               </p>
             )}
             <dl className="product-grid">
+              <div><dt>DOI / mã công trình</dt><dd>{p.workIdentifier ?? '—'}</dd></div>
               <div><dt>Trạng thái bài viết</dt><dd>{p.articleStatus ? article[p.articleStatus] : '—'}</dd></div>
-              <div><dt>Ngày công bố</dt><dd>{p.publishedDate ?? '—'}</dd></div>
+              <div><dt>Ngày công bố / công nhận / nghiệm thu</dt><dd>{p.publishedDate ?? '—'}</dd></div>
               <div><dt>Nơi công bố</dt><dd>{p.publicationInfo ?? '—'}</dd></div>
               <div><dt>Chỉ mục công bố</dt><dd>{p.journalIndex ?? '—'}</dd></div>
               <div><dt>Phân hạng công bố</dt><dd>{p.journalClassification ?? '—'}</dd></div>
@@ -581,6 +578,9 @@ function ReviewPanel({ product, user, onReviewed }: { product: Product; user: Pr
   const [action, setAction] = useState<'APPROVE' | 'REJECT'>('APPROVE')
   const [comment, setComment] = useState('')
   const [score, setScore] = useState('')
+  const [articleStatus, setArticleStatus] = useState(product.articleStatus ?? 'DANG_VIET')
+  const [publishedDate, setPublishedDate] = useState(product.publishedDate ?? '')
+  const [publicationInfo, setPublicationInfo] = useState(product.publicationInfo ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const showScore = needsScore(user, product) && action === 'APPROVE'
@@ -590,6 +590,11 @@ function ReviewPanel({ product, user, onReviewed }: { product: Product; user: Pr
     try {
       const body: Record<string, unknown> = { action, comment: comment.trim() || null }
       if (showScore && score) body.scoreEquivalent = parseFloat(score)
+      if (action === 'APPROVE' && product.requiredReviewRole === 'PHONG_QLKH' && product.productTypeCode === 'BAI_BAO') {
+        body.articleStatus = articleStatus
+        body.publishedDate = publishedDate || null
+        body.publicationInfo = publicationInfo.trim() || null
+      }
       const updated = await api<Product>(`/products/${product.id}/review`, 'POST', body)
       onReviewed(updated); setOpen(false); setComment(''); setScore('')
     } catch (x) { setError((x as Error).message) }
@@ -621,11 +626,18 @@ function ReviewPanel({ product, user, onReviewed }: { product: Product; user: Pr
           </div>
           {showScore && (
             <label>
-              Điểm quy đổi <small className="muted">(Bắt buộc khi duyệt cuối)</small>
+              Điểm thẩm định <small className="muted">(nếu quy định yêu cầu)</small>
               <input type="number" min="0" max="999.99" step="0.01" value={score}
-                onChange={e => setScore(e.target.value)} required={showScore} placeholder="Ví dụ: 1.5" />
+                onChange={e => setScore(e.target.value)}  placeholder="Ví dụ: 1.5" />
             </label>
           )}
+          {action === 'APPROVE' && product.requiredReviewRole === 'PHONG_QLKH' && product.productTypeCode === 'BAI_BAO' && <>
+            <label>Trạng thái bài viết khi công nhận cuối<select value={articleStatus} onChange={e => setArticleStatus(e.target.value)}>
+              <option value="DANG_NHAN_XET">Đã nhận xét</option><option value="DA_XUAT_BAN">Đã xuất bản</option>
+            </select></label>
+            {articleStatus === 'DA_XUAT_BAN' && <><label>Ngày công bố<input type="date" required value={publishedDate} onChange={e => setPublishedDate(e.target.value)} /></label>
+              <label>Nơi công bố<input value={publicationInfo} onChange={e => setPublicationInfo(e.target.value)} /></label></>}
+          </>}
           <label>
             Ghi chú / Lý do {action === 'REJECT' && <strong>(bắt buộc khi trả lại)</strong>}
             <textarea rows={3} maxLength={1000} value={comment} onChange={e => setComment(e.target.value)}
@@ -747,68 +759,94 @@ function SnapshotPanel({ productId }: { productId: number }) {
 }
 
 // ── ProductForm ────────────────────────────────────────────────────────────────
-function ProductForm({ product, onSubmit, busy, error, planItems, targets }: {
+export function ProductForm({ product, onSubmit, busy, error, planItems, targets, yearId }: {
   product?: Product; onSubmit: (e: FormEvent<HTMLFormElement>) => void
-  busy: boolean; error: string; planItems?: PlanItem[]; targets?: AvailableTarget[]
+  busy: boolean; error: string; planItems?: PlanItem[]; targets?: AvailableTarget[]; yearId?: string
 }) {
-  const [selectedPlanItemId, setSelectedPlanItemId] = useState('')
+  const [selectedPlanItemId, setSelectedPlanItemId] = useState(String(product?.researchPlanItemId ?? ''))
   const [classifications, setClassifications] = useState<Classification[]>([])
-  const [publicationOptions, setPublicationOptions] = useState<{ id: number; name: string; type: string }[]>([])
+  const [publications, setPublications] = useState<{ id: number; name: string; type: string; issn: string | null; index: string | null; classification: string | null }[]>([])
   const [catalogError, setCatalogError] = useState('')
-  const [selectedClassification, setSelectedClassification] = useState(String(product?.classificationId ?? ''))
+  const [classification, setClassification] = useState(String(product?.classificationId ?? ''))
+  const [publicationId, setPublicationId] = useState(String(product?.journalConferenceId ?? ''))
+  const [targetId, setTargetId] = useState(String(product?.researchTargetId ?? ''))
   useEffect(() => {
-    Promise.all([api<Classification[]>('/product-classifications'), api<{ id: number; name: string; type: string }[]>('/products/publication-options')])
-      .then(([c, p]) => { setClassifications(c); setPublicationOptions(p) }).catch(e => setCatalogError(e.message))
+    Promise.all([api<Classification[]>('/product-classifications'), api<{ id: number; name: string; type: string; issn: string | null; index: string | null; classification: string | null }[]>('/products/publication-options')])
+      .then(([c, p]) => { setClassifications(c); setPublications(p) }).catch(e => setCatalogError(e.message))
   }, [])
   const selectedPlan = planItems?.find(x => x.id === Number(selectedPlanItemId))
-  const productPlan = selectedPlan ?? planItems?.find(x => x.id === product?.researchPlanItemId)
-  const classOptions = classifications.filter(c => (c.isActive || c.id === product?.classificationId) && c.productTypeId === (productPlan?.productTypeId ?? product?.productTypeId))
-  const isArticle = (productPlan?.productTypeCode ?? product?.productTypeCode) === 'BAI_BAO'
-  const isProject = (productPlan?.productTypeCode ?? product?.productTypeCode) === 'DE_TAI'
-  return <form onSubmit={onSubmit}>
-    {error && <p className="alert">{error}</p>}
-    {catalogError && <p className="alert" role="alert">Không tải được danh mục quy đổi: {catalogError}</p>}
-    <div className="form-grid">
-      {planItems && <><label className="wide">1. Nội dung đã cam kết trong kế hoạch
-        <select name="researchPlanItemId" required value={selectedPlanItemId} onChange={e => { setSelectedPlanItemId(e.target.value); setSelectedClassification('') }}>
-          <option value="">Chọn nội dung kế hoạch</option>
-          {planItems.map(x => <option value={x.id} key={x.id}>{x.academicYearCode} · {x.productTypeName} · {x.name}</option>)}
-        </select>
-        <small className="muted">Dùng để đối chiếu sản phẩm này với cam kết đầu năm; đây không phải nơi gửi duyệt.</small>
-      </label>
-      {selectedPlan && <div className="wide product-context"><strong>Loại đã chọn: {selectedPlan.productTypeName}</strong><span>{isArticle ? 'Bài báo có thể được gắn với chỉ tiêu được giao.' : 'Loại này không dùng chỉ tiêu bài báo; chỉ cần khai báo thông tin và minh chứng.'}</span></div>}
-      {isArticle && <label className="wide">2. Chỉ tiêu bài báo được giao <small className="muted">(nếu áp dụng)</small>
-        <select name="researchTargetId" defaultValue="">
-          <option value="">Không gắn chỉ tiêu cụ thể</option>
-          {(targets ?? []).map(x => <option value={x.id} key={x.id}>
-            {x.academicYearCode} · {x.journalConferenceName ?? 'Chỉ tiêu bài báo chung'} · phân bổ {x.allocatedArticleCount} bài
-          </option>)}
-        </select>
-        {targets?.length === 0 && <small className="muted">Bạn chưa được giao chỉ tiêu bài báo; vẫn có thể lưu sản phẩm và tự liên kết sau.</small>}
-      </label>}</>}
-      <label className="wide">Phân loại dùng để quy đổi<select name="classificationId" required={classOptions.length > 0 && !product} value={selectedClassification} onChange={e => setSelectedClassification(e.target.value)}>
-        <option value="" disabled={!!product?.classificationId}>{classOptions.length ? 'Chọn phân loại phù hợp với minh chứng' : 'Nhóm chưa có phân loại / hồ sơ cũ'}</option>
-        {classOptions.map(c => <option value={c.id} key={c.id}>{c.name}</option>)}
-      </select><small className="muted">QLKH kiểm tra phân loại và minh chứng trước khi công nhận. Chọn phân loại không tự động công nhận giờ/điểm.</small></label>
-      {!product && <label className="wide">Nơi công bố trong danh mục (nếu có)<select name="journalConferenceId" defaultValue=""><option value="">Không áp dụng / chưa có trong danh mục</option>{publicationOptions.map(p => <option key={p.id} value={p.id}>{p.type === 'TAP_CHI' ? 'Tạp chí' : 'Hội nghị'} · {p.name}</option>)}</select><small className="muted">Nếu chỉ tiêu đã quy định nơi công bố, hệ thống dùng nơi công bố của chỉ tiêu.</small></label>}
-      <label>Số tác giả ngoài trường<input name="externalAuthorCount" type="number" min="0" max="10000" required defaultValue={product?.externalAuthorCount ?? 0} /><small className="muted">Không tính lại các đồng tác giả đã chọn từ danh sách giảng viên.</small></label>
-      <label className="wide">{planItems ? '3. Tên sản phẩm thực tế' : 'Tên sản phẩm'}<input name="title" required minLength={3} maxLength={500} defaultValue={product?.title} /></label>
-      {(isArticle || !planItems) && <label>Trạng thái bài viết
-        <select name="articleStatus" defaultValue={product?.articleStatus ?? ''}>
-          <option value="">Không áp dụng</option>
-          {Object.entries(article).filter(([v]) => v !== 'DA_NHAN_DANG').map(([v, n]) => <option value={v} key={v}>{n}</option>)}
-        </select>
+  const typeCode = selectedPlan?.productTypeCode ?? product?.productTypeCode
+  const typeId = selectedPlan?.productTypeId ?? product?.productTypeId
+  const isArticle = typeCode === 'BAI_BAO'
+  const isConference = typeCode === 'HOI_NGHI_HOI_THAO'
+  const isProject = typeCode === 'DE_TAI'
+  const isBook = typeCode === 'SACH'
+  const isCertificate = typeCode === 'CHUNG_NHAN'
+  const target = targets?.find(x => x.id === Number(targetId))
+  const lockedPublication = target?.journalConferenceId
+  const effectivePublicationId = lockedPublication ? String(lockedPublication) : publicationId
+  const selectedPublication = publications.find(x => x.id === Number(effectivePublicationId))
+  const classes = classifications.filter(c => (c.isActive || c.id === product?.classificationId) && c.productTypeId === typeId)
+  const applicableTargets = (targets ?? []).filter(x => x.academicYearId === (selectedPlan?.academicYearId ?? Number(yearId)) && x.productTypeId === typeId)
+  const dateLabel = isProject ? 'Ngày nghiệm thu' : isCertificate ? 'Ngày cấp' : 'Ngày công bố / xuất bản'
+  const today = new Date(); const maxDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  return <form className="product-simple-form" onSubmit={onSubmit}>
+    {error && <p className="alert" role="alert">{error}</p>}
+    {catalogError && <p className="alert" role="alert">Không tải được danh mục: {catalogError}</p>}
+    {planItems && <label>Nội dung trong kế hoạch
+      <select name="researchPlanItemId" required value={selectedPlanItemId} onChange={e => {
+        setSelectedPlanItemId(e.target.value); setClassification(''); setTargetId(''); setPublicationId('')
+      }}><option value="">Chọn nội dung đã đăng ký</option>
+        {planItems.filter(x => !yearId || x.academicYearId === Number(yearId)).map(x =>
+          <option value={x.id} key={x.id}>{x.productTypeName} · {x.name}</option>)}
+      </select>
+      {!planItems.some(x => !yearId || x.academicYearId === Number(yearId)) && <small>Chưa có nội dung trong năm này. Hãy đăng ký kế hoạch trước.</small>}
+    </label>}
+    {(product || selectedPlan) && <>
+      <p className="product-type-context">{selectedPlan?.productTypeName ?? ({ BAI_BAO: 'Bài báo', DE_TAI: 'Đề tài', SACH: 'Sách', CHUNG_NHAN: 'Chứng nhận', HOI_NGHI_HOI_THAO: 'Hội nghị / hội thảo' } as Record<string, string>)[typeCode ?? '']}</p>
+      <div className="form-grid">
+        <label className="wide">Tên {isProject ? 'đề tài' : isBook ? 'sách / giáo trình' : isCertificate ? 'chứng nhận' : 'công trình'}
+          <input name="title" required minLength={3} maxLength={500} defaultValue={product?.title} /></label>
+        {isArticle && product && <p className="product-type-context">Trạng thái bài viết: <strong>{article[product.articleStatus ?? 'DANG_VIET'] ?? 'Đang viết'}</strong>. Cấp duyệt sẽ chuyển bước sau khi kiểm tra minh chứng.</p>}
+        {isArticle && !product && <input type="hidden" name="articleStatus" value="DANG_VIET" />}
+        <label>{dateLabel}<input type="date" name="publishedDate" max={maxDate} defaultValue={product?.publishedDate ?? ''} />
+          <small>Có thể bổ sung trước khi công nhận.</small></label>
+        {(isArticle || isConference) && <label>Nơi công bố
+          <select name="journalConferenceId" value={effectivePublicationId} disabled={!!lockedPublication} onChange={e => setPublicationId(e.target.value)}>
+            <option value="">Khác / chưa có trong danh mục</option>
+            {publications.filter(p => p.id === Number(effectivePublicationId) || p.type === (isConference ? 'HOI_NGHI' : 'TAP_CHI')).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>{lockedPublication && <input type="hidden" name="journalConferenceId" value={lockedPublication} />}
+        </label>}
+        {selectedPublication ? <input type="hidden" name="publicationInfo" value={selectedPublication.name} /> :
+          <label>{isBook ? 'Nhà xuất bản' : isCertificate ? 'Đơn vị cấp' : isProject ? 'Đơn vị nghiệm thu' : 'Tên nơi công bố'}
+            <input name="publicationInfo" maxLength={500} defaultValue={product?.publicationInfo ?? ''} /></label>}
+        {isProject && <label>Cấp đề tài<input name="projectLevel" maxLength={100} placeholder="Trường, Bộ…" defaultValue={product?.projectLevel ?? ''} /></label>}
+      </div>
+      {!product && applicableTargets.length > 0 && <label>Gắn với chỉ tiêu được giao
+        <select name="researchTargetId" value={targetId} onChange={e => setTargetId(e.target.value)}><option value="">Chưa gắn chỉ tiêu</option>
+                  {applicableTargets.map(x => <option key={x.id} value={x.id}>{x.productTypeName} · {x.journalConferenceName ?? 'Chỉ tiêu chung'} · {x.allocatedArticleCount} sản phẩm</option>)}
+        </select><small>Loại: {applicableTargets[0]?.productTypeName}. Một sản phẩm tính cho giảng viên phụ trách; đồng tác giả được quy đổi đóng góp riêng.</small>
       </label>}
-      <label>{isArticle ? 'Ngày công bố' : 'Ngày công bố / công nhận / nghiệm thu'}<input type="date" name="publishedDate" defaultValue={product?.publishedDate ?? ''} /><small className="muted">Dùng để xác định quy định còn hiệu lực tại thời điểm công trình được công nhận.</small></label>
-      <label>Nơi công bố / đơn vị cấp<input name="publicationInfo" maxLength={500} defaultValue={product?.publicationInfo ?? ''} /></label>
-      {(isArticle || !planItems) && <label>Chỉ mục công bố<input name="journalIndex" maxLength={100} placeholder="Scopus, WoS…" defaultValue={product?.journalIndex ?? ''} /></label>}
-      {(isArticle || !planItems) && <label>Phân hạng công bố<input name="journalClassification" maxLength={100} placeholder="Q1, Q2…" defaultValue={product?.journalClassification ?? ''} /></label>}
-      {(isProject || !planItems) && <label>Cấp đề tài<input name="projectLevel" maxLength={100} placeholder="Trường, Bộ, Nhà nước…" defaultValue={product?.projectLevel ?? ''} /></label>}
-      <label className="wide">Mô tả<textarea name="description" rows={4} defaultValue={product?.description ?? ''} /></label>
-    </div>
-    <button className="primary" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu sản phẩm'}</button>
+      <details className="product-extra-fields"><summary>Thông tin bổ sung (khi cần)</summary>
+        <div className="form-grid">
+          <label>{isArticle || isConference ? 'DOI / mã công trình' : 'Mã công trình / quyết định'}<input name="workIdentifier" maxLength={255} defaultValue={product?.workIdentifier ?? ''} /></label>
+          {classes.length > 0 && <label>Phân loại đề xuất<select name="classificationId" value={classification} onChange={e => setClassification(e.target.value)}>
+            <option value="">Để QLKH xác nhận</option>{classes.map(c => <option value={c.id} key={c.id}>{c.name}</option>)}
+          </select></label>}
+          {(isArticle || isConference) && <>
+            <label>ISSN{selectedPublication ? <input name="issn" readOnly value={selectedPublication.issn ?? ''} /> : <input name="issn" defaultValue={product?.journalConferenceId ? '' : ''} placeholder="Có thể bổ sung sau" />}</label>
+            <label>Chỉ mục {selectedPublication && <small>tự lấy từ danh mục nơi công bố</small>}{selectedPublication ? <input name="journalIndex" readOnly value={selectedPublication.index ?? ''} /> : <input name="journalIndex" maxLength={100} defaultValue={product?.journalIndex ?? ''} placeholder="Scopus, Web of Science…" />}</label>
+            <label>Phân hạng {selectedPublication && <small>tự lấy từ danh mục nơi công bố</small>}{selectedPublication ? <input name="journalClassification" readOnly value={selectedPublication.classification ?? ''} /> : <input name="journalClassification" maxLength={100} defaultValue={product?.journalClassification ?? ''} placeholder="Q1, Q2…" />}</label>
+          </>}
+          <label className="wide">Mô tả<textarea name="description" rows={3} defaultValue={product?.description ?? ''} /></label>
+        </div>
+      </details>
+      <p className="muted">Sau khi lưu, bổ sung đồng tác giả và minh chứng trong chi tiết sản phẩm rồi gửi duyệt.</p>
+      <button className="primary" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu thông tin'}</button>
+    </>}
   </form>
 }
+
 
 // ── CoAuthors ──────────────────────────────────────────────────────────────────
 function CoAuthors({ product, user, onChanged }: { product: Product; user: Profile | null; onChanged: () => void }) {
@@ -874,7 +912,7 @@ function Evidences({ product, user, onChanged }: { product: Product; user: Profi
     catch (x) { setError((x as Error).message) }
   }
   return <section className="panel">
-    <h2>Minh chứng</h2>
+    <h2>Minh chứng</h2><p className="muted">Cần có ít nhất một minh chứng trước khi Phòng QLKH công nhận sản phẩm.</p>
     {error && <p className="alert">{error}</p>}
     <ul className="product-list">
       {product.evidences.map(e => <li key={e.id}>
@@ -900,9 +938,10 @@ function formBody(f: FormData, researchPlanItemId?: number) {
   return {
     ...(researchPlanItemId ? { researchPlanItemId } : {}),
     ...(researchPlanItemId ? { researchTargetId } : {}),
-    title: text('title'), description: text('description'),
+    title: text('title'), description: text('description'), workIdentifier: String(f.get('workIdentifier') ?? ''),
     classificationId: Number(f.get('classificationId')) || null,
-    externalAuthorCount: Number(f.get('externalAuthorCount')) || 0,
+    ...(f.has('externalAuthorCount') ? { externalAuthorCount: Number(f.get('externalAuthorCount')) || 0 } : {}),
+    updateJournalConference: true, journalConferenceId: Number(f.get('journalConferenceId')) || null,
     publicationInfo: text('publicationInfo'), publishedDate: text('publishedDate'),
     articleStatus: text('articleStatus'), journalIndex: text('journalIndex'),
     journalClassification: text('journalClassification'), projectLevel: text('projectLevel'),

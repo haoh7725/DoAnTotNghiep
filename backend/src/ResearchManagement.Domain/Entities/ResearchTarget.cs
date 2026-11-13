@@ -12,7 +12,8 @@ public sealed class ResearchTarget : BaseEntity
         long academicYearId,
         int assignedArticleCount,
         DateOnly? deadline,
-        long? journalConferenceId = null)
+        long? journalConferenceId = null,
+        long? productTypeId = null)
     {
         if (assignedArticleCount <= 0)
         {
@@ -26,6 +27,7 @@ public sealed class ResearchTarget : BaseEntity
         AssignedArticleCount = assignedArticleCount;
         Deadline = deadline;
         JournalConferenceId = journalConferenceId;
+        ProductTypeId = productTypeId;
         Status = "CHO_TIEP_NHAN";
     }
 
@@ -37,6 +39,7 @@ public sealed class ResearchTarget : BaseEntity
 
     public DateOnly? Deadline { get; private set; }
     public long? JournalConferenceId { get; private set; }
+    public long? ProductTypeId { get; private set; }
     public string Status { get; private set; } = "CHO_TIEP_NHAN";
     public long? AssignedByAccountId { get; private set; }
     public long? AcceptedByAccountId { get; private set; }
@@ -47,7 +50,8 @@ public sealed class ResearchTarget : BaseEntity
     public void Update(
         int assignedArticleCount,
         DateOnly? deadline,
-        long? journalConferenceId = null)
+        long? journalConferenceId = null,
+        long? productTypeId = null)
     {
         if (assignedArticleCount <= 0)
         {
@@ -59,9 +63,18 @@ public sealed class ResearchTarget : BaseEntity
         AssignedArticleCount = assignedArticleCount;
         Deadline = deadline;
         JournalConferenceId = journalConferenceId;
+        if (productTypeId.HasValue) ProductTypeId = productTypeId;
     }
 
     public void MarkAssigned(long accountId) => AssignedByAccountId = accountId;
+
+    public void ExtendDeadline(DateOnly date)
+    {
+        if (Status == "DA_HUY") throw new InvalidOperationException("Không gia hạn chỉ tiêu đã hủy.");
+        if (Deadline.HasValue && date <= Deadline.Value)
+            throw new InvalidOperationException("Hạn mới phải sau hạn hiện tại.");
+        Deadline = date;
+    }
 
     public void Accept(long accountId, DateTimeOffset now)
     {

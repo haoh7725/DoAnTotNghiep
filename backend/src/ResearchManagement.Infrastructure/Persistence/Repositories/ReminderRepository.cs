@@ -42,13 +42,13 @@ public sealed class ReminderRepository(ApplicationDbContext db)
                 && db.Products.Count(product =>
                     product.ResearchTargetId == target.Id
                     && product.SubmittedByLecturerId == lecturer.Id
-                    && db.ResearchPlanItems.Any(item => item.Id == product.ResearchPlanItemId
-                        && db.ProductTypes.Any(type => type.Id == item.ProductTypeId && type.Code == "BAI_BAO"))
                     && product.Status == "DA_DUYET"
-                    && product.ArticleStatus == "DA_XUAT_BAN") < assignment.AllocatedArticleCount
+                    && db.ResearchPlanItems.Any(item => item.Id == product.ResearchPlanItemId
+                        && db.ProductTypes.Any(type => type.Id == item.ProductTypeId
+                            && (type.Code != "BAI_BAO" || product.ArticleStatus == "DA_XUAT_BAN")))) < assignment.AllocatedArticleCount
             select new ReminderCandidate(
                 lecturer.AccountId,
-                "Chỉ tiêu NCKH (" + assignment.AllocatedArticleCount + " bài)",
+                "Chỉ tiêu NCKH (" + assignment.AllocatedArticleCount + " sản phẩm)",
                 target.Deadline!.Value,
                 "TARGET_ASSIGNMENT:" + assignment.Id,
                 null,

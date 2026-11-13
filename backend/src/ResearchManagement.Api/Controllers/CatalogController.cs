@@ -61,6 +61,8 @@ public sealed class CatalogController(ApplicationDbContext db) : ControllerBase
     public async Task<IActionResult> CreateYear(AcademicYearRequest r, CancellationToken ct)
     {
         if (r.StartDate == default || r.EndDate < r.StartDate) return BadRequest(new { title = "Ngày kết thúc phải từ ngày bắt đầu trở đi." });
+        if (await db.AcademicYears.AnyAsync(x => x.StartDate <= r.EndDate && x.EndDate >= r.StartDate, ct))
+            return Conflict(new { title = "Khoảng thời gian năm học bị chồng lấn; không thể xác định duy nhất kỳ ghi nhận công trình." });
         var item = new AcademicYear { Code = r.Code.Trim(), StartDate = r.StartDate, EndDate = r.EndDate };
         db.Add(item); await db.SaveChangesAsync(ct); return Created($"/api/admin/academic-years/{item.Id}", item);
     }
@@ -69,6 +71,10 @@ public sealed class CatalogController(ApplicationDbContext db) : ControllerBase
     {
         if (r.StartDate == default || r.EndDate < r.StartDate) return BadRequest(new { title = "Ngày kết thúc phải từ ngày bắt đầu trở đi." });
         var item = await db.AcademicYears.FindAsync([id], ct); if (item is null) return NotFound();
+        if (await db.AcademicYears.AnyAsync(x => x.Id != id && x.StartDate <= r.EndDate && x.EndDate >= r.StartDate, ct))
+            return Conflict(new { title = "Khoảng thời gian năm học bị chồng lấn." });
+        if ((item.StartDate != r.StartDate || item.EndDate != r.EndDate) && await db.Evaluations.AnyAsync(x => x.AcademicYearId == id, ct))
+            return Conflict(new { title = "Năm học đã có đánh giá; không được đổi khoảng thời gian ghi nhận." });
         item.Code = r.Code.Trim(); item.StartDate = r.StartDate; item.EndDate = r.EndDate; await db.SaveChangesAsync(ct); return Ok(item);
     }
     [HttpDelete("academic-years/{id:long}")]

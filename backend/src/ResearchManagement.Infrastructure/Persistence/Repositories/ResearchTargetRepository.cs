@@ -20,13 +20,14 @@ public sealed class ResearchTargetRepository(ApplicationDbContext dbContext)
     public Task<ResearchTarget?> GetByFacultyAndAcademicYearAsync(
         long facultyId,
         long academicYearId,
+        long productTypeId,
         long? journalConferenceId,
         CancellationToken cancellationToken)
     {
         return dbContext.ResearchTargets
             .FirstOrDefaultAsync(
                 x => x.FacultyId == facultyId &&
-                     x.AcademicYearId == academicYearId && x.JournalConferenceId == journalConferenceId,
+                     x.AcademicYearId == academicYearId && x.ProductTypeId == productTypeId && x.JournalConferenceId == journalConferenceId && x.Status != "DA_HUY",
                 cancellationToken);
     }
 

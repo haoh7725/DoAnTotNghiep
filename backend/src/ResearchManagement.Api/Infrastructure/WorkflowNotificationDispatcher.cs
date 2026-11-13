@@ -21,7 +21,10 @@ public sealed class WorkflowNotificationDispatcher(ApplicationDbContext db)
     {
         var query = from assignment in db.RoleAssignments.AsNoTracking()
                     join account in db.Accounts.AsNoTracking() on assignment.AccountId equals account.Id
-                    where assignment.Role == role && account.Status == AccountStatuses.Active
+                    where assignment.Role == role && account.Status == AccountStatuses.Active &&
+                        (!productId.HasValue || !db.Lecturers.Any(lecturer => lecturer.AccountId == account.Id &&
+                            (db.Products.Any(product => product.Id == productId && product.SubmittedByLecturerId == lecturer.Id) ||
+                             db.ProductCoAuthors.Any(author => author.ProductId == productId && author.LecturerId == lecturer.Id))))
                     select new
                     {
                         assignment.AccountId,

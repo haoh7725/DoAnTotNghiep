@@ -339,11 +339,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   bool _canUpdateArticleProgress() {
     if (_product == null || _product!['status'] == 'DA_DUYET') return false;
-    final submittedByLecturerId = _product!['submittedByLecturerId'];
-    final isOwner =
-        _currentLecturerId != null &&
-        _currentLecturerId == submittedByLecturerId;
-    return isOwner || _currentUserRoles.contains('QUAN_TRI');
+    // Publication status advances only when a reviewer confirms the next step.
+    return _currentUserRoles.any((role) =>
+        role == 'TRUONG_BO_MON' ||
+        role == 'TRUONG_KHOA' ||
+        role == 'PHONG_QLKH' ||
+        role == 'QUAN_TRI');
   }
 
   String _getEditDisabledReason() {

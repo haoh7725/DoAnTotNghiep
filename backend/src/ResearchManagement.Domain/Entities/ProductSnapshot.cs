@@ -16,6 +16,7 @@ public sealed class ProductSnapshot
         SnapshotAt = DateTimeOffset.UtcNow;
         // Copy all content fields from product
         Title = product.Title;
+        WorkIdentifier = product.WorkIdentifier;
         Description = product.Description;
         PublicationInfo = product.PublicationInfo;
         PublishedDate = product.PublishedDate;
@@ -31,6 +32,7 @@ public sealed class ProductSnapshot
     public long SnapshotByAccountId { get; private set; }
     public DateTimeOffset SnapshotAt { get; private set; }
     public string Title { get; private set; } = string.Empty;
+    public string? WorkIdentifier { get; private set; }
     public string? Description { get; private set; }
     public string? PublicationInfo { get; private set; }
     public DateOnly? PublishedDate { get; private set; }
