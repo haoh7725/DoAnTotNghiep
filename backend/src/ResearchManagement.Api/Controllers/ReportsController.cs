@@ -122,7 +122,7 @@ public sealed class ReportsController(ApplicationDbContext db, ICurrentUser curr
         var approvedProducts = await (from product in db.Products.AsNoTracking()
                                       join item in db.ResearchPlanItems.AsNoTracking() on product.ResearchPlanItemId equals item.Id
                                       join plan in db.ResearchPlans.AsNoTracking() on item.ResearchPlanId equals plan.Id
-                                      where plan.AcademicYearId == query.AcademicYearId && product.Status == "DA_DUYET"
+                                      where product.PublishedDate >= year.StartDate && product.PublishedDate <= year.EndDate && product.Status == "DA_DUYET"
                                       select new { product.Id, product.SubmittedByLecturerId }).ToListAsync(ct);
         var approvedIds = approvedProducts.Select(x => x.Id).ToArray();
         var coAuthors = await db.ProductCoAuthors.AsNoTracking().Where(x => approvedIds.Contains(x.ProductId)).ToListAsync(ct);

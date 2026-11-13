@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { api, ApiError, roleNames, scopeNames } from './api'
+import { api, ApiError, roleNames, scopeNames, preferredAcademicYear } from './api'
 import type { Lookups, Profile } from './api'
 import { AdminPanel } from './AdminPanel'
 import { LecturerDirectory, MyLecturerProfile, canBrowseLecturers } from './Lecturers'
 import { ConversionRules } from './ConversionRules'
-import { ProductWorkspace, ProductReviewWorkspace } from './Products'
+import { ProductReviewWorkspace } from './Products'
 import { ResearchReports } from './Reports'
-import { ResearchPlans } from './ResearchPlans'
+import { ResearchWorkspace } from './ResearchWorkspace'
+import { LecturerOverview } from './LecturerOverview'
 import { ResearchNorms } from './ResearchNorms'
 import { ResearchTargets } from './ResearchTargets'
-import { MyResearchTargets } from './MyResearchTargets'
 import JournalConferences from './JournalConferences'
 import Notifications from './Notifications'
 import { Evaluations } from './Evaluations'
@@ -25,6 +25,7 @@ export default function App() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [tab, setTab] = useState('overview')
+  const [researchYearId, setResearchYearId] = useState('')
   const [productToOpen, setProductToOpen] = useState<number | null>(null)
   const [reviewProductToOpen, setReviewProductToOpen] = useState<number | null>(null)
   const [unreadCount, setUnreadCount] = useState(0)
@@ -65,6 +66,10 @@ export default function App() {
     p.role === 'PHONG_QLKH' || p.role === 'QUAN_TRI'
   ) ?? false
   const targetProgressManager = user?.roles.some(p => ['TRUONG_BO_MON', 'TRUONG_KHOA'].includes(p.role)) ?? false
+  useEffect(() => {
+    if (lookups?.academicYears.length && !lookups.academicYears.some(y => String(y.id) === researchYearId))
+      setResearchYearId(String(preferredAcademicYear(lookups.academicYears).id))
+  }, [lookups, researchYearId])
   useEffect(() => {
     let active = true
     api<Profile>('/auth/me', 'GET', undefined, false)
@@ -220,26 +225,19 @@ export default function App() {
   </main>
   return <div className="workspace">
     <aside className="sidebar"><div className="brand"><span className="brand-mark">R</span> ResearchHub</div><p className="nav-label">KHÔNG GIAN LÀM VIỆC</p>
-      <nav aria-label="Điều hướng chính"><button className={tab === 'overview' ? 'active' : ''} onClick={() => setTab('overview')}>{executive ? 'Tổng quan toàn trường' : 'Tổng quan tài khoản'}</button>
+      <nav aria-label="Điều hướng chính"><button className={tab === 'overview' ? 'active' : ''} onClick={() => setTab('overview')}>{executive ? 'Tổng quan toàn trường' : user.roles.some(r => r.role === 'GIANG_VIEN') ? 'Tổng quan công việc' : 'Tổng quan tài khoản'}</button>
         <p className="nav-section">CÁ NHÂN</p>
         {hasPersonalLecturerProfile && <button className={tab === 'my-profile' ? 'active' : ''} onClick={() => setTab('my-profile')}>Hồ sơ của tôi</button>}
-        {user.roles.some(r => r.role === 'GIANG_VIEN') && (
-          <button
-            className={tab === 'research-plans' ? 'active' : ''}
-            onClick={() => setTab('research-plans')}
-          >
-            Kế hoạch & Tiến độ
-          </button>
-        )}
-        {user.roles.some(r => r.role === 'GIANG_VIEN') && <button className={tab === 'my-targets' ? 'active' : ''} onClick={() => setTab('my-targets')}>Chỉ tiêu của tôi</button>}
+        {user.roles.some(r => r.role === 'GIANG_VIEN') && <button className={['research', 'research-plans', 'my-targets', 'products'].includes(tab) ? 'active' : ''} onClick={() => setTab('research')}>Nghiên cứu của tôi</button>}
+        {!manager && user.roles.some(r => r.role === 'GIANG_VIEN') && <button className={tab === 'evaluations' ? 'active' : ''} onClick={() => setTab('evaluations')}>Kết quả thi đua</button>}
         <button
           className={`notif-nav-btn${tab === 'notifications' ? ' active' : ''}`}
           onClick={() => setTab('notifications')}
         >
           Thông báo
         </button>
-        {user.roles.some(r => r.role === 'GIANG_VIEN') && <button className={tab === 'products' ? 'active' : ''} onClick={() => { setProductToOpen(null); setTab('products') }}>Sản phẩm khoa học</button>}
-        {(user.roles.some(r => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'QUAN_TRI'].includes(r.role)) || canBrowseLecturers(user) || canViewResearchNorms || canViewResearchTargets || canViewJournalConferences) && <p className="nav-section">QUẢN LÝ, ĐÁNH GIÁ & BÁO CÁO</p>}
+
+        {(user.roles.some(r => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'QUAN_TRI'].includes(r.role)) || canBrowseLecturers(user) || (canViewResearchNorms && manager) || canViewResearchTargets || canViewJournalConferences) && <p className="nav-section">QUẢN LÝ, ĐÁNH GIÁ & BÁO CÁO</p>}
         {user.roles.some(r =>
           ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'QUAN_TRI']
             .includes(r.role)
@@ -251,10 +249,10 @@ export default function App() {
               Sản phẩm chờ duyệt
             </button>
           )}
-        {(canEvaluate || manager || user.roles.some(r => r.role === 'GIANG_VIEN')) && <button className={tab === 'evaluations' ? 'active' : ''} onClick={() => setTab('evaluations')}>{canEvaluate ? 'Đánh giá thi đua' : executive ? 'Kết quả thi đua toàn trường' : manager ? 'Kết quả thi đua đơn vị' : 'Kết quả thi đua của tôi'}</button>}
+        {(canEvaluate || manager) && <button className={tab === 'evaluations' ? 'active' : ''} onClick={() => setTab('evaluations')}>{canEvaluate ? 'Đánh giá thi đua' : executive ? 'Kết quả thi đua toàn trường' : manager ? 'Kết quả thi đua đơn vị' : 'Kết quả thi đua của tôi'}</button>}
         {canEvaluate && <button className={tab === 'emulation-rules' ? 'active' : ''} onClick={() => setTab('emulation-rules')}>Quy chế xếp loại</button>}
         {canBrowseLecturers(user) && <button className={tab === 'lecturers' ? 'active' : ''} onClick={() => setTab('lecturers')}>Hồ sơ giảng viên</button>}
-        {canViewResearchNorms && <button className={tab === 'research-norms' ? 'active' : ''} onClick={() => setTab('research-norms')}>Định mức NCKH</button>}
+        {canViewResearchNorms && manager && <button className={tab === 'research-norms' ? 'active' : ''} onClick={() => setTab('research-norms')}>Định mức NCKH</button>}
         {canViewResearchTargets && (
           <button
             className={tab === 'research-targets' ? 'active' : ''}
@@ -304,24 +302,22 @@ export default function App() {
       </header>
       {error && <p className="alert" role="alert">{error}</p>}
       {tab === 'overview' && executive && <ResearchReports lookups={lookups} executive />}
-      {tab === 'overview' && !executive && <><p className="eyebrow">TỔNG QUAN</p><h1>Xin chào, {user.fullName}</h1><p className="muted">Thông tin tài khoản và phạm vi truy cập của bạn.</p>
+      {tab === 'overview' && !executive && user.roles.some(r => r.role === 'GIANG_VIEN') && <LecturerOverview fullName={user.fullName} years={lookups?.academicYears ?? []} yearId={researchYearId} onYearChange={setResearchYearId} onOpen={setTab} />}
+      {tab === 'overview' && !executive && !user.roles.some(r => r.role === 'GIANG_VIEN') && <><p className="eyebrow">TỔNG QUAN</p><h1>Xin chào, {user.fullName}</h1><p className="muted">Thông tin tài khoản và phạm vi truy cập của bạn.</p>
         {targetProgressManager && <ManagementProgressDashboard lookups={lookups} onOpenTargets={() => setTab('research-targets')} />}
         <section className="panel"><h2>Quyền truy cập</h2>{user.roles.length ? <div className="permission-grid">{user.roles.map((p, i) => <article key={i} className="permission"><strong>{roleNames[p.role] ?? p.role}</strong><span>{scopeNames[p.scope] ?? p.scope}</span>{p.facultyId && <small>{lookups?.faculties.find(f => f.id === p.facultyId)?.name ?? `Khoa #${p.facultyId}`}</small>}{p.departmentId && <small>{lookups?.departments.find(d => d.id === p.departmentId)?.name ?? `Bộ môn #${p.departmentId}`}</small>}</article>)}</div> : <p>Tài khoản chưa được gán quyền. Vui lòng liên hệ quản trị viên.</p>}</section>
         <section className="panel"><h2>Đơn vị và năm học</h2>{lookupError ? <><p className="alert" role="alert">{lookupError}</p><button onClick={() => setRetry(x => x + 1)}>Thử lại</button></> : !lookups ? <p role="status">Đang tải dữ liệu…</p> : <div className="summary-grid"><div><h3>Khoa</h3>{lookups.faculties.map(f => <p key={f.id}>{f.name}</p>)}{!lookups.faculties.length && <p className="muted">Chưa có đơn vị được liên kết.</p>}</div><div><h3>Bộ môn</h3>{lookups.departments.map(d => <p key={d.id}>{d.name}</p>)}{!lookups.departments.length && <p className="muted">Chưa có bộ môn được liên kết.</p>}</div><div><h3>Năm học</h3>{lookups.academicYears.map(y => <p key={y.id}>{y.code}</p>)}{!lookups.academicYears.length && <p className="muted">Chưa có năm học.</p>}</div></div>}</section>
       </>}
       {tab === 'my-profile' && (hasPersonalLecturerProfile ? <MyLecturerProfile user={user} lookups={lookups} /> : <p role="alert">Tài khoản không được liên kết với hồ sơ giảng viên.</p>)}
-      {tab === 'research-plans' &&
-        user.roles.some(r => r.role === 'GIANG_VIEN') && (
-          <ResearchPlans academicYears={lookups?.academicYears ?? []} />
-        )}
-      {tab === 'my-targets' && user.roles.some(r => r.role === 'GIANG_VIEN') && <MyResearchTargets
-        onOpenProducts={() => { setProductToOpen(null); setTab('products') }}
-        onOpenProduct={id => { setProductToOpen(id); setTab('products') }}
-      />}
+      {['research', 'research-plans', 'my-targets', 'products'].includes(tab) && user.roles.some(r => r.role === 'GIANG_VIEN') &&
+        <ResearchWorkspace user={user} years={lookups?.academicYears ?? []} yearId={researchYearId} onYearChange={value => { setResearchYearId(value); setProductToOpen(null) }} section={tab} productId={productToOpen} onSectionChange={value => {
+          if (value.startsWith('product:')) { setProductToOpen(Number(value.split(':')[1])); setTab('products') }
+          else { setProductToOpen(null); setTab(value) }
+        }} />}
       {tab === 'notifications' && (
         <Notifications onUnreadCountChange={setUnreadCount} onOpenAction={openNotificationAction} />
       )}
-      {tab === 'products' && <ProductWorkspace user={user} initialProductId={productToOpen} />}
+
       {tab === 'product-reviews' &&
         user.roles.some(r =>
           ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'QUAN_TRI']
@@ -330,7 +326,7 @@ export default function App() {
           <ProductReviewWorkspace user={user} initialProductId={reviewProductToOpen} />
         )
       }
-      {tab === 'evaluations' && <Evaluations user={user} lookups={lookups} />}
+      {tab === 'evaluations' && <><Evaluations user={user} lookups={lookups} />{!manager && canViewResearchNorms && <details className="panel"><summary>Định mức NCKH của tôi</summary><ResearchNorms academicYears={lookups?.academicYears ?? []} canEdit={false} /></details>}</>}
       {tab === 'emulation-rules' && (canEvaluate ? <EmulationClassificationRules years={lookups?.academicYears ?? []} /> : <p role="alert">Bạn không có quyền cấu hình quy chế.</p>)}
       {tab === 'lecturers' && (canBrowseLecturers(user) ? <LecturerDirectory user={user} lookups={lookups} /> : <p role="alert">Bạn không có quyền xem danh sách giảng viên.</p>)}
       {tab === 'research-norms' && (canViewResearchNorms ? <ResearchNorms academicYears={lookups?.academicYears ?? []} canEdit={canEditResearchNorms} /> : <p role="alert">Bạn không có quyền xem định mức NCKH.</p>)}

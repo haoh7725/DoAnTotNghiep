@@ -1,3 +1,4 @@
+using ResearchManagement.Application.ResearchTargets;
 using System.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,7 +18,7 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
     public sealed record SaveRequest(long DepartmentAllocationId, long LecturerId, int AllocatedArticleCount);
 
     [HttpGet("mine")]
-    public async Task<IActionResult> Mine(CancellationToken ct)
+    public async Task<IActionResult> Mine(CancellationToken ct, [FromQuery] long? academicYearId = null)
     {
         var accountId = currentUser.Id ?? throw new ForbiddenException("Không xác định được tài khoản.");
         var lecturer = await db.Lecturers.AsNoTracking().SingleOrDefaultAsync(x => x.AccountId == accountId, ct)
@@ -25,21 +26,23 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
         var rows = await (from personal in db.LecturerTargetAllocations.AsNoTracking()
                           join departmentAllocation in db.ResearchTargetAllocations.AsNoTracking() on personal.DepartmentAllocationId equals departmentAllocation.Id
                           join target in db.ResearchTargets.AsNoTracking() on departmentAllocation.ResearchTargetId equals target.Id
+                          join type in db.ProductTypes.AsNoTracking() on target.ProductTypeId equals type.Id
                           join year in db.AcademicYears.AsNoTracking() on target.AcademicYearId equals year.Id
-                          where personal.LecturerId == lecturer.Id && target.Status == "DA_KHOA"
+                          where personal.LecturerId == lecturer.Id && target.Status == "DA_KHOA" && (!academicYearId.HasValue || target.AcademicYearId == academicYearId)
                           orderby year.StartDate descending
-                          select new { personal.Id, TargetId = target.Id, year.Code, personal.AllocatedArticleCount,
+                          select new { personal.Id, TargetId = target.Id, target.ProductTypeId, ProductTypeCode = type.Code, ProductTypeName = type.Name, target.AcademicYearId, year.Code, personal.AllocatedArticleCount,
+                              RegisteredArticles = db.Products.Count(x => x.ResearchTargetId == target.Id && x.SubmittedByLecturerId == lecturer.Id),
                               ApprovedArticles = db.Products.Count(x => x.ResearchTargetId == target.Id &&
-                                  (x.SubmittedByLecturerId == lecturer.Id || db.ProductCoAuthors.Any(a => a.ProductId == x.Id && a.LecturerId == lecturer.Id)) &&
-                                  x.Status == "DA_DUYET" && x.ArticleStatus == "DA_XUAT_BAN" &&
+                                  x.SubmittedByLecturerId == lecturer.Id &&
+                                  x.Status == "DA_DUYET" && (type.Code != "BAI_BAO" || x.ArticleStatus == "DA_XUAT_BAN") &&
                                   db.ResearchPlanItems.Any(item => item.Id == x.ResearchPlanItemId &&
-                                      db.ProductTypes.Any(type => type.Id == item.ProductTypeId && type.Code == "BAI_BAO"))),
+                                      db.ProductTypes.Any(type => type.Id == item.ProductTypeId && type.Id == target.ProductTypeId))),
                               LinkedProducts = db.Products.Where(x => x.ResearchTargetId == target.Id &&
-                                  (x.SubmittedByLecturerId == lecturer.Id || db.ProductCoAuthors.Any(a => a.ProductId == x.Id && a.LecturerId == lecturer.Id)))
+                                  x.SubmittedByLecturerId == lecturer.Id)
                                   .OrderByDescending(x => x.UpdatedAt)
                                   .Select(x => new { x.Id, x.Title, x.Status, x.ArticleStatus }).ToList(),
                               personal.AllocationDate, target.Deadline, target.Status }).ToListAsync(ct);
-        return Ok(rows.Select(x => new { x.Id, x.TargetId, AcademicYearCode = x.Code, x.AllocatedArticleCount, x.ApprovedArticles,
+        return Ok(rows.Select(x => new { x.Id, x.TargetId, x.ProductTypeId, x.ProductTypeCode, x.ProductTypeName, x.AcademicYearId, AcademicYearCode = x.Code, x.RegisteredArticles, x.AllocatedArticleCount, x.ApprovedArticles,
             CompletionPercent = x.AllocatedArticleCount <= 0 ? 0m : Math.Round(x.ApprovedArticles * 100m / x.AllocatedArticleCount, 2),
             IsCompleted = x.ApprovedArticles >= x.AllocatedArticleCount, x.LinkedProducts, x.AllocationDate, x.Deadline, x.Status }));
     }
@@ -76,7 +79,7 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
         foreach (var lecturer in lecturers)
         {
             var capacity = await GetCommitmentCapacity(
-                lecturer.Id, target.AcademicYearId, null, ct);
+                lecturer.Id, target.AcademicYearId, target.ProductTypeId ?? 1, null, ct);
             rows.Add(new
             {
                 lecturer.Id,
@@ -97,6 +100,7 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var allocation = await GetAllocation(request.DepartmentAllocationId, ct);
         EnsureCanAssign(allocation);
+        await EnsureWithinDates(allocation, ct);
         var lecturer = await db.Lecturers.SingleOrDefaultAsync(x => x.Id == request.LecturerId, ct)
             ?? throw new NotFoundException("Không tìm thấy giảng viên.");
         if (lecturer.DepartmentId != allocation.DepartmentId) throw new BusinessRuleException("Giảng viên không thuộc bộ môn được phân bổ.");
@@ -104,7 +108,7 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
             throw new BusinessRuleException("Giảng viên đã được giao trong chỉ tiêu này.");
         var target = await db.ResearchTargets.AsNoTracking()
             .SingleAsync(x => x.Id == allocation.ResearchTargetId, ct);
-        (await GetCommitmentCapacity(lecturer.Id, target.AcademicYearId, null, ct))
+        (await GetCommitmentCapacity(lecturer.Id, target.AcademicYearId, target.ProductTypeId ?? 1, null, ct))
             .EnsureCanAssign(request.AllocatedArticleCount);
         await EnsureTotal(allocation, request.AllocatedArticleCount, null, ct);
         var item = new LecturerTargetAllocation(allocation.Id, lecturer.Id, request.AllocatedArticleCount, CurrentVietnamDate());
@@ -126,10 +130,11 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var item = await db.LecturerTargetAllocations.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new NotFoundException("Không tìm thấy phân công.");
         var allocation = await GetAllocation(item.DepartmentAllocationId, ct); EnsureCanAssign(allocation);
+        await EnsureWithinDates(allocation, ct);
         if (await HasProducts(allocation.ResearchTargetId, item.LecturerId, ct)) throw new BusinessRuleException("Không thể sửa vì giảng viên đã phát sinh sản phẩm.");
         var target = await db.ResearchTargets.AsNoTracking()
             .SingleAsync(x => x.Id == allocation.ResearchTargetId, ct);
-        (await GetCommitmentCapacity(item.LecturerId, target.AcademicYearId, id, ct))
+        (await GetCommitmentCapacity(item.LecturerId, target.AcademicYearId, target.ProductTypeId ?? 1, id, ct))
             .EnsureCanAssign(request.AllocatedArticleCount);
         await EnsureTotal(allocation, request.AllocatedArticleCount, id, ct);
         var lecturer = await db.Lecturers.AsNoTracking().SingleAsync(x => x.Id == item.LecturerId, ct);
@@ -150,6 +155,7 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var item = await db.LecturerTargetAllocations.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new NotFoundException("Không tìm thấy phân công.");
         var allocation = await GetAllocation(item.DepartmentAllocationId, ct); EnsureCanAssign(allocation);
+        await EnsureWithinDates(allocation, ct);
         if (await HasProducts(allocation.ResearchTargetId, item.LecturerId, ct)) throw new BusinessRuleException("Không thể hủy vì giảng viên đã phát sinh sản phẩm.");
         var lecturer = await db.Lecturers.AsNoTracking().SingleAsync(x => x.Id == item.LecturerId, ct);
         db.LecturerTargetAllocations.Remove(item);
@@ -163,6 +169,14 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
 
     private async Task<ResearchTargetAllocation> GetAllocation(long id, CancellationToken ct) =>
         await db.ResearchTargetAllocations.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new NotFoundException("Không tìm thấy phân bổ bộ môn.");
+    private async Task EnsureWithinDates(ResearchTargetAllocation allocation, CancellationToken ct)
+    {
+        var dates = await (from target in db.ResearchTargets.AsNoTracking()
+                           join year in db.AcademicYears on target.AcademicYearId equals year.Id
+                           where target.Id == allocation.ResearchTargetId
+                           select new { year.StartDate, year.EndDate, target.Deadline }).SingleAsync(ct);
+        TargetRules.EnsureOpen(CurrentVietnamDate(), dates.StartDate, dates.EndDate, dates.Deadline);
+    }
     private void EnsureAccess(ResearchTargetAllocation x) { if (!currentUser.CanAccess(x.FacultyId, x.DepartmentId)) throw new ForbiddenException("Không có quyền phân công cho bộ môn này."); }
     private void EnsureCanAssign(ResearchTargetAllocation allocation)
     {
@@ -183,6 +197,7 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
     private async Task<LecturerCommitmentCapacity> GetCommitmentCapacity(
         long lecturerId,
         long academicYearId,
+        long productTypeId,
         long? excludingAssignmentId,
         CancellationToken ct)
     {
@@ -192,7 +207,7 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
                                where plan.LecturerId == lecturerId &&
                                      plan.AcademicYearId == academicYearId &&
                                      plan.Status == "DA_DANG_KY" &&
-                                     type.Code == "BAI_BAO"
+                                     type.Id == productTypeId
                                select (int?)item.CommittedQuantity).SumAsync(ct) ?? 0;
 
         var assigned = await (from personal in db.LecturerTargetAllocations.AsNoTracking()
@@ -201,6 +216,7 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
                               where personal.LecturerId == lecturerId &&
                                     target.AcademicYearId == academicYearId &&
                                     target.Status == "DA_KHOA" &&
+                                    target.ProductTypeId == productTypeId &&
                                     (!excludingAssignmentId.HasValue || personal.Id != excludingAssignmentId.Value)
                               select (int?)personal.AllocatedArticleCount).SumAsync(ct) ?? 0;
 

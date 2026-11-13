@@ -69,11 +69,15 @@ const progressTone = (status: string) => status === 'DA_THUC_HIEN'
 
 type Props = {
     academicYears: AcademicYear[]
+    selectedYearId?: string
+    onYearChange?: (value: string) => void
 }
 
-export function ResearchPlans({ academicYears }: Props) {
+export function ResearchPlans({ academicYears, selectedYearId, onYearChange }: Props) {
     const [lecturerId, setLecturerId] = useState<number | null>(null)
-    const [yearId, setYearId] = useState('')
+    const [localYearId, setLocalYearId] = useState('')
+    const yearId = selectedYearId ?? localYearId
+    const setYearId = (value: string) => { setLocalYearId(value); onYearChange?.(value) }
     const [plan, setPlan] = useState<ResearchPlan | null>(null)
     const [editingPlan, setEditingPlan] = useState(false)
     const [loading, setLoading] = useState(true)
@@ -849,7 +853,7 @@ export function ResearchPlans({ academicYears }: Props) {
                         <div className="section-top">
                             <div>
                                 <h2>Tổng quan kế hoạch</h2>
-                                <p className="muted">Thông tin đăng ký chung của năm học đang chọn.</p>
+                                <p className="muted">Tổng số sản phẩm NCKH cam kết trong kế hoạch, không phải số bài báo được phân công riêng.</p>
                             </div>
                             <span className={`plan-status-badge ${plan.status === 'NHAP' ? 'draft' : 'registered'}`}>
                                 {plan.status === 'NHAP' ? 'Bản nháp' : 'Đã đăng ký'}
@@ -857,7 +861,7 @@ export function ResearchPlans({ academicYears }: Props) {
                         </div>
 
                         <div className="plan-overview-grid">
-                            <div><span>Sản phẩm cam kết</span><strong>{plan.committedProductCount}</strong></div>
+                            <div><span>Sản phẩm NCKH cam kết</span><strong>{plan.committedProductCount}</strong></div>
                             <div><span>Nội dung nghiên cứu</span><strong>{items.length}</strong></div>
                             <div><span>Ngày lập</span><strong>{formatPlanDate(plan.planDate)}</strong></div>
                             <div><span>Hạn hoàn thành</span><strong>{formatPlanDate(plan.deadline)}</strong></div>

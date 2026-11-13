@@ -13,6 +13,11 @@ export type ScientificProfile = {
   researchDirections: string | null; activitySummary: string | null; updatedAt: string | null
   details: Details
 }
+export type ApprovedResearch = {
+  id: number; title: string; productType: string; productTypeCode: string; academicYear: string
+  startYear: number; endYear: number; publishedDate: string | null; publicationInfo: string | null
+  projectLevel: string | null; authorRole: string | null
+}
 type Field = {
   key: string; label: string; type?: 'number' | 'date' | 'textarea'; max?: number; required?: boolean
   options?: Record<string, string>; future?: boolean
@@ -55,15 +60,16 @@ const groups: { key: ListKey; title: string; hint: string; max: number; fields: 
     { key: 'organization', label: 'Nơi công tác', required: true, max: 300 },
     { key: 'position', label: 'Công việc đảm nhiệm', required: true, max: 1000 },
   ] },
-  { key: 'researchProjects', title: 'IV.1. Đề tài nghiên cứu khoa học đã và đang tham gia', hint: 'Khai cả đề tài đã hoàn thành và đang thực hiện. Năm hoàn thành có thể để trống hoặc là năm dự kiến.', max: 500, fields: [
-    { key: 'title', label: 'Tên đề tài nghiên cứu', required: true, max: 1000 },
-    { key: 'startYear', label: 'Năm bắt đầu', type: 'number' }, { key: 'endYear', label: 'Năm hoàn thành / dự kiến', type: 'number', future: true },
-    { key: 'level', label: 'Cấp đề tài (Nhà nước, Bộ, ngành, trường…)', required: true, max: 200 },
-    { key: 'responsibility', label: 'Trách nhiệm tham gia trong đề tài', required: true, max: 300 },
+  { key: 'researchProjects', title: 'IV.1. Đề tài nghiên cứu đã và đang tham gia', hint: 'Kê khai cả đề tài đang thực hiện và đã hoàn thành. Năm hoàn thành có thể là năm dự kiến.', max: 500, fields: [
+    { key: 'title', label: 'Tên đề tài', required: true, max: 1000 },
+    { key: 'startYear', label: 'Năm bắt đầu', type: 'number' },
+    { key: 'endYear', label: 'Năm hoàn thành / dự kiến', type: 'number', future: true },
+    { key: 'level', label: 'Cấp đề tài', required: true, max: 200 },
+    { key: 'responsibility', label: 'Trách nhiệm tham gia', required: true, max: 300 },
   ] },
-  { key: 'publications', title: 'IV.2. Các công trình khoa học đã công bố', hint: 'Khai từng công trình và tên tạp chí hoặc nơi công bố theo mẫu.', max: 500, fields: [
+  { key: 'publications', title: 'IV.2. Sản phẩm khoa học đã công bố hoặc được công nhận', hint: 'Bao gồm đề tài, bài báo, sách và chứng nhận đã được hệ thống phê duyệt. Sản phẩm thủ công có thể bổ sung khi chưa có trong hệ thống.', max: 500, fields: [
     { key: 'title', label: 'Tên công trình', required: true, max: 1000 }, { key: 'year', label: 'Năm công bố', type: 'number' },
-    { key: 'journal', label: 'Tên tạp chí / nơi công bố', required: true, max: 500 },
+    { key: 'journal', label: 'Loại sản phẩm / nơi công bố', required: true, max: 500 },
   ] },
 ]
 const display = (value: Value | undefined, field?: Field) => {
@@ -96,8 +102,8 @@ function FieldInput({ field, value, onChange }: { field: Field; value: Value; on
   </label>
 }
 
-export function ProfileSection({ lecturer, profile, canEdit, onSaved }: {
-  lecturer: Lecturer; profile: ScientificProfile; canEdit: boolean; onSaved: (p: ScientificProfile) => void
+export function ProfileSection({ lecturer, profile, approvedResearch = [], canEdit, onSaved }: {
+  lecturer: Lecturer; profile: ScientificProfile; approvedResearch?: ApprovedResearch[]; canEdit: boolean; onSaved: (p: ScientificProfile) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -106,6 +112,21 @@ export function ProfileSection({ lecturer, profile, canEdit, onSaved }: {
   const [details, setDetails] = useState<Details>(profile.details ?? {})
   const [summary, setSummary] = useState<Row>(() => Object.fromEntries(summaries.map(f => [f.key, profile[f.key as keyof ScientificProfile] as Value])))
   const current = editing ? details : profile.details ?? {}
+  const normalizedTitle = (value: Value | undefined) => String(value ?? '').trim().toLocaleLowerCase('vi-VN')
+  const withApprovedResearch = (key: ListKey, manualRows: Row[]) => {
+    if (key !== 'publications') return manualRows
+    const known = new Set(manualRows.map(row => normalizedTitle(row.title)))
+    const automatic: Row[] = approvedResearch
+      .filter(item => !known.has(normalizedTitle(item.title)))
+      .map(item => ({
+        title: item.title,
+        year: item.publishedDate ? Number(item.publishedDate.slice(0, 4)) : null,
+        journal: [item.productType, item.publicationInfo].filter(Boolean).join(' · '),
+      } as Row))
+    return [...manualRows, ...automatic]
+  }
+  const approvedRowsFor = (key: ListKey, manualRows: Row[]) =>
+    withApprovedResearch(key, manualRows).slice(manualRows.length)
   const updateScalar = (key: string, value: string) => setDetails(d => ({ ...d, [key]: value }))
   function updateRows(key: ListKey, rows: Row[]) { setDetails(d => ({ ...d, [key]: rows })) }
   function beginEdit() {
@@ -161,6 +182,8 @@ export function ProfileSection({ lecturer, profile, canEdit, onSaved }: {
         </section>
         {groups.map(g => {
           const rows = rowsOf(current, g.key)
+          const visibleRows = editing ? rows : withApprovedResearch(g.key, rows)
+          const approvedRows = editing ? approvedRowsFor(g.key, rows) : []
           return <section key={g.key} className="scientific-section"><div className="section-top"><h3>{g.title}</h3>
             {editing && <button type="button" disabled={rows.length >= g.max} onClick={() => updateRows(g.key, [...rows, g.key === 'education' ? { level: 'DAI_HOC' } : {}])}>+ Thêm dòng ({rows.length}/{g.max})</button>}</div>
             <p className="muted scientific-controls">{g.hint}</p>
@@ -168,9 +191,15 @@ export function ProfileSection({ lecturer, profile, canEdit, onSaved }: {
               <div className="section-top"><strong>Dòng {index + 1}</strong><button type="button" onClick={() => updateRows(g.key, rows.filter((_, i) => i !== index))}>Xóa dòng {index + 1}</button></div>
               <div className="form-grid">{g.fields.map(f => <FieldInput key={f.key} field={f} value={row[f.key] ?? null}
                 onChange={value => updateRows(g.key, rows.map((r, i) => i === index ? { ...r, [f.key]: value } : r))} />)}</div>
-            </div>) : rows.length > 0 ? <div className="table-wrap"><table><thead><tr><th scope="col">TT</th>{g.fields.map(f => <th scope="col" key={f.key}>{f.label}</th>)}</tr></thead>
-              <tbody>{rows.map((row, index) => <tr key={index}><td>{index + 1}</td>{g.fields.map(f => <td key={f.key}>{display(row[f.key], f)}</td>)}</tr>)}</tbody></table></div>
-              : <p className="muted">Chưa kê khai.</p>}
+            </div>) : null}
+            {editing && approvedRows.length > 0 && <>
+              <h4>Sản phẩm đã được duyệt</h4>
+              <div className="table-wrap"><table><thead><tr><th scope="col">TT</th>{g.fields.map(f => <th scope="col" key={f.key}>{f.label}</th>)}</tr></thead>
+                <tbody>{approvedRows.map((row, index) => <tr key={index}><td>{index + 1}</td>{g.fields.map(f => <td key={f.key}>{display(row[f.key], f)}</td>)}</tr>)}</tbody></table></div>
+            </>}
+            {!editing && visibleRows.length > 0 ? <div className="table-wrap"><table><thead><tr><th scope="col">TT</th>{g.fields.map(f => <th scope="col" key={f.key}>{f.label}</th>)}</tr></thead>
+              <tbody>{visibleRows.map((row, index) => <tr key={index}><td>{index + 1}</td>{g.fields.map(f => <td key={f.key}>{display(row[f.key], f)}</td>)}</tr>)}</tbody></table></div>
+              : !editing && <p className="muted">Chưa kê khai.</p>}
           </section>
         })}
         <section className="scientific-section"><h3>Thông tin kê khai</h3>{scalarSection(declaration)}

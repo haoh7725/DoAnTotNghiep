@@ -36,6 +36,16 @@ services:
       - ./database/09_lecturer_target_allocations.sql:/docker-entrypoint-initdb.d/09_lecturer_target_allocations.sql:ro
       - ./database/10_conversion_priority.sql:/docker-entrypoint-initdb.d/10_conversion_priority.sql:ro
       - ./database/11_emulation_classification_and_target_reminders.sql:/docker-entrypoint-initdb.d/11_emulation_classification_and_target_reminders.sql:ro
+      - ./database/12_business_rule_hardening.sql:/docker-entrypoint-initdb.d/12_business_rule_hardening.sql:ro
+      - ./database/13_norm_points_default.sql:/docker-entrypoint-initdb.d/13_norm_points_default.sql:ro
+      - ./database/14_research_plan_history.sql:/docker-entrypoint-initdb.d/14_research_plan_history.sql:ro
+      - ./database/15_conversion_sharing.sql:/docker-entrypoint-initdb.d/15_conversion_sharing.sql:ro
+      - ./database/16_research_product_taxonomy.sql:/docker-entrypoint-initdb.d/16_research_product_taxonomy.sql:ro
+      - ./database/17_product_business_rules.sql:/docker-entrypoint-initdb.d/17_product_business_rules.sql:ro
+      - ./database/18_project_requirements.sql:/docker-entrypoint-initdb.d/18_project_requirements.sql:ro
+      - ./database/19_target_consistency.sql:/docker-entrypoint-initdb.d/19_target_consistency.sql:ro
+      - ./database/20_reference_research_taxonomy.sql:/docker-entrypoint-initdb.d/20_reference_research_taxonomy.sql:ro
+      - ./database/21_target_product_types.sql:/docker-entrypoint-initdb.d/21_target_product_types.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s

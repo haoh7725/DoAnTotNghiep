@@ -11,7 +11,8 @@ public sealed record EvaluationSummaryResponse(
     string? Classification,
     decimal TotalHours,
     decimal TotalPoints,
-    DateTimeOffset EvaluatedAt);
+    DateTimeOffset EvaluatedAt,
+    string EvaluationUnit = "GIO");
 
 /// <summary>Chi tiết một sản phẩm đã tham gia vào kết quả quy đổi.</summary>
 public sealed record ConversionDetailResponse(
@@ -50,4 +51,5 @@ public sealed record EvaluationDetailResponse(
     decimal TotalHours,
     decimal TotalPoints,
     DateTimeOffset EvaluatedAt,
-    IReadOnlyList<ConversionDetailResponse> Details);
+    IReadOnlyList<ConversionDetailResponse> Details,
+    string EvaluationUnit = "GIO");

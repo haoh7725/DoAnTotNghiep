@@ -37,10 +37,9 @@ public sealed class ResearchProgressController(
                               from product in db.Products.AsNoTracking()
                               join item in db.ResearchPlanItems.AsNoTracking() on product.ResearchPlanItemId equals item.Id
                               join type in db.ProductTypes.AsNoTracking() on item.ProductTypeId equals type.Id
-                              where allocation.ResearchTargetId == targetId && product.ResearchTargetId == targetId && type.Code == "BAI_BAO"
-                                  && (product.SubmittedByLecturerId == personal.LecturerId ||
-                                      db.ProductCoAuthors.Any(a => a.ProductId == product.Id && a.LecturerId == personal.LecturerId))
-                                  && product.Status == "DA_DUYET" && product.ArticleStatus == "DA_XUAT_BAN"
+                              where allocation.ResearchTargetId == targetId && product.ResearchTargetId == targetId && type.Id == target.ProductTypeId
+                                  && product.SubmittedByLecturerId == personal.LecturerId
+                                  && product.Status == "DA_DUYET" && (type.Code != "BAI_BAO" || product.ArticleStatus == "DA_XUAT_BAN")
                               group product by allocation.DepartmentId into grouped
                               select new { DepartmentId = grouped.Key, Count = grouped.Select(x => x.Id).Distinct().Count() })
             .ToDictionaryAsync(x => x.DepartmentId, x => x.Count, ct);
@@ -49,15 +48,14 @@ public sealed class ResearchProgressController(
             CompletionPercent = x.AllocatedArticleCount == 0 ? 0m : Math.Round(approved.GetValueOrDefault(x.DepartmentId) * 100m / x.AllocatedArticleCount, 2),
             IsCompleted = approved.GetValueOrDefault(x.DepartmentId) >= x.AllocatedArticleCount }).ToList();
         var visibleDepartmentIds = allocations.Select(x => x.DepartmentId).ToList();
-        // Một bài có đồng tác giả ở nhiều bộ môn chỉ được tính một lần trong tổng toàn khoa.
+        // Số lượng chỉ tiêu tính cho giảng viên phụ trách bài; đồng tác giả được quy đổi đóng góp riêng.
         var totalApproved = await (from product in db.Products.AsNoTracking()
                                    join item in db.ResearchPlanItems.AsNoTracking() on product.ResearchPlanItemId equals item.Id
                                    join type in db.ProductTypes.AsNoTracking() on item.ProductTypeId equals type.Id
-                                   where product.ResearchTargetId == targetId && type.Code == "BAI_BAO" &&
-                                       product.Status == "DA_DUYET" && product.ArticleStatus == "DA_XUAT_BAN" &&
+                                   where product.ResearchTargetId == targetId && type.Id == target.ProductTypeId &&
+                                       product.Status == "DA_DUYET" && (type.Code != "BAI_BAO" || product.ArticleStatus == "DA_XUAT_BAN") &&
                                        db.LecturerTargetAllocations.Any(personal =>
-                                           (personal.LecturerId == product.SubmittedByLecturerId ||
-                                            db.ProductCoAuthors.Any(author => author.ProductId == product.Id && author.LecturerId == personal.LecturerId)) &&
+                                           personal.LecturerId == product.SubmittedByLecturerId &&
                                            db.ResearchTargetAllocations.Any(allocation =>
                                                allocation.Id == personal.DepartmentAllocationId &&
                                                allocation.ResearchTargetId == targetId &&
@@ -99,8 +97,7 @@ public sealed class ResearchProgressController(
             ?? throw new NotFoundException(
                 "Không tìm thấy năm học.");
 
-        // Chỉ tiêu bài báo đã được phân bổ cho bộ môn
-        // trong đúng năm học đang xem.
+        // Tổng chỉ tiêu đã được phân bổ cho bộ môn trong đúng năm học đang xem.
         var allocations = await (
             from allocation in db.ResearchTargetAllocations.AsNoTracking()
             join target in db.ResearchTargets.AsNoTracking()
@@ -119,7 +116,8 @@ public sealed class ResearchProgressController(
             ? allocations.Sum()
             : null;
 
-        // Chỉ đếm bài báo đã duyệt hoàn tất.
+        // Chỉ đếm sản phẩm đã được duyệt hoàn tất. Bài báo còn yêu cầu trạng thái xuất bản;
+        // các loại sản phẩm khác được tính ngay khi được công nhận.
         // Bộ môn được xác định từ giảng viên đứng tên gửi.
         var approvedArticleIds =
             from product in db.Products.AsNoTracking()
@@ -130,19 +128,17 @@ public sealed class ResearchProgressController(
             join productType in db.ProductTypes.AsNoTracking()
                 on item.ProductTypeId equals productType.Id
             where plan.AcademicYearId == academicYearId
-                && productType.Code == "BAI_BAO"
                 && product.Status == "DA_DUYET"
-                && product.ArticleStatus == "DA_XUAT_BAN"
+                && (productType.Code != "BAI_BAO" || product.ArticleStatus == "DA_XUAT_BAN")
                 && product.ResearchTargetId.HasValue
                 && db.LecturerTargetAllocations.Any(personal =>
-                    (personal.LecturerId == product.SubmittedByLecturerId ||
-                     db.ProductCoAuthors.Any(coAuthor => coAuthor.ProductId == product.Id && coAuthor.LecturerId == personal.LecturerId)) &&
+                    personal.LecturerId == product.SubmittedByLecturerId &&
                     db.ResearchTargetAllocations.Any(a => a.Id == personal.DepartmentAllocationId &&
                         a.ResearchTargetId == product.ResearchTargetId && a.DepartmentId == department.Id &&
                         a.FacultyId == department.FacultyId))
             select product.Id;
 
-        var approvedArticles = await approvedArticleIds
+        var approvedProducts = await approvedArticleIds
             .Distinct()
             .CountAsync(ct);
 
@@ -152,7 +148,7 @@ public sealed class ResearchProgressController(
             allocatedArticles.Value > 0)
         {
             completionPercent = Math.Round(
-                approvedArticles * 100m / allocatedArticles.Value,
+                approvedProducts * 100m / allocatedArticles.Value,
                 2);
         }
 
@@ -164,7 +160,7 @@ public sealed class ResearchProgressController(
             DepartmentName = department.Name,
             HasAllocation = hasAllocation,
             AllocatedArticles = allocatedArticles,
-            ApprovedArticles = approvedArticles,
+            ApprovedArticles = approvedProducts,
             CompletionPercent = completionPercent,
             UpdatedAt = DateTimeOffset.UtcNow
         });
@@ -277,11 +273,11 @@ public sealed class ResearchProgressController(
             ?? throw new NotFoundException(
                 "Không tìm thấy năm học.");
 
-        var requiredHours = await db.ResearchNorms.AsNoTracking()
+        var norm = await db.ResearchNorms.AsNoTracking()
             .Where(x =>
                 x.LecturerId == lecturer.Id &&
                 x.AcademicYearId == academicYearId)
-            .Select(x => (decimal?)x.RequiredHours)
+            .Select(x => new { x.RequiredHours, x.RequiredPoints })
             .SingleOrDefaultAsync(ct);
 
         // Cùng nguyên tắc với báo cáo Web:
@@ -322,22 +318,19 @@ public sealed class ResearchProgressController(
 
         decimal? completionPercent = null;
 
-        if (requiredHours.HasValue &&
-            requiredHours.Value > 0 &&
-            confirmedHours.HasValue)
-        {
-            completionPercent = Math.Round(
-                confirmedHours.Value * 100m /
-                requiredHours.Value,
-                2);
-        }
-
+        var evaluationUnit = evaluation?.EvaluationUnit ?? "GIO";
+        var requiredValue = evaluationUnit == "DIEM" ? norm?.RequiredPoints : norm?.RequiredHours;
+        var confirmedValue = evaluationUnit == "DIEM" ? confirmedPoints : confirmedHours;
+        if (evaluationUnit != "LEGACY" && requiredValue > 0 && confirmedValue.HasValue)
+            completionPercent = Math.Round(confirmedValue.Value * 100m / requiredValue.Value, 2);
         return Ok(new
         {
             AcademicYearId = year.Id,
             AcademicYearCode = year.Code,
             LecturerName = lecturer.FullName,
-            RequiredHours = requiredHours,
+            RequiredHours = norm?.RequiredHours,
+            RequiredPoints = norm?.RequiredPoints,
+            EvaluationUnit = evaluationUnit,
             HasFinalizedEvaluation = evaluation != null,
             ConfirmedHours = confirmedHours,
             ConfirmedPoints = confirmedPoints,

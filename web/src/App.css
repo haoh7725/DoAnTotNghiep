@@ -2,6 +2,16 @@ button { cursor: pointer; border: 1px solid #d4dee7; background: #fff; color: va
 button:disabled { opacity: .55; cursor: not-allowed; }
 button:hover:not(:disabled) { border-color: #b9cbd9; background: #f4f8fa; }
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.research-workspace { display: grid; gap: 18px; }
+.research-workspace > .section-top { margin-bottom: 0; }
+.research-workspace > .tabs { margin: 0; }
+.lecturer-work-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.lecturer-work-cards button { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; min-height: 115px; text-align: left; background: #fff; }
+.lecturer-work-cards span, .lecturer-work-cards small { color: var(--muted); }
+.lecturer-work-cards strong { font-size: 1.8rem; color: var(--navy); }
+.product-filters { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; margin: 12px 0 18px; }
+@media (max-width: 800px) { .lecturer-work-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .product-filters { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .lecturer-work-cards { grid-template-columns: 1fr; } }
 .primary { background: var(--teal); color: #fff; border-color: var(--teal); box-shadow: 0 3px 8px rgba(22,140,140,.14); }
 .primary:hover:not(:disabled) { background: var(--teal-dark); border-color: var(--teal-dark); }
 label { display:flex; flex-direction:column; gap:8px; font-size:.86rem; font-weight:600; margin:20px 0; color:#34495e; }

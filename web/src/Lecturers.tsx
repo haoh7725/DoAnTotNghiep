@@ -4,7 +4,7 @@ import { api, ApiError, roleNames } from './api'
 import type { Lookups, Profile } from './api'
 import './Lecturers.css'
 import { ProfileSection } from './ScientificProfile'
-import type { ScientificProfile } from './ScientificProfile'
+import type { ApprovedResearch, ScientificProfile } from './ScientificProfile'
 import { useAutoReveal } from './useAutoReveal'
 
 /* ===== Kiểu dữ liệu khớp với LecturerModels.cs ===== */
@@ -207,6 +207,8 @@ function LecturerDetail({ user, lookups, lecturerId, onBack }: {
 }) {
   const [lecturer, setLecturer] = useState<Lecturer | null>(null)
   const [profile, setProfile] = useState<ScientificProfile | null>(null)
+  const [profileTab, setProfileTab] = useState('personal')
+  const [approvedResearch, setApprovedResearch] = useState<ApprovedResearch[]>([])
   const [error, setError] = useState(''); const [status, setStatus] = useState<number | null>(null)
   const [loading, setLoading] = useState(true); const [retry, setRetry] = useState(0)
 
@@ -215,7 +217,10 @@ function LecturerDetail({ user, lookups, lecturerId, onBack }: {
     ;(async () => {
       const l = await api<Lecturer>(lecturerId === undefined ? '/lecturers/me' : `/lecturers/${lecturerId}`)
       const p = await api<ScientificProfile>(`/lecturers/${l.id}/scientific-profile`)
-      if (active) { setLecturer(l); setProfile(p) }
+      if (active) { setLecturer(l); setProfile(p); setApprovedResearch([]) }
+      api<ApprovedResearch[]>(`/lecturers/${l.id}/approved-research`)
+        .then(data => { if (active) setApprovedResearch(data) })
+        .catch(() => { if (active) setApprovedResearch([]) })
     })().catch(e => { if (active) { setError((e as Error).message); setStatus(e instanceof ApiError ? e.status : null) } })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
@@ -242,8 +247,15 @@ function LecturerDetail({ user, lookups, lecturerId, onBack }: {
     <p className="muted">{lecturer.code} · {lecturer.departmentName} · {lecturer.facultyName}</p>
     <p className={`lec-notice ${level}`} role="note"><strong>{{ office: 'Toàn quyền chỉnh sửa', owner: 'Chính chủ', view: 'Chỉ xem' }[level]}</strong>{notice}</p>
     {perm.office && <PlanReopenSection lecturer={lecturer} lookups={lookups} />}
-    <PersonalSection key={`p${lecturer.id}`} lecturer={lecturer} perm={perm} lookups={lookups} onSaved={setLecturer} />
-    <ProfileSection key={`s${lecturer.id}`} lecturer={lecturer} profile={profile} canEdit={perm.editProfile} onSaved={setProfile} />
+    <nav className="tabs" aria-label="Hồ sơ giảng viên">
+      {[['personal', 'Thông tin cá nhân'], ['cv', 'Lý lịch khoa học'], ['research', 'Công trình đã công nhận']].map(([key, label]) =>
+        <button key={key} className={profileTab === key ? 'active' : ''} onClick={() => setProfileTab(key)}>{label}</button>)}
+    </nav>
+    {profileTab === 'personal' && <PersonalSection key={`p${lecturer.id}`} lecturer={lecturer} perm={perm} lookups={lookups} onSaved={setLecturer} />}
+    {profileTab === 'cv' && <ProfileSection key={`s${lecturer.id}`} lecturer={lecturer} profile={profile} approvedResearch={approvedResearch} canEdit={perm.editProfile} onSaved={setProfile} />}
+    {profileTab === 'research' && <section className="panel"><h2>Công trình đã công nhận</h2><p className="muted">Dữ liệu từ hồ sơ sản phẩm đã được duyệt.</p>
+      {approvedResearch.length ? <div className="table-wrap"><table><thead><tr><th>Công trình</th><th>Loại</th><th>Ngày công bố / công nhận</th><th>Nơi công bố</th></tr></thead><tbody>{approvedResearch.map(x => <tr key={x.id}><td>{x.title}</td><td>{x.productType}</td><td>{x.publishedDate ?? 'Chưa bổ sung'}</td><td>{x.publicationInfo ?? '—'}</td></tr>)}</tbody></table></div> : <p>Chưa có công trình đã công nhận.</p>}
+    </section>}
   </>
 }
 

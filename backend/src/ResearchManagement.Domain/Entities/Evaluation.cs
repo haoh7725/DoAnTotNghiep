@@ -7,7 +7,8 @@ public sealed class Evaluation : BaseEntity
     private Evaluation() { }
 
     public Evaluation(long lecturerId, long academicYearId, int attempt, long evaluatorAccountId,
-        string lecturerCode, string lecturerName, long departmentId, string? academicRank, string? degree)
+        string lecturerCode, string lecturerName, long departmentId, string? academicRank, string? degree,
+        string evaluationUnit = "GIO")
     {
         LecturerId = lecturerId;
         AcademicYearId = academicYearId;
@@ -20,6 +21,7 @@ public sealed class Evaluation : BaseEntity
         AcademicRankSnapshot = academicRank;
         DegreeSnapshot = degree;
         EvaluatedAt = DateTimeOffset.UtcNow;
+        SelectUnit(evaluationUnit);
     }
 
     public long LecturerId { get; private set; }
@@ -35,6 +37,14 @@ public sealed class Evaluation : BaseEntity
     public string? AcademicRankSnapshot { get; private set; }
     public string? DegreeSnapshot { get; private set; }
     public DateTimeOffset EvaluatedAt { get; private set; }
+    public string EvaluationUnit { get; private set; } = "GIO";
+
+    public void SelectUnit(string unit)
+    {
+        if (Status == "CHOT") throw new InvalidOperationException("Không được đổi phương thức của kết quả đã chốt.");
+        if (unit is not ("GIO" or "DIEM")) throw new ArgumentException("Phương thức phải là GIO hoặc DIEM.", nameof(unit));
+        EvaluationUnit = unit;
+    }
 
     public void Finalize(string classification, string basis)
     {
@@ -42,6 +52,14 @@ public sealed class Evaluation : BaseEntity
         Classification = classification.Trim();
         ClassificationBasis = basis.Trim();
         Status = "CHOT";
+        EvaluatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void RecalculateClassification(string classification, string basis)
+    {
+        if (Status != "CHOT") throw new InvalidOperationException("Chỉ cập nhật được kết quả đã chốt.");
+        Classification = classification.Trim();
+        ClassificationBasis = basis.Trim();
         EvaluatedAt = DateTimeOffset.UtcNow;
     }
 }

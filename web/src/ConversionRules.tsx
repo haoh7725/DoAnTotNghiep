@@ -52,7 +52,7 @@ export function ConversionRules() {
     setBusy(true); setError('')
     try { await api(`/admin/conversion-rules/${rule.id}`, 'DELETE'); setRevision(x => x + 1) } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }
-  const className = (id: number | null) => classes.find(x => x.id === id)?.name ?? 'Quy định chung / dữ liệu cũ'
+  const className = (id: number | null) => classes.find(x => x.id === id)?.name ?? 'Quy định chung cho nhóm'
   return <div className="conversion-page">
     <p className="eyebrow">QUY ĐỔI VÀ ĐÁNH GIÁ</p><h1>Quy định quy đổi NCKH</h1>
     <p className="muted">Chọn nhóm → phân loại → cấu hình mức giờ hoặc điểm và cách chia tác giả theo văn bản của trường.</p>
@@ -60,12 +60,12 @@ export function ConversionRules() {
     {message && <p role="status">{message}</p>}
     {error && <p className="alert" role="alert">{error}</p>}
     {tab === 'catalog' ? <ProductTaxonomy onChanged={() => setRevision(x => x + 1)} /> : <>
-        <p>Sản phẩm đã chọn phân loại chỉ dùng quy định của phân loại đó. Dữ liệu cũ chưa phân loại tiếp tục dùng quy định chung. Trong cùng phạm vi, xét ưu tiên rồi phiên bản; nếu vẫn trùng thì báo lỗi.</p>
+        <p>Ưu tiên quy định riêng phù hợp với phân loại. Nếu chưa có, dùng quy định chung cho nhóm theo đơn vị giờ hoặc điểm đang đánh giá. Trong cùng phạm vi, xét ưu tiên rồi phiên bản; nếu vẫn trùng thì báo lỗi.</p>
       {edit && <form ref={formRef} className="panel auto-reveal-target" onSubmit={save}>
         <div className="section-top"><h2>{edit.id ? 'Sửa quy định chưa sử dụng' : 'Thêm quy định / phiên bản'}</h2><button type="button" onClick={() => setEdit(null)}>Đóng</button></div>
         <h3>Đối tượng áp dụng</h3><div className="form-grid">
           <label>Nhóm sản phẩm<select required value={edit.productTypeId || ''} onChange={e => change({ productTypeId: Number(e.target.value), classificationId: null, criteria: [] })}><option value="">Chọn nhóm</option>{types.filter(t => t.isActive || t.id === edit.productTypeId).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
-          <label>Phân loại quy đổi<select required={!edit.id} value={edit.classificationId ?? ''} onChange={e => change({ classificationId: Number(e.target.value) || null })}><option value="">{edit.id ? 'Quy định chung / dữ liệu cũ' : 'Chọn phân loại quy đổi'}</option>{classes.filter(c => c.productTypeId === edit.productTypeId && (c.isActive || c.id === edit.classificationId)).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select><small>Chưa có phân loại? Thêm ở tab Danh mục nhóm và phân loại.</small></label>
+          <label>Phân loại quy đổi<select value={edit.classificationId ?? ''} onChange={e => change({ classificationId: Number(e.target.value) || null })}><option value="">Quy định chung cho nhóm</option>{classes.filter(c => c.productTypeId === edit.productTypeId && (c.isActive || c.id === edit.classificationId)).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select><small>Chọn một phân loại để áp dụng riêng; để quy định chung nếu áp dụng cho cả nhóm khi chưa có mức riêng phù hợp.</small></label>
           <label>Mã quy định<input required maxLength={50} value={edit.code} onChange={e => change({ code: e.target.value })} placeholder="QD_SCOPUS_GIO" /></label>
           <label>Phiên bản<input type="number" min="1" required value={edit.version} onChange={e => change({ version: Number(e.target.value) })} /></label>
           <label className="wide">Tên quy định<input required maxLength={300} value={edit.name} onChange={e => change({ name: e.target.value })} /></label>

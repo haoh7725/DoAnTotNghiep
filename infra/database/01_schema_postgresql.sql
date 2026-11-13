@@ -547,6 +547,7 @@ INSERT INTO loai_san_pham(ma_loai, ten_loai) VALUES
     ('BAI_BAO', 'Bài báo'),
     ('DE_TAI', 'Đề tài'),
     ('SACH', 'Sách'),
+    ('HOI_NGHI_HOI_THAO', 'Bài/kỷ yếu/báo cáo hội nghị, hội thảo'),
     ('CHUNG_NHAN', 'Chứng nhận');
 
 CREATE VIEW v_tong_ket_danh_gia AS

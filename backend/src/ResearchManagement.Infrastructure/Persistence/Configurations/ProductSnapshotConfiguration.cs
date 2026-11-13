@@ -18,6 +18,7 @@ public sealed class ProductSnapshotConfiguration : IEntityTypeConfiguration<Prod
         builder.Property(x => x.SnapshotByAccountId).HasColumnName("nguoi_cap_nhat_id").IsRequired();
         builder.Property(x => x.SnapshotAt).HasColumnName("ghi_luc").HasColumnType("timestamptz").IsRequired();
         builder.Property(x => x.Title).HasColumnName("tieu_de").HasMaxLength(500).IsRequired();
+        builder.Property(x => x.WorkIdentifier).HasColumnName("ma_cong_trinh").HasMaxLength(255);
         builder.Property(x => x.Description).HasColumnName("mo_ta");
         builder.Property(x => x.PublicationInfo).HasColumnName("thong_tin_xuat_ban").HasMaxLength(500);
         builder.Property(x => x.PublishedDate).HasColumnName("ngay_cong_bo").HasColumnType("date");

@@ -26,6 +26,11 @@
   <ItemGroup>
     <Content Include="DemoEvidence\*.pdf" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <EmbeddedResource Include="..\..\..\infra\database\15_conversion_sharing.sql" LogicalName="ConversionSharingMigration.sql" />
+    <EmbeddedResource Include="..\..\..\infra\database\17_product_business_rules.sql" LogicalName="ProductBusinessRulesMigration.sql" />
+    <EmbeddedResource Include="..\..\..\infra\database\18_project_requirements.sql" LogicalName="ProjectRequirementsMigration.sql" />
+    <EmbeddedResource Include="..\..\..\infra\database\19_target_consistency.sql" LogicalName="TargetConsistencyMigration.sql" />
+    <EmbeddedResource Include="..\..\..\infra\database\20_reference_research_taxonomy.sql" LogicalName="ReferenceResearchTaxonomyMigration.sql" />
+    <EmbeddedResource Include="..\..\..\infra\database\21_target_product_types.sql" LogicalName="TargetProductTypesMigration.sql" />
   </ItemGroup>
 
 </Project>

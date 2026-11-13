@@ -5,6 +5,9 @@ using ResearchManagement.Application.Auth.Models;
 using ResearchManagement.Application.Common;
 using ResearchManagement.Application.Lecturers;
 using ResearchManagement.Application.Lecturers.Models;
+using ResearchManagement.Domain.Constants;
+using ResearchManagement.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace ResearchManagement.Api.Controllers;
 
@@ -17,7 +20,8 @@ namespace ResearchManagement.Api.Controllers;
 [Authorize]
 public sealed class LecturersController(
     LecturerService lecturers,
-    ScientificProfileService profiles) : ControllerBase
+    ScientificProfileService profiles,
+    ApplicationDbContext db) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<PagedResult<LecturerResponse>>> Search(
@@ -80,6 +84,47 @@ public sealed class LecturersController(
     public async Task<ActionResult<ScientificProfileResponse>> GetProfile(
         long id, CancellationToken cancellationToken) =>
         Ok(await profiles.GetAsync(id, cancellationToken));
+
+    [HttpGet("{id:long}/approved-research")]
+    public async Task<IActionResult> GetApprovedResearch(long id, CancellationToken cancellationToken)
+    {
+        // Dùng cùng kiểm tra phạm vi với màn hồ sơ giảng viên.
+        _ = await lecturers.GetByIdAsync(id, cancellationToken);
+
+        var products = await (from product in db.Products.AsNoTracking()
+                              join planItem in db.ResearchPlanItems.AsNoTracking()
+                                  on product.ResearchPlanItemId equals planItem.Id
+                              join plan in db.ResearchPlans.AsNoTracking()
+                                  on planItem.ResearchPlanId equals plan.Id
+                              join productType in db.ProductTypes.AsNoTracking()
+                                  on planItem.ProductTypeId equals productType.Id
+                              from academicYear in db.AcademicYears.AsNoTracking()
+                              let coAuthorRole = db.ProductCoAuthors
+                                  .Where(author => author.ProductId == product.Id && author.LecturerId == id)
+                                  .Select(author => author.AuthorRole)
+                                  .FirstOrDefault()
+                              where (product.PublishedDate.HasValue
+                                        ? product.PublishedDate >= academicYear.StartDate && product.PublishedDate <= academicYear.EndDate
+                                        : academicYear.Id == plan.AcademicYearId) && product.Status == ProductStatuses.Approved
+                                    && (product.SubmittedByLecturerId == id || coAuthorRole != null)
+                              orderby academicYear.StartDate descending, product.PublishedDate descending, product.Title
+                              select new
+                              {
+                                  product.Id,
+                                  product.Title,
+                                  ProductType = productType.Name,
+                                  ProductTypeCode = productType.Code,
+                                  AcademicYear = product.PublishedDate.HasValue ? academicYear.Code : "Chưa xác định",
+                                  StartYear = academicYear.StartDate.Year,
+                                  EndYear = academicYear.EndDate.Year,
+                                  product.PublishedDate,
+                                  product.PublicationInfo,
+                                  product.ProjectLevel,
+                                  AuthorRole = product.SubmittedByLecturerId == id ? "TAC_GIA_CHINH" : coAuthorRole
+                              }).ToListAsync(cancellationToken);
+
+        return Ok(products);
+    }
 
     [HttpPut("{id:long}/scientific-profile")]
     public async Task<ActionResult<ScientificProfileResponse>> UpsertProfile(
