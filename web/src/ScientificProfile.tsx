@@ -112,6 +112,7 @@ export function ProfileSection({ lecturer, profile, approvedResearch = [], canEd
   const [details, setDetails] = useState<Details>(profile.details ?? {})
   const [summary, setSummary] = useState<Row>(() => Object.fromEntries(summaries.map(f => [f.key, profile[f.key as keyof ScientificProfile] as Value])))
   const current = editing ? details : profile.details ?? {}
+  const researchTypes = [ ['DE_TAI', 'Đề tài'], ['BAI_BAO', 'Bài báo'], ['HOI_NGHI_HOI_THAO', 'Hội nghị / hội thảo'], ['SACH', 'Sách và giáo trình'] ]
   const normalizedTitle = (value: Value | undefined) => String(value ?? '').trim().toLocaleLowerCase('vi-VN')
   const withApprovedResearch = (key: ListKey, manualRows: Row[]) => {
     if (key !== 'publications') return manualRows
@@ -172,6 +173,11 @@ export function ProfileSection({ lecturer, profile, approvedResearch = [], canEd
       {!editing && <div className="actions scientific-controls"><button onClick={() => window.print()}>In / Lưu PDF</button>
         {canEdit && <button className="primary" onClick={beginEdit}>{profile.updatedAt ? 'Chỉnh sửa lý lịch' : 'Lập lý lịch'}</button>}</div>}</div>
     {saved && <p className="lec-ok scientific-controls" role="status">Đã lưu đầy đủ lý lịch khoa học.</p>}
+    {!editing && <section><h3>Sản phẩm NCKH đã công nhận</h3><div className="actions"><a href={`/api/lecturers/${lecturer.id}/research-export/xlsx`}>Xuất Excel</a><a href={`/api/lecturers/${lecturer.id}/research-export/pdf`}>Xuất PDF</a></div>
+      <div className="form-grid">{researchTypes.map(([code, name]) => <section className="panel" key={code}><h4>{name}</h4>
+        {approvedResearch.filter(p => p.productTypeCode === code).map(p => <p key={p.id}>{p.title}<br /><small>{p.publishedDate ?? 'Chưa có ngày công nhận'} · {p.publicationInfo ?? '—'}</small></p>)}
+        {!approvedResearch.some(p => p.productTypeCode === code) && <p>Chưa có sản phẩm được công nhận.</p>}
+      </section>)}</div></section>}
     <form onSubmit={save}>
       {error && <p className="alert" role="alert">{error}</p>}
       <fieldset disabled={busy} className="scientific-fieldset">

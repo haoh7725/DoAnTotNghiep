@@ -24,6 +24,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="..\..\..\infra\database\22_faculty_workflow_2023.sql" LogicalName="FacultyWorkflow2023Migration.sql" />
+    <EmbeddedResource Include="..\..\..\infra\database\23_article_progress_requests.sql" LogicalName="ArticleProgressRequestsMigration.sql" />
     <Content Include="DemoEvidence\*.pdf" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <EmbeddedResource Include="..\..\..\infra\database\15_conversion_sharing.sql" LogicalName="ConversionSharingMigration.sql" />
     <EmbeddedResource Include="..\..\..\infra\database\17_product_business_rules.sql" LogicalName="ProductBusinessRulesMigration.sql" />

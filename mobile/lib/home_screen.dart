@@ -501,6 +501,7 @@ class _EvaluationView extends StatelessWidget {
     final statusLabel = switch (status) {
       'CHOT' => 'Đã chốt',
       'NHAP' => 'Bản nháp',
+      'TAM_TINH' => 'Tự tổng hợp',
       _ => 'Chưa xác định',
     };
     final classification = data['classification'] as String?;

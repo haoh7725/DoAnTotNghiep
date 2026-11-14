@@ -10,7 +10,7 @@ export const preferredAcademicYear = (years: AcademicYear[], today = new Date())
 }
 export const roleNames: Record<string, string> = {
   QUAN_TRI: 'Quản trị viên', GIANG_VIEN: 'Giảng viên', TRUONG_BO_MON: 'Trưởng bộ môn',
-  TRUONG_KHOA: 'Trưởng khoa', PHONG_QLKH: 'Phòng quản lý khoa học', BAN_GIAM_HIEU: 'Ban giám hiệu',
+  TRUONG_KHOA: 'Trưởng khoa',
 }
 export const scopeNames: Record<string, string> = { CA_NHAN: 'Cá nhân', BO_MON: 'Bộ môn', KHOA: 'Khoa', TOAN_TRUONG: 'Toàn trường' }
 export class ApiError extends Error { status: number; constructor(message: string, status: number) { super(message); this.status = status } }

@@ -224,6 +224,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   Map<String, dynamic>? _product;
   List<dynamic>? _history;
   List<dynamic>? _snapshots;
+  List<dynamic> _progressRequests = [];
   String? _snapshotsError;
   int? _currentLecturerId;
   List<String> _currentUserRoles = [];
@@ -256,6 +257,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           snapshotsError = e.toString();
           return <dynamic>[];
         }),
+        widget.client.getArticleProgressRequests(widget.productId),
       ]);
 
       // Lấy thông tin giảng viên và quyền tài khoản hiện tại để kiểm tra phân quyền sửa
@@ -265,12 +267,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       } catch (e) {
         accessErrors.add('Không xác định được hồ sơ giảng viên: $e');
       }
-
       try {
         final me = await widget.client.getMe();
         if (me is Map && me['roles'] is List) {
           _currentUserRoles = (me['roles'] as List)
-              .map((r) => (r is Map ? r['role'] : r).toString())
+              .map((role) => (role is Map ? role['role'] : role).toString())
               .toList();
         }
       } catch (e) {
@@ -282,6 +283,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           _product = Map<String, dynamic>.from(results[0] as Map);
           _history = results[1] as List<dynamic>;
           _snapshots = results[2] as List<dynamic>;
+          _progressRequests = results[3] as List<dynamic>;
           _snapshotsError = snapshotsError;
           _accessContextError = accessErrors.isEmpty
               ? null
@@ -322,33 +324,25 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   // ──── Kiểm tra quyền sửa & quy tắc phiên bản ─────────────────────────────
   bool _canEdit() {
-    if (_product == null) return false;
-    final status = _product!['status'] as String? ?? '';
-    // Chỉ có thể sửa khi sản phẩm ở trạng thái Nháp hoặc Yêu cầu bổ sung
-    final isStatusEditable = status == 'NHAP' || status == 'TRA_LAI';
-    if (!isStatusEditable) return false;
-
-    // Chỉ tác giả chính hoặc quản trị viên mới có quyền sửa
-    final submittedByLecturerId = _product!['submittedByLecturerId'];
-    final isOwner =
-        _currentLecturerId != null &&
-        _currentLecturerId == submittedByLecturerId;
-    final isAdmin = _currentUserRoles.contains('QUAN_TRI');
-    return isOwner || isAdmin;
+    return _product?['canEdit'] == true;
   }
 
   bool _canUpdateArticleProgress() {
-    if (_product == null || _product!['status'] == 'DA_DUYET') return false;
-    // Publication status advances only when a reviewer confirms the next step.
-    return _currentUserRoles.any((role) =>
-        role == 'TRUONG_BO_MON' ||
-        role == 'TRUONG_KHOA' ||
-        role == 'PHONG_QLKH' ||
-        role == 'QUAN_TRI');
+    return _product?['canRequestArticleProgress'] == true &&
+        !_progressRequests.any((item) => item['status'] == 'CHO_DUYET');
+  }
+
+  Map<String, dynamic>? _pendingProgressRequest() {
+    for (final raw in _progressRequests) {
+      final item = Map<String, dynamic>.from(raw as Map);
+      if (item['status'] == 'CHO_DUYET') return item;
+    }
+    return null;
   }
 
   String _getEditDisabledReason() {
     if (_product == null) return '';
+    if (_canEdit()) return '';
     final status = _product!['status'] as String? ?? '';
     final isStatusEditable = status == 'NHAP' || status == 'TRA_LAI';
     if (!isStatusEditable) {
@@ -359,11 +353,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final isOwner =
         _currentLecturerId != null &&
         _currentLecturerId == submittedByLecturerId;
-    final isAdmin = _currentUserRoles.contains('QUAN_TRI');
-    if (!isOwner && !isAdmin) {
+    if (!isOwner) {
       return 'Chỉ tác giả chính (${_product!['submittedByLecturerFullName'] ?? ''}) mới có quyền chỉnh sửa sản phẩm này.';
     }
-    return '';
+    return 'Bạn không có quyền chỉnh sửa hoặc gửi duyệt sản phẩm này.';
   }
 
   // ──── Cập nhật trạng thái bài viết & thông tin ────────────────────────────
@@ -371,14 +364,35 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     if (!_canUpdateArticleProgress() || _product == null) return;
 
     final p = _product!;
-    String? currentArticleStatus = p['articleStatus'] as String?;
+    final currentArticleStatus = p['articleStatus'] as String?;
+    const stages = [
+      'DANG_VIET',
+      'DANG_PHAN_BIEN',
+      'DA_NHAN_XET',
+      'DA_XUAT_BAN',
+    ];
+    final normalizedStatus = currentArticleStatus == 'DA_NHAN_DANG'
+        ? 'DA_NHAN_XET'
+        : currentArticleStatus ?? 'DANG_VIET';
+    final currentStage = stages.indexOf(normalizedStatus);
+    final nextStatus = currentStage >= 0 && currentStage < stages.length - 1
+        ? stages[currentStage + 1]
+        : null;
+    if (nextStatus == null) return;
+    bool allowedStage(String status) => status == nextStatus;
+
     DateTime? selectedDate = p['publishedDate'] != null
         ? DateTime.tryParse(p['publishedDate'])
         : null;
     final pubInfoController = TextEditingController(
       text: p['publicationInfo'] as String? ?? '',
     );
-    String? selectedStatus = currentArticleStatus;
+    String? selectedStatus = nextStatus;
+    final evidences = p['evidences'] as List<dynamic>? ?? [];
+    int? selectedEvidenceId = evidences.isEmpty
+        ? null
+        : (evidences.first['id'] as num).toInt();
+    final noteController = TextEditingController();
     bool busy = false;
     String? dialogError;
 
@@ -411,7 +425,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       ),
                       const SizedBox(width: 10),
                       Text(
-                        'Cập nhật trạng thái bài viết',
+                        'Đề nghị cập nhật trạng thái',
                         style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: const Color(0xFF173F32),
@@ -421,8 +435,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Chọn trạng thái bài viết theo tiến độ nghiên cứu thực tế. '
-                    'Thay đổi sẽ được lưu vào phiên bản sản phẩm hiện tại.',
+                    'Chọn minh chứng cho bước tiếp theo. Trạng thái chỉ thay đổi sau khi Trưởng bộ môn hoặc Trưởng khoa xác nhận.',
                     style: TextStyle(color: Colors.black54, fontSize: 13),
                   ),
                   const SizedBox(height: 16),
@@ -445,107 +458,152 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
 
                   // 4 trạng thái bài viết
-                  _ArticleStatusOption(
-                    value: 'DANG_VIET',
-                    label: 'Đang viết',
-                    description:
-                        'Tác giả đang biên soạn và hoàn thiện nội dung bản thảo',
-                    groupValue: selectedStatus,
-                    color: Colors.blueGrey,
-                    onChanged: (v) => setDialogState(() => selectedStatus = v),
-                  ),
-                  _ArticleStatusOption(
-                    value: 'DANG_PHAN_BIEN',
-                    label: 'Đang phản biện',
-                    description:
-                        'Đã nộp tòa soạn/hội thảo và đang trong quá trình phản biện',
-                    groupValue: selectedStatus,
-                    color: Colors.indigo,
-                    onChanged: (v) => setDialogState(() => selectedStatus = v),
-                  ),
-                  _ArticleStatusOption(
-                    value: 'DA_NHAN_XET',
-                    label: 'Đã nhận xét',
-                    description:
-                        'Bài viết đã nhận được nhận xét hoặc phản hồi chuyên môn',
-                    groupValue: selectedStatus,
-                    color: Colors.teal,
-                    onChanged: (v) => setDialogState(() => selectedStatus = v),
-                  ),
-                  _ArticleStatusOption(
-                    value: 'DA_XUAT_BAN',
-                    label: 'Đã xuất bản',
-                    description:
-                        'Đã phát hành chính thức trên tạp chí hoặc kỷ yếu',
-                    groupValue: selectedStatus,
-                    color: const Color(0xFF2E7D32),
-                    onChanged: (v) => setDialogState(() => selectedStatus = v),
-                  ),
+                  if (allowedStage('DANG_VIET'))
+                    _ArticleStatusOption(
+                      value: 'DANG_VIET',
+                      label: 'Đang viết',
+                      description:
+                          'Tác giả đang biên soạn và hoàn thiện nội dung bản thảo',
+                      groupValue: selectedStatus,
+                      color: Colors.blueGrey,
+                      onChanged: (v) =>
+                          setDialogState(() => selectedStatus = v),
+                    ),
+                  if (allowedStage('DANG_PHAN_BIEN'))
+                    _ArticleStatusOption(
+                      value: 'DANG_PHAN_BIEN',
+                      label: 'Đang phản biện',
+                      description:
+                          'Đã nộp tòa soạn/hội thảo và đang trong quá trình phản biện',
+                      groupValue: selectedStatus,
+                      color: Colors.indigo,
+                      onChanged: (v) =>
+                          setDialogState(() => selectedStatus = v),
+                    ),
+                  if (allowedStage('DA_NHAN_XET'))
+                    _ArticleStatusOption(
+                      value: 'DA_NHAN_XET',
+                      label: 'Đã nhận xét',
+                      description:
+                          'Bài viết đã nhận được nhận xét hoặc phản hồi chuyên môn',
+                      groupValue: selectedStatus,
+                      color: Colors.teal,
+                      onChanged: (v) =>
+                          setDialogState(() => selectedStatus = v),
+                    ),
+                  if (allowedStage('DA_XUAT_BAN'))
+                    _ArticleStatusOption(
+                      value: 'DA_XUAT_BAN',
+                      label: 'Đã xuất bản',
+                      description:
+                          'Đã phát hành chính thức trên tạp chí hoặc kỷ yếu',
+                      groupValue: selectedStatus,
+                      color: const Color(0xFF2E7D32),
+                      onChanged: (v) =>
+                          setDialogState(() => selectedStatus = v),
+                    ),
 
-                  const SizedBox(height: 12),
-                  const Divider(),
-                  const SizedBox(height: 8),
-
-                  // Ngày công bố (DatePicker)
-                  ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text(
-                      'Ngày công bố',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                  DropdownButtonFormField<int>(
+                    initialValue: selectedEvidenceId,
+                    decoration: const InputDecoration(
+                      labelText: 'Minh chứng cho đề nghị',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: evidences.map((raw) {
+                      final evidence = raw as Map<String, dynamic>;
+                      return DropdownMenuItem<int>(
+                        value: (evidence['id'] as num).toInt(),
+                        child: Text(evidence['originalFileName'].toString()),
+                      );
+                    }).toList(),
+                    onChanged: (value) =>
+                        setDialogState(() => selectedEvidenceId = value),
+                  ),
+                  if (evidences.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Chưa có minh chứng. Hãy tải minh chứng trên Web trước khi gửi đề nghị.',
+                        style: TextStyle(color: Colors.red),
                       ),
                     ),
-                    subtitle: Text(
-                      selectedDate != null
-                          ? '${selectedDate!.day.toString().padLeft(2, '0')}/${selectedDate!.month.toString().padLeft(2, '0')}/${selectedDate!.year}'
-                          : 'Chưa chọn ngày',
+
+                  if (selectedStatus == 'DA_XUAT_BAN') ...[
+                    const SizedBox(height: 12),
+                    const Divider(),
+                    const SizedBox(height: 8),
+
+                    // Ngày công bố (DatePicker)
+                    ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text(
+                        'Ngày công bố',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      subtitle: Text(
+                        selectedDate != null
+                            ? '${selectedDate!.day.toString().padLeft(2, '0')}/${selectedDate!.month.toString().padLeft(2, '0')}/${selectedDate!.year}'
+                            : 'Chưa chọn ngày',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (selectedDate != null)
+                            IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              onPressed: () =>
+                                  setDialogState(() => selectedDate = null),
+                            ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.calendar_month,
+                              color: Color(0xFF177158),
+                            ),
+                            onPressed: () async {
+                              final picked = await showDatePicker(
+                                context: ctx,
+                                initialDate: selectedDate ?? DateTime.now(),
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime(2035),
+                              );
+                              if (picked != null) {
+                                setDialogState(() => selectedDate = picked);
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Nơi công bố
+                    TextField(
+                      controller: pubInfoController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nơi công bố / Tạp chí / Hội thảo',
+                        hintText: 'Nhập tên tạp chí, nhà xuất bản, hội thảo...',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                      ),
                       style: const TextStyle(fontSize: 13),
                     ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (selectedDate != null)
-                          IconButton(
-                            icon: const Icon(Icons.clear, size: 18),
-                            onPressed: () =>
-                                setDialogState(() => selectedDate = null),
-                          ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.calendar_month,
-                            color: Color(0xFF177158),
-                          ),
-                          onPressed: () async {
-                            final picked = await showDatePicker(
-                              context: ctx,
-                              initialDate: selectedDate ?? DateTime.now(),
-                              firstDate: DateTime(2000),
-                              lastDate: DateTime(2035),
-                            );
-                            if (picked != null) {
-                              setDialogState(() => selectedDate = picked);
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Nơi công bố
+                  ],
+                  const SizedBox(height: 12),
                   TextField(
-                    controller: pubInfoController,
+                    controller: noteController,
+                    maxLength: 1000,
+                    maxLines: 3,
                     decoration: const InputDecoration(
-                      labelText: 'Nơi công bố / Tạp chí / Hội thảo',
-                      hintText: 'Nhập tên tạp chí, nhà xuất bản, hội thảo...',
+                      labelText: 'Ghi chú đề nghị',
                       border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
                     ),
-                    style: const TextStyle(fontSize: 13),
                   ),
 
                   const SizedBox(height: 20),
@@ -582,6 +640,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                         'Vui lòng chọn trạng thái bài viết.',
                                       );
                                     }
+                                    if (selectedEvidenceId == null) {
+                                      throw const FormatException(
+                                        'Phải có minh chứng trước khi chuyển bước bài viết.',
+                                      );
+                                    }
                                     if (selectedStatus == 'DA_XUAT_BAN' &&
                                         selectedDate == null) {
                                       throw const FormatException(
@@ -589,18 +652,23 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       );
                                     }
                                     final payload = <String, dynamic>{
+                                      'toStatus': selectedStatus,
+                                      'evidenceId': selectedEvidenceId,
+                                      'note': noteController.text.trim().isEmpty
+                                          ? null
+                                          : noteController.text.trim(),
                                       'publicationInfo':
                                           pubInfoController.text.trim().isEmpty
                                           ? null
                                           : pubInfoController.text.trim(),
                                       'publishedDate': dateStr,
-                                      'articleStatus': selectedStatus,
                                     };
 
-                                    await widget.client.updateArticleProgress(
-                                      widget.productId,
-                                      payload,
-                                    );
+                                    await widget.client
+                                        .createArticleProgressRequest(
+                                          widget.productId,
+                                          payload,
+                                        );
                                     if (ctx.mounted) Navigator.pop(ctx);
                                     if (mounted) {
                                       ScaffoldMessenger.of(
@@ -608,7 +676,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       ).showSnackBar(
                                         const SnackBar(
                                           content: Text(
-                                            'Cập nhật trạng thái bài viết thành công',
+                                            'Đã gửi đề nghị cập nhật trạng thái',
                                           ),
                                           backgroundColor: Color(0xFF2E7D32),
                                         ),
@@ -627,7 +695,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     });
                                   }
                                 },
-                          child: Text(busy ? 'Đang lưu…' : 'Lưu cập nhật'),
+                          child: Text(busy ? 'Đang gửi…' : 'Gửi đề nghị'),
                         ),
                       ),
                     ],
@@ -704,6 +772,68 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
   }
 
+  Future<void> _reviewProgressRequest(
+    Map<String, dynamic> request,
+    String action,
+  ) async {
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          action == 'APPROVE' ? 'Xác nhận đề nghị' : 'Trả lại đề nghị',
+        ),
+        content: TextField(
+          controller: controller,
+          maxLength: 1000,
+          maxLines: 3,
+          decoration: InputDecoration(
+            labelText: action == 'REJECT' ? 'Lý do trả lại *' : 'Nhận xét',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Xác nhận'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (action == 'REJECT' && controller.text.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Phải nhập lý do trả lại.')),
+        );
+      }
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      await widget.client
+          .reviewArticleProgressRequest((request['id'] as num).toInt(), {
+            'action': action,
+            'comment': controller.text.trim().isEmpty
+                ? null
+                : controller.text.trim(),
+          });
+      await _load();
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } finally {
+      controller.dispose();
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final title = _product != null
@@ -763,6 +893,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final coAuthors = p['coAuthors'] as List<dynamic>? ?? [];
     final evidences = p['evidences'] as List<dynamic>? ?? [];
     final canUpdateProgress = _canUpdateArticleProgress();
+    final pendingProgress = _pendingProgressRequest();
+    final canReviewProgress =
+        pendingProgress != null &&
+        _currentUserRoles.any(
+          (role) =>
+              role == 'QUAN_TRI' || role == pendingProgress['requiredRole'],
+        );
+    final canEdit = _canEdit();
     final disabledReason = _getEditDisabledReason();
     final articleStatus = p['articleStatus'] as String?;
 
@@ -860,28 +998,29 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Trạng thái bài viết',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
-                    if (articleStatus != null && articleStatus.isNotEmpty)
-                      StatusChip(
-                        label: articleStatusLabel(articleStatus),
-                        color: articleStatusColor(articleStatus),
-                      )
-                    else
+                if (p['productTypeCode'] == 'BAI_BAO')
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
                       const Text(
-                        'Chưa cập nhật',
-                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                        'Trạng thái bài viết',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
                       ),
-                  ],
-                ),
+                      if (articleStatus != null && articleStatus.isNotEmpty)
+                        StatusChip(
+                          label: articleStatusLabel(articleStatus),
+                          color: articleStatusColor(articleStatus),
+                        )
+                      else
+                        const Text(
+                          'Chưa cập nhật',
+                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                        ),
+                    ],
+                  ),
                 const SizedBox(height: 12),
 
                 // Hành động chỉnh sửa hoặc thông báo khóa quyền
@@ -903,12 +1042,52 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       onPressed: _showUpdateArticleStatusDialog,
                       icon: const Icon(Icons.edit_outlined, size: 20),
                       label: const Text(
-                        'Cập nhật tiến độ bài viết',
+                        'Đề nghị cập nhật trạng thái',
                         textAlign: TextAlign.center,
                       ),
                     ),
                   ),
                   const SizedBox(height: 10),
+                ],
+                if (pendingProgress != null) ...[
+                  Text(
+                    'Đang chờ ${pendingProgress['requiredRole'] == 'TRUONG_BO_MON' ? 'Trưởng bộ môn' : 'Trưởng khoa'} xác nhận: '
+                    '${articleStatusLabel(pendingProgress['fromStatus'] as String?)} → ${articleStatusLabel(pendingProgress['toStatus'] as String?)}.',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 6),
+                  Text('Minh chứng: ${pendingProgress['evidenceName']}'),
+                  if (pendingProgress['note'] != null)
+                    Text('Ghi chú: ${pendingProgress['note']}'),
+                  if (canReviewProgress) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () => _reviewProgressRequest(
+                              pendingProgress,
+                              'APPROVE',
+                            ),
+                            child: const Text('Xác nhận'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => _reviewProgressRequest(
+                              pendingProgress,
+                              'REJECT',
+                            ),
+                            child: const Text('Trả lại'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                ],
+                if (canEdit) ...[
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
@@ -970,6 +1149,27 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
         ),
         const SizedBox(height: 12),
+        if (_progressRequests.any((item) => item['status'] != 'CHO_DUYET')) ...[
+          SectionCard(
+            title: 'Lịch sử đề nghị tiến độ',
+            children: _progressRequests
+                .where((item) => item['status'] != 'CHO_DUYET')
+                .map((raw) {
+                  final item = Map<String, dynamic>.from(raw as Map);
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      '${articleStatusLabel(item['fromStatus'] as String?)} → ${articleStatusLabel(item['toStatus'] as String?)}',
+                    ),
+                    subtitle: Text(
+                      '${item['status'] == 'DA_DUYET' ? 'Đã xác nhận' : 'Đã trả lại'}${item['reviewComment'] == null ? '' : ' · ${item['reviewComment']}'}',
+                    ),
+                  );
+                })
+                .toList(),
+          ),
+          const SizedBox(height: 12),
+        ],
 
         // ── Thông tin chi tiết sản phẩm ──
         SectionCard(

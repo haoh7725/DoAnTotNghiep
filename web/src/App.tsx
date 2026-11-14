@@ -13,8 +13,7 @@ import { ResearchNorms } from './ResearchNorms'
 import { ResearchTargets } from './ResearchTargets'
 import JournalConferences from './JournalConferences'
 import Notifications from './Notifications'
-import { Evaluations } from './Evaluations'
-import { EmulationClassificationRules } from './EmulationClassificationRules'
+import { AnnualEvaluations as Evaluations } from './AnnualEvaluations'
 import { ManagementProgressDashboard } from './ManagementProgressDashboard'
 import './App.css'
 
@@ -34,36 +33,36 @@ export default function App() {
   const [retry, setRetry] = useState(0)
   const [hasPersonalLecturerProfile, setHasPersonalLecturerProfile] = useState(false)
   const administrator = user?.roles.some(p => p.role === 'QUAN_TRI' && p.scope === 'TOAN_TRUONG') ?? false
-  const executive = user?.roles.some(p => p.role === 'BAN_GIAM_HIEU') ?? false
-  const officeAccount = user?.roles.some(p => ['PHONG_QLKH', 'BAN_GIAM_HIEU', 'QUAN_TRI'].includes(p.role)) ?? false
+  const executive = false
+  const officeAccount = user?.roles.some(p => ['QUAN_TRI'].includes(p.role)) ?? false
   const personalProfileCandidate = !officeAccount && (user?.roles.some(p => ['GIANG_VIEN', 'TRUONG_BO_MON', 'TRUONG_KHOA'].includes(p.role)) ?? false)
-  const manager = user?.roles.some(p => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'BAN_GIAM_HIEU', 'QUAN_TRI'].includes(p.role)) ?? false
-  const canViewResearchNorms = user?.roles.some(p => ['GIANG_VIEN', 'TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'BAN_GIAM_HIEU'].includes(p.role)) ?? false
-  const canEditResearchNorms = user?.roles.some(p => p.role === 'PHONG_QLKH' && p.scope === 'TOAN_TRUONG') ?? false
+  const manager = user?.roles.some(p => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'TRUONG_KHOA', 'REMOVED_BOARD', 'QUAN_TRI'].includes(p.role)) ?? false
+  const canViewResearchNorms = false
+  const canEditResearchNorms = user?.roles.some(p => p.role === 'TRUONG_KHOA' && p.scope === 'TOAN_TRUONG') ?? false
   const canViewResearchTargets = user?.roles.some(p =>
-    ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'BAN_GIAM_HIEU', 'QUAN_TRI'].includes(p.role)
+    ['TRUONG_BO_MON', 'TRUONG_KHOA', 'TRUONG_KHOA', 'REMOVED_BOARD', 'QUAN_TRI'].includes(p.role)
   ) ?? false
 
   const canEditResearchTargets = user?.roles.some(p =>
-    ['PHONG_QLKH', 'QUAN_TRI'].includes(p.role)
+    ['TRUONG_KHOA', 'QUAN_TRI'].includes(p.role)
   ) ?? false
 
   const canEditResearchAllocations = user?.roles.some(p =>
     ['TRUONG_KHOA', 'QUAN_TRI'].includes(p.role)
   ) ?? false
   const canViewJournalConferences = user?.roles.some(p =>
-    ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'BAN_GIAM_HIEU', 'QUAN_TRI'].includes(p.role)
+    ['TRUONG_BO_MON', 'TRUONG_KHOA', 'TRUONG_KHOA', 'REMOVED_BOARD', 'QUAN_TRI'].includes(p.role)
   ) ?? false
 
   const canEditJournalConferences = user?.roles.some(p =>
-    ['PHONG_QLKH', 'QUAN_TRI'].includes(p.role)
+    ['TRUONG_KHOA', 'QUAN_TRI'].includes(p.role)
   ) ?? false
 
   const canEvaluate = user?.roles.some(p =>
-    p.role === 'PHONG_QLKH' || p.role === 'QUAN_TRI'
+    p.role === 'TRUONG_KHOA' || p.role === 'QUAN_TRI'
   ) ?? false
   const canManageConversionRules = user?.roles.some(p =>
-    p.role === 'PHONG_QLKH' || p.role === 'QUAN_TRI'
+    p.role === 'TRUONG_KHOA' || p.role === 'QUAN_TRI'
   ) ?? false
   const targetProgressManager = user?.roles.some(p => ['TRUONG_BO_MON', 'TRUONG_KHOA'].includes(p.role)) ?? false
   useEffect(() => {
@@ -237,9 +236,9 @@ export default function App() {
           Thông báo
         </button>
 
-        {(user.roles.some(r => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'QUAN_TRI'].includes(r.role)) || canBrowseLecturers(user) || (canViewResearchNorms && manager) || canViewResearchTargets || canViewJournalConferences) && <p className="nav-section">QUẢN LÝ, ĐÁNH GIÁ & BÁO CÁO</p>}
+        {(user.roles.some(r => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'TRUONG_KHOA', 'QUAN_TRI'].includes(r.role)) || canBrowseLecturers(user) || (canViewResearchNorms && manager) || canViewResearchTargets || canViewJournalConferences) && <p className="nav-section">QUẢN LÝ, ĐÁNH GIÁ & BÁO CÁO</p>}
         {user.roles.some(r =>
-          ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'QUAN_TRI']
+          ['TRUONG_BO_MON', 'TRUONG_KHOA', 'TRUONG_KHOA', 'QUAN_TRI']
             .includes(r.role)
         ) && (
             <button
@@ -250,7 +249,6 @@ export default function App() {
             </button>
           )}
         {(canEvaluate || manager) && <button className={tab === 'evaluations' ? 'active' : ''} onClick={() => setTab('evaluations')}>{canEvaluate ? 'Đánh giá thi đua' : executive ? 'Kết quả thi đua toàn trường' : manager ? 'Kết quả thi đua đơn vị' : 'Kết quả thi đua của tôi'}</button>}
-        {canEvaluate && <button className={tab === 'emulation-rules' ? 'active' : ''} onClick={() => setTab('emulation-rules')}>Quy chế xếp loại</button>}
         {canBrowseLecturers(user) && <button className={tab === 'lecturers' ? 'active' : ''} onClick={() => setTab('lecturers')}>Hồ sơ giảng viên</button>}
         {canViewResearchNorms && manager && <button className={tab === 'research-norms' ? 'active' : ''} onClick={() => setTab('research-norms')}>Định mức NCKH</button>}
         {canViewResearchTargets && (
@@ -320,14 +318,13 @@ export default function App() {
 
       {tab === 'product-reviews' &&
         user.roles.some(r =>
-          ['TRUONG_BO_MON', 'TRUONG_KHOA', 'PHONG_QLKH', 'QUAN_TRI']
+          ['TRUONG_BO_MON', 'TRUONG_KHOA', 'TRUONG_KHOA', 'QUAN_TRI']
             .includes(r.role)
         ) && (
           <ProductReviewWorkspace user={user} initialProductId={reviewProductToOpen} />
         )
       }
       {tab === 'evaluations' && <><Evaluations user={user} lookups={lookups} />{!manager && canViewResearchNorms && <details className="panel"><summary>Định mức NCKH của tôi</summary><ResearchNorms academicYears={lookups?.academicYears ?? []} canEdit={false} /></details>}</>}
-      {tab === 'emulation-rules' && (canEvaluate ? <EmulationClassificationRules years={lookups?.academicYears ?? []} /> : <p role="alert">Bạn không có quyền cấu hình quy chế.</p>)}
       {tab === 'lecturers' && (canBrowseLecturers(user) ? <LecturerDirectory user={user} lookups={lookups} /> : <p role="alert">Bạn không có quyền xem danh sách giảng viên.</p>)}
       {tab === 'research-norms' && (canViewResearchNorms ? <ResearchNorms academicYears={lookups?.academicYears ?? []} canEdit={canEditResearchNorms} /> : <p role="alert">Bạn không có quyền xem định mức NCKH.</p>)}
       {tab === 'research-targets' && (
@@ -346,7 +343,7 @@ export default function App() {
           : <p role="alert">Bạn không có quyền xem danh mục nơi công bố bài báo.</p>
       )}
       {tab === 'admin' && (administrator ? <AdminPanel currentAccountId={user.id} onChanged={() => setRetry(x => x + 1)} /> : <p role="alert">Bạn không có quyền quản trị.</p>)}
-      {tab === 'conversion-rules' && (canManageConversionRules ? <ConversionRules /> : <p role="alert">Chỉ Phòng QLKH hoặc quản trị viên được cấu hình quy định quy đổi.</p>)}
+      {tab === 'conversion-rules' && (canManageConversionRules ? <ConversionRules /> : <p role="alert">Chỉ Trưởng khoa hoặc quản trị viên được cấu hình quy định quy đổi.</p>)}
       {tab === 'reports' && (manager ? <ResearchReports lookups={lookups} /> : <p role="alert">Bạn không có quyền xem báo cáo.</p>)}
       {tab === 'password' && <PasswordForm onChanged={() => { setUser(null); setError('Đã đổi mật khẩu. Vui lòng đăng nhập lại.'); setTab('overview') }} />}
     </main>

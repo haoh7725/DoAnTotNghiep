@@ -35,7 +35,17 @@ public sealed class ResearchTargetsController(
             .ToListAsync(cancellationToken);
         var visible = result.Where(item => currentUser.CanAccess(item.FacultyId, null) ||
             allocatedUnits.Any(x => x.TargetId == item.Id && currentUser.CanAccess(x.FacultyId, x.DepartmentId))).ToList();
-        return Ok(visible);
+        var scoped = new List<ResearchTargetResponse>();
+        foreach (var item in visible)
+        {
+            var departmentIds = allocatedUnits.Where(u => u.TargetId == item.Id && currentUser.CanAccess(u.FacultyId, u.DepartmentId)).Select(u => u.DepartmentId).ToList();
+            var visibleCount = currentUser.CanAccess(item.FacultyId, null) ? item.AssignedArticleCount :
+                await db.ResearchTargetAllocations.Where(a => a.ResearchTargetId == item.Id)
+                    .Where(a => departmentIds.Contains(a.DepartmentId))
+                    .SumAsync(a => a.AllocatedArticleCount, cancellationToken);
+            scoped.Add(item with { AssignedArticleCount = visibleCount });
+        }
+        return Ok(scoped);
     }
 
     [HttpGet("{id:long}")]
@@ -50,12 +60,16 @@ public sealed class ResearchTargetsController(
 
         if (!await CanReadTargetAsync(result.Id, result.FacultyId, cancellationToken))
             throw new ForbiddenException("Không có quyền xem chỉ tiêu NCKH này.");
-
+        if (!currentUser.CanAccess(result.FacultyId, null))
+        {
+            var allocations = await db.ResearchTargetAllocations.AsNoTracking().Where(a => a.ResearchTargetId == id).ToListAsync(cancellationToken);
+            result = result with { AssignedArticleCount = allocations.Where(a => currentUser.CanAccess(a.FacultyId, a.DepartmentId)).Sum(a => a.AllocatedArticleCount) };
+        }
         return Ok(result);
     }
 
     [HttpPost]
-    [Authorize(Roles = "PHONG_QLKH,QUAN_TRI")]
+    [Authorize(Roles = "TRUONG_KHOA,QUAN_TRI")]
     public async Task<ActionResult<ResearchTargetResponse>> Create(
         CreateResearchTargetRequest request,
         CancellationToken cancellationToken)
@@ -96,7 +110,7 @@ public sealed class ResearchTargetsController(
     }
 
     [HttpPut("{id:long}")]
-    [Authorize(Roles = "PHONG_QLKH,QUAN_TRI")]
+    [Authorize(Roles = "TRUONG_KHOA,QUAN_TRI")]
     public async Task<ActionResult<ResearchTargetResponse>> Update(
         long id,
         UpdateResearchTargetRequest request,
@@ -109,7 +123,7 @@ public sealed class ResearchTargetsController(
             throw new NotFoundException("Không tìm thấy loại sản phẩm hoặc loại đã ngừng sử dụng.");
         if (!currentUser.CanAccess(target.FacultyId, null))
             throw new ForbiddenException("Không có quyền cập nhật chỉ tiêu của khoa này.");
-        if (target.Status != "CHO_TIEP_NHAN")
+        if (target.Status is not ("CHO_TIEP_NHAN" or "DA_TIEP_NHAN"))
             throw new BusinessRuleException("Chỉ tiêu đã được Trưởng khoa tiếp nhận hoặc công bố nên không thể sửa. Hãy hủy và tạo lại chỉ tiêu nếu cần điều chỉnh.");
         var year = await db.AcademicYears.AsNoTracking()
             .SingleAsync(x => x.Id == target.AcademicYearId, cancellationToken);
@@ -174,7 +188,7 @@ public sealed class ResearchTargetsController(
     public async Task<IActionResult> Cancel(long id, CancellationToken cancellationToken)
     {
         var target = await GetManageableTarget(id, cancellationToken);
-        if (target.Status != "CHO_TIEP_NHAN")
+        if (target.Status is not ("CHO_TIEP_NHAN" or "DA_TIEP_NHAN"))
             throw new BusinessRuleException("Chỉ được hủy chỉ tiêu khi Trưởng khoa chưa tiếp nhận.");
         if (await db.ResearchTargetAllocations.AnyAsync(x => x.ResearchTargetId == id, cancellationToken))
             throw new BusinessRuleException("Không thể hủy chỉ tiêu đã có phân bổ.");

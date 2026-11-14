@@ -22,6 +22,32 @@ public sealed class BusinessRuleHardeningTests
         Assert.Throws<BusinessRuleException>(() => ArticleProgressPolicy.ValidateTransition("DA_NHAN_XET", "DANG_PHAN_BIEN", 1));
     }
 
+    [Theory]
+    [InlineData("DANG_VIET", "DANG_PHAN_BIEN", Roles.DepartmentHead)]
+    [InlineData("DANG_PHAN_BIEN", "DA_NHAN_XET", Roles.FacultyDean)]
+    [InlineData("DA_NHAN_XET", "DA_XUAT_BAN", Roles.FacultyDean)]
+    public void Lecturer_request_routes_each_next_step_to_the_right_reviewer(
+        string current, string next, string role)
+    {
+        Assert.Equal(next, ArticleProgressRequestPolicy.Next(current));
+        Assert.Equal(role, ArticleProgressRequestPolicy.RequiredRole(next));
+    }
+
+    [Fact]
+    public void Progress_request_is_auditable_and_requires_a_reason_when_rejected()
+    {
+        var request = new ArticleProgressRequest(1, 2, "DANG_VIET", "DANG_PHAN_BIEN",
+            3, Roles.DepartmentHead, null, "Tạp chí", "Đã nộp bản thảo");
+
+        Assert.Equal("CHO_DUYET", request.Status);
+        Assert.Throws<InvalidOperationException>(() => request.Reject(4, ""));
+        request.Reject(4, "Minh chứng chưa thể hiện ngày nộp");
+
+        Assert.Equal("TRA_LAI", request.Status);
+        Assert.Equal(4, request.ReviewedByAccountId);
+        Assert.Equal("Minh chứng chưa thể hiện ngày nộp", request.ReviewComment);
+    }
+
     [Fact]
     public void Article_progress_can_change_after_submission_without_unlocking_content()
     {

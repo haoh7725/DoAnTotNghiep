@@ -40,6 +40,16 @@ public static class DemoDataSeeder
         }
 
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        if (configuration["Seed:OperationalDatasetVersion"] == CleanOperationalDataSeeder.Version)
+        {
+            var cleanEnvironment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
+            var cleanStorage = scope.ServiceProvider.GetRequiredService<IFileStorage>();
+            await CleanOperationalDataSeeder.SeedAsync(db, cleanStorage, cleanEnvironment, cancellationToken);
+            logger.LogInformation("Đã bảo đảm bộ dữ liệu vận hành {Version}.", CleanOperationalDataSeeder.Version);
+            return;
+        }
+        if (await db.Database.SqlQueryRaw<int>("SELECT COUNT(*)::int AS \"Value\" FROM nckh.cau_hinh_nghiep_vu WHERE ma='faculty_workflow_2023'").SingleAsync(cancellationToken) > 0)
+            return;
         var existingMarker = await db.Accounts.SingleOrDefaultAsync(
             x => x.Username == MarkerUsername, cancellationToken);
         if (existingMarker is not null)

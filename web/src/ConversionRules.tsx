@@ -31,7 +31,7 @@ export function ConversionRules() {
   useEffect(() => {
     let active = true; setLoading(true)
     Promise.all([api<Rule[]>('/admin/conversion-rules'), api<ProductGroup[]>('/product-types'), api<Classification[]>('/product-classifications')])
-      .then(([r, t, c]) => { if (active) { setRules(r); setTypes(t); setClasses(c) } })
+      .then(([r, t, c]) => { if (active) { setRules(r.filter(rule => rule.code.startsWith('QD2023_'))); setTypes(t); setClasses(c) } })
       .catch(e => { if (active) setError(e.message) }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [revision])
@@ -42,6 +42,7 @@ export function ConversionRules() {
   }
   async function save(e: FormEvent) {
     e.preventDefault(); if (!edit) return
+    if (!edit.code.startsWith('QD2023_') || edit.unit !== 'GIO') { setError('Quy định hiện hành phải dùng mã QD2023_ và đơn vị giờ NCKH.'); return }
     if (edit.authorSharingMode === 'HE_SO' && !edit.authorCoefficients.length) { setError('Vui lòng nhập ít nhất hệ số tác giả chính cho cách chia hệ số.'); return }
     setBusy(true); setError('')
     try { await api(`/admin/conversion-rules${edit.id ? `/${edit.id}` : ''}`, edit.id ? 'PUT' : 'POST', edit); setEdit(null); setRevision(x => x + 1); setMessage('Đã lưu quy định. Kết quả đã chốt được giữ nguyên.') }
@@ -55,7 +56,7 @@ export function ConversionRules() {
   const className = (id: number | null) => classes.find(x => x.id === id)?.name ?? 'Quy định chung cho nhóm'
   return <div className="conversion-page">
     <p className="eyebrow">QUY ĐỔI VÀ ĐÁNH GIÁ</p><h1>Quy định quy đổi NCKH</h1>
-    <p className="muted">Chọn nhóm → phân loại → cấu hình mức giờ hoặc điểm và cách chia tác giả theo văn bản của trường.</p>
+    <p className="muted">Bảng giờ NCKH 2023 theo 4 nhóm sản phẩm. Quy định cũ được giữ trong kết quả lịch sử; cấu hình hiện hành dùng mã bắt đầu QD2023_ và đơn vị giờ.</p>
     <div className="actions conversion-tabs"><button className={tab === 'rules' ? 'primary' : ''} onClick={() => setTab('rules')}>Quy định quy đổi</button><button className={tab === 'catalog' ? 'primary' : ''} onClick={() => { setTab('catalog'); setEdit(null) }}>Danh mục nhóm và phân loại</button></div>
     {message && <p role="status">{message}</p>}
     {error && <p className="alert" role="alert">{error}</p>}
@@ -71,7 +72,7 @@ export function ConversionRules() {
           <label className="wide">Tên quy định<input required maxLength={300} value={edit.name} onChange={e => change({ name: e.target.value })} /></label>
         </div><h3>Mức quy đổi và hiệu lực</h3><div className="form-grid">
           <label>Mức gốc của một công trình<input type="number" min="0" step="0.0001" required value={edit.conversionValue} onChange={e => change({ conversionValue: Number(e.target.value) })} /><small>Nhập theo văn bản căn cứ, chưa chia cho tác giả.</small></label>
-          <label>Đơn vị<select value={edit.unit} onChange={e => change({ unit: e.target.value })}><option value="GIO">Giờ NCKH</option><option value="DIEM">Điểm NCKH</option></select><small>Mỗi quy định chỉ có một đơn vị. Điểm cần căn cứ riêng.</small></label>
+          <label>Đơn vị<input readOnly value="Giờ NCKH" /><small>Đánh giá năm hiện hành sử dụng giờ và ngưỡng 586 giờ.</small></label>
           <label>Hiệu lực từ<input type="date" required value={edit.effectiveFrom} onChange={e => change({ effectiveFrom: e.target.value })} /></label>
           <label>Hiệu lực đến<input type="date" min={edit.effectiveFrom} value={edit.effectiveTo ?? ''} onChange={e => change({ effectiveTo: e.target.value || null })} /></label>
           <label className="wide">Văn bản căn cứ<input required maxLength={512} value={edit.legalBasis} onChange={e => change({ legalBasis: e.target.value })} placeholder="Số quyết định, ngày ban hành, điều/mục áp dụng" /></label>

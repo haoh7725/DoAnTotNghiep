@@ -20,11 +20,13 @@ public sealed class AccountsController(
     private static object View(Account x) => new { x.Id, x.Username, x.FullName, x.Email, x.Status, x.CreatedAt };
 
     [HttpGet]
-    public async Task<IActionResult> List(int page = 1, int pageSize = 20, CancellationToken ct = default)
+    public async Task<IActionResult> List(int page = 1, int pageSize = 20, string? search = null, CancellationToken ct = default)
     {
         if (page is < 1 or > 1_000_000 || pageSize is < 1 or > 100) return BadRequest();
-        var total = await db.Accounts.CountAsync(ct);
-        var items = await db.Accounts.AsNoTracking().OrderBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize)
+        var query = db.Accounts.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(search)) { var term = search.Trim().ToLower(); query = query.Where(x => x.Username.ToLower().Contains(term) || x.FullName.ToLower().Contains(term) || x.Email != null && x.Email.ToLower().Contains(term)); }
+        var total = await query.CountAsync(ct);
+        var items = await query.OrderBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize)
             .Select(x => new { x.Id, x.Username, x.FullName, x.Email, x.Status, x.CreatedAt }).ToListAsync(ct);
         return Ok(new { items, total, page, pageSize });
     }

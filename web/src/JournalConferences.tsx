@@ -186,7 +186,7 @@ export default function JournalConferences({ canEdit }: Props) {
       <p className="eyebrow">QUẢN LÝ NGHIÊN CỨU KHOA HỌC</p>
       <h1>Nơi công bố bài báo</h1>
       <p>
-        Quản lý nơi công bố bài báo. Admin và Phòng QLKH có thể nhập thêm tên tạp chí hoặc hội nghị mới.
+        Quản lý nơi công bố bài báo. Admin và Trưởng khoa có thể nhập thêm tên tạp chí hoặc hội nghị mới.
         Nhóm sản phẩm và phân loại tính giờ/điểm được quản lý riêng trong Quy định quy đổi.
       </p>
 

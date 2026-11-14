@@ -19,11 +19,12 @@ public sealed class LecturerCommitmentCapacityTests
     }
 
     [Fact]
-    public void EnsureCanAssign_RejectsCountAboveAvailableCapacity()
+    public void Assignment_does_not_require_a_commitment()
     {
         var capacity = new LecturerCommitmentCapacity(3, 1);
         capacity.EnsureCanAssign(2);
-        var error = Assert.Throws<BusinessRuleException>(() => capacity.EnsureCanAssign(3));
-        Assert.Contains("chỉ còn có thể nhận 2 bài", error.Message);
+        capacity.EnsureCanAssign(3);
+        new LecturerCommitmentCapacity(0, 0).EnsureCanAssign(10);
+        Assert.Throws<BusinessRuleException>(() => capacity.EnsureCanAssign(0));
     }
 }

@@ -9,6 +9,12 @@ namespace ResearchManagement.Domain.Entities;
 /// </summary>
 public sealed class Product : BaseEntity
 {
+    public decimal RecognitionQuantity { get; private set; } = 1m;
+    public void SetRecognitionQuantity(decimal value)
+    {
+        if (value <= 0 || value > 10000) throw new ArgumentOutOfRangeException(nameof(value));
+        RecognitionQuantity = value;
+    }
     public string? WorkIdentifier { get; private set; }
 
     public void SetWorkIdentifier(string? value)

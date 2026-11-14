@@ -9,20 +9,21 @@ import type { Classification } from './ProductTaxonomy'
 type Summary = { id: number; researchPlanItemId: number; title: string; articleStatus: string | null; status: string; scoreEquivalent: number | null; updatedAt: string; createdAt: string }
 type CoAuthor = { id: number; lecturerId: number; lecturerFullName: string; lecturerCode: string | null; displayOrder: number; authorRole: string }
 type Evidence = { id: number; originalFileName: string; fileSizeBytes: number; description: string | null; uploadedAt: string }
-type Product = Summary & { workIdentifier: string | null; requiredReviewRole: string | null; canReview: boolean; canEdit: boolean; productTypeId: number; productTypeCode: string; submittedByLecturerId: number; submittedByLecturerFullName: string; description: string | null; publicationInfo: string | null; publishedDate: string | null; journalIndex: string | null; journalClassification: string | null; projectLevel: string | null; researchTargetId: number | null; journalConferenceId: number | null; externalAuthorCount: number; classificationId: number | null; coAuthors: CoAuthor[]; evidences: Evidence[] }
+type Product = Summary & { recognitionQuantity: number; workIdentifier: string | null; requiredReviewRole: string | null; canReview: boolean; canEdit: boolean; canRequestArticleProgress: boolean; productTypeId: number; productTypeCode: string; submittedByLecturerId: number; submittedByLecturerFullName: string; description: string | null; publicationInfo: string | null; publishedDate: string | null; journalIndex: string | null; journalClassification: string | null; projectLevel: string | null; researchTargetId: number | null; journalConferenceId: number | null; externalAuthorCount: number; classificationId: number | null; coAuthors: CoAuthor[]; evidences: Evidence[] }
 type PlanItem = { id: number; name: string; productTypeId: number; productTypeCode: string; productTypeName: string; academicYearCode: string; academicYearId: number; status: string }
 type LecturerOption = { id: number; fullName: string; code: string; departmentName: string }
 type AvailableTarget = { id: number; productTypeId: number; productTypeCode: string; productTypeName: string; academicYearId: number; academicYearCode: string; allocatedArticleCount: number; journalConferenceId: number | null; journalConferenceName: string | null; deadline: string | null; status: string }
 type ReviewHistory = { id: number; productId: number; actorAccountId: number; actorUsername: string; fromStatus: string; toStatus: string; comment: string | null; occurredAt: string }
 type ProductSnapshot = { productId: number; version: number; snapshotByAccountId: number; snapshotAt: string; title: string; description: string | null; publicationInfo: string | null; publishedDate: string | null; articleStatus: string | null; journalIndex: string | null; journalClassification: string | null; projectLevel: string | null; status: string }
 type PlagiarismCheck = { id: number; productId: number; evidenceId: number | null; provider: string; status: string; similarityScore: number | null; matchedSourceCount: number | null; totalWords: number | null; creditsUsed: number | null; reportUrl: string | null; errorMessage: string | null; requestedByAccountId: number; createdAt: string; startedAt: string | null; completedAt: string | null }
+type ArticleProgressRequest = { id: number; productId: number; fromStatus: string; toStatus: string; evidenceId: number; evidenceName: string; requiredRole: string; publishedDate: string | null; publicationInfo: string | null; note: string | null; status: string; requesterName: string; requestedAt: string; reviewerName: string | null; reviewComment: string | null; reviewedAt: string | null }
 
 // ── Lookup maps ────────────────────────────────────────────────────────────────
 const workflow: Record<string, string> = {
   NHAP: 'Nháp', NOP: 'Đã gửi',
   TRUONG_BO_MON_DUYET: 'Trưởng bộ môn đã duyệt',
   TRUONG_KHOA_DUYET: 'Trưởng khoa đã duyệt',
-  PHONG_QLKH_DUYET: 'Phòng QLKH đã duyệt',
+  PHONG_QLKH_DUYET: 'Trưởng khoa đã duyệt',
   DA_DUYET: 'Đã duyệt', TRA_LAI: 'Yêu cầu bổ sung',
 }
 const article: Record<string, string> = {
@@ -33,8 +34,10 @@ const article: Record<string, string> = {
 const editable = (p: Product) => ['NHAP', 'TRA_LAI'].includes(p.status)
 const canManageProductAttachments = (user: Profile | null, p: Product) =>
   p.canEdit && (user?.roles.some(r => r.role === 'GIANG_VIEN') ?? false)
+const canUploadProductEvidence = (user: Profile | null, p: Product) =>
+  canManageProductAttachments(user, p) || p.canRequestArticleProgress
 const canManagerReview = (user: Profile | null, p: Product) => !!user && p.canReview
-const needsScore = (user: Profile | null, p: Product) => !!user && p.requiredReviewRole === 'PHONG_QLKH'
+const needsScore = (user: Profile | null, p: Product) => !!user && p.requiredReviewRole === 'TRUONG_KHOA'
 type PendingProduct = {
   id: number
   title: string
@@ -42,6 +45,7 @@ type PendingProduct = {
   lecturerName: string
   departmentName: string
 }
+type PendingProgress = { id: number; productId: number; productTitle: string; requesterName: string; toStatus: string }
 
 export function ProductReviewWorkspace({ user, initialProductId }: { user: Profile; initialProductId?: number | null }) {
   const [items, setItems] = useState<PendingProduct[]>([])
@@ -60,8 +64,16 @@ export function ProductReviewWorkspace({ user, initialProductId }: { user: Profi
     setLoading(true)
     setError('')
 
-    api<PendingProduct[]>('/products/pending-review')
-      .then(data => { if (active) setItems(data) })
+    Promise.all([api<PendingProduct[]>('/products/pending-review'), api<PendingProgress[]>('/article-progress-requests/pending')])
+      .then(([products, progress]) => {
+        if (!active) return
+        const merged = new Map(products.map(item => [item.id, item]))
+        for (const request of progress) if (!merged.has(request.productId)) merged.set(request.productId, {
+          id: request.productId, title: request.productTitle, status: 'DE_NGHI_TIEN_DO',
+          lecturerName: request.requesterName, departmentName: `Đề nghị ${article[request.toStatus] ?? request.toStatus}`,
+        })
+        setItems([...merged.values()])
+      })
       .catch(err => {
         if (active) setError((err as Error).message)
       })
@@ -99,7 +111,6 @@ export function ProductReviewWorkspace({ user, initialProductId }: { user: Profi
       key={selected}
       id={selected}
       user={user}
-      allowProgressUpdate={false}
       onBack={() => {
         setSelected(null)
         setRevision(value => value + 1)
@@ -218,7 +229,7 @@ export function ProductWorkspace({ user, initialProductId, yearId }: { user?: Pr
   }, [revision, yearId])
 
   if (selected !== null)
-    return <ProductDetail id={selected} user={user ?? null} allowProgressUpdate onBack={() => { setSelected(null); setRevision(x => x + 1) }} />
+    return <ProductDetail id={selected} user={user ?? null} onBack={() => { setSelected(null); setRevision(x => x + 1) }} />
 
   return <>
     <p className="eyebrow">SẢN PHẨM KHOA HỌC</p>
@@ -297,13 +308,13 @@ function CreateProduct({ onCreated, yearId }: { onCreated: (id: number) => void;
 }
 
 // ── ProductDetail ──────────────────────────────────────────────────────────────
-function ProductDetail({ id, user, allowProgressUpdate = false, onBack }: { id: number; user: Profile | null; allowProgressUpdate?: boolean; onBack: () => void }) {
+function ProductDetail({ id, user, onBack }: { id: number; user: Profile | null; onBack: () => void }) {
   const [p, setP] = useState<Product | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
-  const [editingProgress, setEditingProgress] = useState(false)
   const [revision, setRevision] = useState(0)
+  const [progressRequests, setProgressRequests] = useState<ArticleProgressRequest[]>([])
   const [linkTargets, setLinkTargets] = useState<AvailableTarget[]>([])
   const [planItems, setPlanItems] = useState<PlanItem[]>([])
   const [tab, setTab] = useState<'info' | 'plagiarism' | 'history' | 'snapshots' | 'feedback'>('info')
@@ -313,6 +324,9 @@ function ProductDetail({ id, user, allowProgressUpdate = false, onBack }: { id: 
     api<Product>(`/products/${id}`)
       .then(x => { if (active) setP(x) })
       .catch(e => { if (active) setError((e as Error).message) })
+    api<ArticleProgressRequest[]>(`/products/${id}/article-progress-requests`)
+      .then(x => { if (active) setProgressRequests(x) })
+      .catch(() => { if (active) setProgressRequests([]) })
     return () => { active = false }
   }, [id, revision])
 
@@ -343,27 +357,6 @@ function ProductDetail({ id, user, allowProgressUpdate = false, onBack }: { id: 
     setBusy(true); setError('')
     try { setP(await api<Product>(`/products/${id}/submit`, 'POST')) }
     catch (x) { setError((x as Error).message) }
-    finally { setBusy(false) }
-  }
-
-  async function saveProgress(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const form = new FormData(e.currentTarget)
-    const articleStatus = String(form.get('articleStatus') ?? '')
-    const publishedDate = String(form.get('publishedDate') ?? '') || null
-    if (articleStatus === 'DA_XUAT_BAN' && !publishedDate) {
-      setError('Bài viết đã xuất bản phải có ngày công bố.')
-      return
-    }
-    setBusy(true); setError('')
-    try {
-      setP(await api<Product>(`/products/${id}/article-progress`, 'PATCH', {
-        articleStatus,
-        publishedDate,
-        publicationInfo: String(form.get('publicationInfo') ?? '').trim() || null,
-      }))
-      setEditingProgress(false)
-    } catch (x) { setError((x as Error).message) }
     finally { setBusy(false) }
   }
 
@@ -404,7 +397,7 @@ function ProductDetail({ id, user, allowProgressUpdate = false, onBack }: { id: 
               <button className="primary" disabled={busy}>Liên kết với chỉ tiêu</button>
             </form>
           </section>}
-        {p.status === 'DA_DUYET' && !p.publishedDate && user?.roles.some(r => ['PHONG_QLKH', 'QUAN_TRI'].includes(r.role)) &&
+        {p.status === 'DA_DUYET' && !p.publishedDate && user?.roles.some(r => ['TRUONG_KHOA', 'QUAN_TRI'].includes(r.role)) &&
           <section className="panel"><h2>Bổ sung ngày công nhận còn thiếu</h2><p className="muted">Chỉ bổ sung ngày còn thiếu và lưu lịch sử. Kết quả đã chốt được giữ nguyên; tạo đánh giá mới để áp dụng kỳ ghi nhận theo ngày này.</p>
             <form onSubmit={async e => {
               e.preventDefault(); const f = new FormData(e.currentTarget); setBusy(true); setError('')
@@ -419,6 +412,7 @@ function ProductDetail({ id, user, allowProgressUpdate = false, onBack }: { id: 
         {canManagerReview(user, p) && (
           <ReviewPanel product={p} user={user!} onReviewed={updated => { setP(updated); setRevision(x => x + 1) }} />
         )}
+        {p.productTypeCode === 'BAI_BAO' && <ArticleProgressRequests product={p} requests={progressRequests} user={user} busy={busy} setBusy={setBusy} onChanged={() => setRevision(x => x + 1)} onError={setError} />}
 
         {/* Product info */}
         {editing
@@ -430,24 +424,12 @@ function ProductDetail({ id, user, allowProgressUpdate = false, onBack }: { id: 
             <div className="section-top">
               <h2>Thông tin</h2>
               <div className="actions">
-                {allowProgressUpdate && p.status !== 'DA_DUYET' && !user?.roles.some(r => r.role === 'GIANG_VIEN') &&
-                  <button onClick={() => setEditingProgress(x => !x)}>Cập nhật tiến độ bài viết</button>}
                 {p.canEdit && <>
                   <button onClick={() => setEditing(true)}>Chỉnh sửa nội dung</button>
                   <button className="primary" disabled={busy} onClick={submitProduct}>Gửi duyệt</button>
                 </>}
               </div>
             </div>
-            {editingProgress && <form className="product-progress-form" onSubmit={saveProgress}>
-              <h3>Tiến độ xuất bản</h3>
-              <label>Trạng thái bài viết<select name="articleStatus" required defaultValue={p.articleStatus ?? 'DANG_VIET'}>
-                <option value="DANG_VIET">Đang viết</option><option value="DANG_PHAN_BIEN">Đang phản biện</option>
-                <option value="DA_NHAN_XET">Đã nhận xét</option><option value="DA_XUAT_BAN">Đã xuất bản</option>
-              </select></label>
-              <label>Ngày công bố<input name="publishedDate" type="date" max={new Date().toISOString().slice(0, 10)} defaultValue={p.publishedDate ?? ''} /></label>
-              <label>Nơi công bố<input name="publicationInfo" maxLength={500} defaultValue={p.publicationInfo ?? ''} /></label>
-              <div className="actions"><button className="primary" disabled={busy}>Lưu tiến độ</button><button type="button" onClick={() => setEditingProgress(false)}>Hủy</button></div>
-            </form>}
             {p.status === 'TRA_LAI' && (
               <p className="alert review-alert" role="alert">
                 ⚠️ Sản phẩm được yêu cầu bổ sung. Vui lòng chỉnh sửa và gửi duyệt lại.
@@ -467,7 +449,7 @@ function ProductDetail({ id, user, allowProgressUpdate = false, onBack }: { id: 
         }
 
         <CoAuthors product={p} user={user} onChanged={() => setRevision(x => x + 1)} />
-        <Evidences product={p} user={user} onChanged={() => setRevision(x => x + 1)} />
+        <Evidences product={p} user={user} requests={progressRequests} onChanged={() => setRevision(x => x + 1)} />
       </>}
 
       {tab === 'history' && <ReviewHistoryPanel productId={id} key={`hist-${revision}`} />}
@@ -556,7 +538,7 @@ function FeedbackPanel({ productId, user }: { productId: number; user: Profile |
   const [items, setItems] = useState<ProductFeedback[]>([])
   const [content, setContent] = useState('')
   const [error, setError] = useState('')
-  const canSend = user?.roles.some(x => x.role === 'PHONG_QLKH' || x.role === 'QUAN_TRI') ?? false
+  const canSend = user?.roles.some(x => x.role === 'TRUONG_KHOA' || x.role === 'QUAN_TRI') ?? false
   const load = () => api<ProductFeedback[]>(`/products/${productId}/feedback`).then(setItems).catch(e => setError((e as Error).message))
   useEffect(() => { void load() }, [productId])
   async function send(e: FormEvent) {
@@ -565,10 +547,67 @@ function FeedbackPanel({ productId, user }: { productId: number; user: Profile |
     catch (x) { setError((x as Error).message) }
   }
   return <section className="panel">
-    <h2>Phản hồi từ Phòng Quản lý khoa học</h2>
+    <h2>Phản hồi từ Trưởng khoa</h2>
     {error && <p className="alert">{error}</p>}
     {items.length === 0 ? <p className="empty">Chưa có phản hồi.</p> : <ul>{items.map(x => <li key={x.id}><strong>{x.senderName}</strong> · {new Date(x.createdAt).toLocaleString('vi-VN')}<br />{x.content}</li>)}</ul>}
     {canSend && <form onSubmit={send}><label>Nội dung phản hồi<textarea value={content} maxLength={2000} required onChange={e => setContent(e.target.value)} /></label><button className="primary" type="submit">Gửi phản hồi</button></form>}
+  </section>
+}
+
+function ArticleProgressRequests({ product, requests, user, busy, setBusy, onChanged, onError }: {
+  product: Product; requests: ArticleProgressRequest[]; user: Profile | null; busy: boolean
+  setBusy: (value: boolean) => void; onChanged: () => void; onError: (value: string) => void
+}) {
+  const nextStatus = ({ DANG_VIET: 'DANG_PHAN_BIEN', DANG_PHAN_BIEN: 'DA_NHAN_XET', DA_NHAN_XET: 'DA_XUAT_BAN' } as Record<string, string>)[product.articleStatus ?? 'DANG_VIET']
+  const pending = requests.find(x => x.status === 'CHO_DUYET')
+  const canReviewPending = !!pending && (user?.roles.some(r => r.role === pending.requiredRole || r.role === 'QUAN_TRI') ?? false)
+  const [reviewComment, setReviewComment] = useState('')
+
+  async function create(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault(); if (!nextStatus) return
+    const form = new FormData(e.currentTarget)
+    setBusy(true); onError('')
+    try {
+      await api(`/products/${product.id}/article-progress-requests`, 'POST', {
+        toStatus: nextStatus,
+        evidenceId: Number(form.get('evidenceId')),
+        publishedDate: String(form.get('publishedDate') ?? '') || null,
+        publicationInfo: String(form.get('publicationInfo') ?? '').trim() || null,
+        note: String(form.get('note') ?? '').trim() || null,
+      })
+      onChanged()
+    } catch (error) { onError((error as Error).message) }
+    finally { setBusy(false) }
+  }
+
+  async function review(action: 'APPROVE' | 'REJECT') {
+    if (!pending) return
+    if (action === 'REJECT' && !reviewComment.trim()) { onError('Phải nhập lý do khi trả lại đề nghị.'); return }
+    setBusy(true); onError('')
+    try {
+      await api(`/article-progress-requests/${pending.id}/review`, 'POST', { action, comment: reviewComment.trim() || null })
+      setReviewComment(''); onChanged()
+    } catch (error) { onError((error as Error).message) }
+    finally { setBusy(false) }
+  }
+
+  return <section className="panel">
+    <h2>Đề nghị cập nhật trạng thái bài báo</h2>
+    <p className="muted">Tác giả đề nghị bước tiếp theo và chọn minh chứng. Trạng thái chỉ thay đổi sau khi đúng cấp quản lý xác nhận.</p>
+    {product.canRequestArticleProgress && nextStatus && !pending && <form onSubmit={create}>
+      <p>Trạng thái hiện tại: <strong>{article[product.articleStatus ?? 'DANG_VIET']}</strong> → đề nghị <strong>{article[nextStatus]}</strong>.</p>
+      <label>Minh chứng cho bước này<select name="evidenceId" required defaultValue=""><option value="">Chọn tệp minh chứng</option>{product.evidences.map(x => <option value={x.id} key={x.id}>{x.originalFileName}</option>)}</select></label>
+      {!product.evidences.length && <p className="alert">Hãy tải minh chứng lên trước khi gửi đề nghị.</p>}
+      {nextStatus === 'DA_XUAT_BAN' && <><label>Ngày công bố<input type="date" name="publishedDate" required max={new Date().toISOString().slice(0, 10)} /></label><label>Nơi công bố<input name="publicationInfo" required maxLength={500} defaultValue={product.publicationInfo ?? ''} /></label></>}
+      <label>Ghi chú đề nghị<textarea name="note" maxLength={1000} placeholder="Mô tả nội dung minh chứng và thay đổi cần xác nhận" /></label>
+      <button className="primary" disabled={busy || !product.evidences.length}>Gửi đề nghị</button>
+    </form>}
+    {pending && <div>
+      <p><strong>Đang chờ {pending.requiredRole === 'TRUONG_BO_MON' ? 'Trưởng bộ môn' : 'Trưởng khoa'} xác nhận:</strong> {article[pending.fromStatus]} → {article[pending.toStatus]}</p>
+      <p>Minh chứng: <a href={`/api/products/${product.id}/evidences/${pending.evidenceId}/download`}>{pending.evidenceName}</a>{pending.note ? ` · ${pending.note}` : ''}</p>
+      {canReviewPending && <><label>Nhận xét<textarea value={reviewComment} maxLength={1000} onChange={e => setReviewComment(e.target.value)} /></label><div className="actions"><button className="primary" disabled={busy} onClick={() => void review('APPROVE')}>Xác nhận đề nghị</button><button className="danger" disabled={busy} onClick={() => void review('REJECT')}>Trả lại</button></div></>}
+    </div>}
+    {requests.filter(x => x.status !== 'CHO_DUYET').length > 0 && <details><summary>Lịch sử đề nghị</summary><ul>{requests.filter(x => x.status !== 'CHO_DUYET').map(x => <li key={x.id}>{new Date(x.requestedAt).toLocaleString('vi-VN')} · {article[x.fromStatus]} → {article[x.toStatus]} · {x.status === 'DA_DUYET' ? 'Đã xác nhận' : 'Đã trả lại'}{x.reviewComment ? ` · ${x.reviewComment}` : ''}</li>)}</ul></details>}
   </section>
 }
 
@@ -578,9 +617,9 @@ function ReviewPanel({ product, user, onReviewed }: { product: Product; user: Pr
   const [action, setAction] = useState<'APPROVE' | 'REJECT'>('APPROVE')
   const [comment, setComment] = useState('')
   const [score, setScore] = useState('')
-  const [articleStatus, setArticleStatus] = useState(product.articleStatus ?? 'DANG_VIET')
-  const [publishedDate, setPublishedDate] = useState(product.publishedDate ?? '')
-  const [publicationInfo, setPublicationInfo] = useState(product.publicationInfo ?? '')
+  const [reviewClasses, setReviewClasses] = useState<Classification[]>([])
+  const [reviewClassId, setReviewClassId] = useState(String(product.classificationId ?? ''))
+  useEffect(() => { api<Classification[]>('/product-classifications').then(setReviewClasses).catch(e => setError(e.message)) }, [product.id])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const showScore = needsScore(user, product) && action === 'APPROVE'
@@ -589,12 +628,8 @@ function ReviewPanel({ product, user, onReviewed }: { product: Product; user: Pr
     e.preventDefault(); setBusy(true); setError('')
     try {
       const body: Record<string, unknown> = { action, comment: comment.trim() || null }
+      if (action === 'APPROVE' && ['TRUONG_KHOA', 'QUAN_TRI'].includes(product.requiredReviewRole ?? '')) body.classificationId = Number(reviewClassId) || null
       if (showScore && score) body.scoreEquivalent = parseFloat(score)
-      if (action === 'APPROVE' && product.requiredReviewRole === 'PHONG_QLKH' && product.productTypeCode === 'BAI_BAO') {
-        body.articleStatus = articleStatus
-        body.publishedDate = publishedDate || null
-        body.publicationInfo = publicationInfo.trim() || null
-      }
       const updated = await api<Product>(`/products/${product.id}/review`, 'POST', body)
       onReviewed(updated); setOpen(false); setComment(''); setScore('')
     } catch (x) { setError((x as Error).message) }
@@ -624,6 +659,7 @@ function ReviewPanel({ product, user, onReviewed }: { product: Product; user: Pr
               🔁 Yêu cầu bổ sung (trả lại giảng viên)
             </label>
           </div>
+          {action === 'APPROVE' && ['TRUONG_KHOA', 'QUAN_TRI'].includes(product.requiredReviewRole ?? '') && <label>Phân loại quy đổi được xác nhận<select required value={reviewClassId} onChange={e => setReviewClassId(e.target.value)}><option value="">Chọn theo minh chứng và bảng quy đổi 2023</option>{reviewClasses.filter(c => c.isActive && c.productTypeId === product.productTypeId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
           {showScore && (
             <label>
               Điểm thẩm định <small className="muted">(nếu quy định yêu cầu)</small>
@@ -631,13 +667,7 @@ function ReviewPanel({ product, user, onReviewed }: { product: Product; user: Pr
                 onChange={e => setScore(e.target.value)}  placeholder="Ví dụ: 1.5" />
             </label>
           )}
-          {action === 'APPROVE' && product.requiredReviewRole === 'PHONG_QLKH' && product.productTypeCode === 'BAI_BAO' && <>
-            <label>Trạng thái bài viết khi công nhận cuối<select value={articleStatus} onChange={e => setArticleStatus(e.target.value)}>
-              <option value="DANG_NHAN_XET">Đã nhận xét</option><option value="DA_XUAT_BAN">Đã xuất bản</option>
-            </select></label>
-            {articleStatus === 'DA_XUAT_BAN' && <><label>Ngày công bố<input type="date" required value={publishedDate} onChange={e => setPublishedDate(e.target.value)} /></label>
-              <label>Nơi công bố<input value={publicationInfo} onChange={e => setPublicationInfo(e.target.value)} /></label></>}
-          </>}
+          {product.productTypeCode === 'BAI_BAO' && product.articleStatus !== 'DA_XUAT_BAN' && <p className="alert">Bài báo phải hoàn tất các đề nghị tiến độ và được xác nhận Đã xuất bản trước khi Trưởng khoa công nhận sản phẩm.</p>}
           <label>
             Ghi chú / Lý do {action === 'REJECT' && <strong>(bắt buộc khi trả lại)</strong>}
             <textarea rows={3} maxLength={1000} value={comment} onChange={e => setComment(e.target.value)}
@@ -833,6 +863,7 @@ export function ProductForm({ product, onSubmit, busy, error, planItems, targets
           {classes.length > 0 && <label>Phân loại đề xuất<select name="classificationId" value={classification} onChange={e => setClassification(e.target.value)}>
             <option value="">Để QLKH xác nhận</option>{classes.map(c => <option value={c.id} key={c.id}>{c.name}</option>)}
           </select></label>}
+          {(isBook || isProject) && <label>Số đơn vị quy đổi<input name="recognitionQuantity" type="number" min="0.0001" max="10000" step="0.0001" defaultValue={product?.recognitionQuantity ?? 1} /><small>Dịch sách: số trang bản gốc. Đề tài tính theo năm: số năm thực hiện được duyệt trong kỳ này. Các loại còn lại: 1 đơn vị/công trình.</small></label>}
           {(isArticle || isConference) && <>
             <label>ISSN{selectedPublication ? <input name="issn" readOnly value={selectedPublication.issn ?? ''} /> : <input name="issn" defaultValue={product?.journalConferenceId ? '' : ''} placeholder="Có thể bổ sung sau" />}</label>
             <label>Chỉ mục {selectedPublication && <small>tự lấy từ danh mục nơi công bố</small>}{selectedPublication ? <input name="journalIndex" readOnly value={selectedPublication.index ?? ''} /> : <input name="journalIndex" maxLength={100} defaultValue={product?.journalIndex ?? ''} placeholder="Scopus, Web of Science…" />}</label>
@@ -899,9 +930,10 @@ function CoAuthors({ product, user, onChanged }: { product: Product; user: Profi
 }
 
 // ── Evidences ──────────────────────────────────────────────────────────────────
-function Evidences({ product, user, onChanged }: { product: Product; user: Profile | null; onChanged: () => void }) {
+function Evidences({ product, user, requests, onChanged }: { product: Product; user: Profile | null; requests: ArticleProgressRequest[]; onChanged: () => void }) {
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
   const canManage = canManageProductAttachments(user, product)
+  const canUpload = canUploadProductEvidence(user, product)
   async function upload(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const form = e.currentTarget; const data = new FormData(form); setBusy(true); setError('')
     try { await apiForm(`/products/${product.id}/evidences`, data); form.reset(); onChanged() }
@@ -912,20 +944,20 @@ function Evidences({ product, user, onChanged }: { product: Product; user: Profi
     catch (x) { setError((x as Error).message) }
   }
   return <section className="panel">
-    <h2>Minh chứng</h2><p className="muted">Cần có ít nhất một minh chứng trước khi Phòng QLKH công nhận sản phẩm.</p>
+    <h2>Minh chứng</h2><p className="muted">Cần có ít nhất một minh chứng trước khi Trưởng khoa công nhận sản phẩm.</p>
     {error && <p className="alert">{error}</p>}
     <ul className="product-list">
       {product.evidences.map(e => <li key={e.id}>
         <a href={`/api/products/${product.id}/evidences/${e.id}/download`}>{e.originalFileName}</a>
         <span>{(e.fileSizeBytes / 1024).toFixed(1)} KB</span>
-        {canManage && <button className="danger" onClick={() => remove(e.id)}>Xóa</button>}
+        {requests.some(request => request.evidenceId === e.id) ? <small>Đã dùng trong đề nghị tiến độ</small> : canManage && <button className="danger" onClick={() => remove(e.id)}>Xóa</button>}
       </li>)}
     </ul>
-    {canManage && (
+    {canUpload && (
       <form className="product-upload" onSubmit={upload}>
         <label>Tệp minh chứng<input name="file" type="file" required accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.zip" /></label>
         <label>Mô tả<input name="description" maxLength={300} /></label>
-        <button disabled={busy}>{busy ? 'Đang tải…' : 'Tải lên'}</button>
+        <button disabled={busy}>{busy ? 'Đang tải…' : 'Tải minh chứng mới'}</button>
       </form>
     )}
   </section>
@@ -938,7 +970,7 @@ function formBody(f: FormData, researchPlanItemId?: number) {
   return {
     ...(researchPlanItemId ? { researchPlanItemId } : {}),
     ...(researchPlanItemId ? { researchTargetId } : {}),
-    title: text('title'), description: text('description'), workIdentifier: String(f.get('workIdentifier') ?? ''),
+    recognitionQuantity: Number(f.get('recognitionQuantity')) || 1, title: text('title'), description: text('description'), workIdentifier: String(f.get('workIdentifier') ?? ''),
     classificationId: Number(f.get('classificationId')) || null,
     ...(f.has('externalAuthorCount') ? { externalAuthorCount: Number(f.get('externalAuthorCount')) || 0 } : {}),
     updateJournalConference: true, journalConferenceId: Number(f.get('journalConferenceId')) || null,

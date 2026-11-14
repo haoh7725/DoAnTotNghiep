@@ -69,7 +69,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
   const allocationFormRef = useAutoReveal<HTMLElement>(allocationFormOpen, editingAllocation?.id ?? 'new')
 
   const selectedTarget = targets.find(t => t.id === selectedId)
-  const isResearchOffice = roles.includes('PHONG_QLKH')
+  const isResearchOffice = false
   const isFacultyDean = roles.includes('TRUONG_KHOA')
   const isDepartmentHead = roles.includes('TRUONG_BO_MON')
   const isExecutive = roles.includes('BAN_GIAM_HIEU')
@@ -352,7 +352,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
   )
   const isAllocationLocked = selectedTarget?.status === 'DA_KHOA'
   const canAssignLecturers = roles.some(x => ['TRUONG_BO_MON', 'QUAN_TRI'].includes(x))
-  const canViewLecturerAssignments = roles.some(x => ['TRUONG_BO_MON', 'PHONG_QLKH', 'QUAN_TRI'].includes(x))
+  const canViewLecturerAssignments = roles.some(x => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'QUAN_TRI'].includes(x))
   const canViewDepartmentAllocations = !isExecutive && (
     isResearchOffice || isFacultyDean || isAdministrator ||
     (isDepartmentHead && isAllocationLocked)
@@ -363,7 +363,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
   const selectedLecturer = lecturerOptions.find(x => x.id === selectedLecturerId)
   const unassignedLecturers = lecturerOptions.filter(
     x => !lecturerAssignments.some(a => a.lecturerId === x.id)
-  )
+  ).sort((a, b) => b.committedArticles - a.committedArticles || a.fullName.localeCompare(b.fullName, 'vi'))
 
   function workflowStage(target: Target) {
     if (target.status === 'CHO_TIEP_NHAN') return 0
@@ -378,9 +378,9 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
     if (isExecutive) return 'Theo dõi kết quả toàn trường; tài khoản Ban giám hiệu chỉ được xem, không thực hiện phân bổ.'
     if (isResearchOffice) return target.status === 'DA_KHOA'
       ? 'Theo dõi việc phân công cho giảng viên và kết quả thực hiện của các đơn vị.'
-      : 'Theo dõi khoa tiếp nhận và phân bổ chỉ tiêu; Phòng QLKH không phân bổ thay cho khoa.'
+      : 'Theo dõi khoa tiếp nhận và phân bổ chỉ tiêu; Trưởng khoa không phân bổ thay cho khoa.'
     if (isFacultyDean) {
-      if (target.status === 'CHO_TIEP_NHAN') return 'Tiếp nhận chỉ tiêu do Phòng QLKH giao.'
+      if (target.status === 'CHO_TIEP_NHAN') return 'Tiếp nhận chỉ tiêu do Trưởng khoa giao.'
       if (target.status === 'DA_TIEP_NHAN') return 'Công bố chỉ tiêu để bắt đầu phân bổ xuống các bộ môn.'
       if (target.status === 'CONG_BO' && remainingAllocation > 0) return `Phân bổ thêm ${remainingAllocation} sản phẩm cho các bộ môn trước khi khóa.`
       if (target.status === 'CONG_BO') return 'Đã phân bổ đủ. Kiểm tra lần cuối và khóa để chuyển cho Trưởng bộ môn.'
@@ -459,7 +459,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
                         {selectedId === target.id ? 'Đang xem' : 'Mở chi tiết'}
                       </button>
                       {' '}
-                      {canEdit && target.status === 'CHO_TIEP_NHAN' && (
+                      {canEdit && ['CHO_TIEP_NHAN', 'DA_TIEP_NHAN'].includes(target.status) && (
                         <button
                           type="button"
                           onClick={() => openEditTarget(target)}
@@ -654,7 +654,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
                   <thead>
                     <tr>
                       <th>Bộ môn</th>
-                      <th>Số bài phân bổ</th>
+                      <th>Số sản phẩm phân bổ</th>
                       <th>Ngày phân bổ</th>
                       <th>Phân công giảng viên</th>
                       <th>Thao tác</th>
@@ -695,19 +695,19 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
         <div className="section-top"><h2>Phân công cho giảng viên — {departmentName(selectedAllocation.departmentId)}</h2>
           <button onClick={() => { setSelectedAllocation(null); setTargetPanel('allocations') }}>Quay lại phân bổ bộ môn</button></div>
         <p><strong>Chỉ tiêu bộ môn:</strong> {selectedAllocation.allocatedArticleCount} bài · <strong>Đã giao cá nhân:</strong> {lecturerAssignments.reduce((s, x) => s + x.allocatedArticleCount, 0)} bài</p>
-        {lecturerAssignments.length > 0 && <div className="table-wrap"><table><thead><tr><th>Giảng viên</th><th>Số bài</th><th>Ngày giao</th><th></th></tr></thead><tbody>
+        {lecturerAssignments.length > 0 && <div className="table-wrap"><table><thead><tr><th>Giảng viên</th><th>Số sản phẩm</th><th>Ngày giao</th><th></th></tr></thead><tbody>
           {lecturerAssignments.map(x => <tr key={x.id}><td>{x.lecturerCode} — {x.lecturerName}</td><td>{x.allocatedArticleCount}</td><td>{x.allocationDate}</td><td><button className="danger" disabled={busy} onClick={() => void deleteLecturerAssignment(x.id)}>Hủy</button></td></tr>)}
         </tbody></table></div>}
 
         <div className="subpanel">
-          <h3>Căn cứ phân công theo cam kết bài báo</h3>
+          <h3>Cam kết tham khảo để ưu tiên phân công</h3>
           <p className="muted">
-            Có thể giao thêm = max(0, cam kết bài báo − đã giao).
-            Chỉ tính cam kết bài báo trong kế hoạch đã đăng ký của năm học này.
+            Cam kết dùng để ưu tiên, không phải điều kiện bắt buộc nhận chỉ tiêu.
+            Giảng viên chưa cam kết vẫn được giao trong hạn mức bộ môn.
           </p>
           {lecturerOptions.length === 0 ? <p className="muted">Bộ môn chưa có giảng viên để phân công.</p> : <div className="table-wrap">
             <table>
-              <thead><tr><th>Giảng viên</th><th>Cam kết bài báo</th><th>Đã giao</th><th>Có thể giao thêm</th></tr></thead>
+              <thead><tr><th>Giảng viên</th><th>Cam kết cùng loại NCKH</th><th>Đã giao</th><th>Có thể giao thêm</th></tr></thead>
               <tbody>{lecturerOptions.map(x => <tr key={x.id}>
                 <td>{x.code} — {x.fullName}</td>
                 <td>{x.committedArticles}</td>
@@ -721,15 +721,15 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
         {isAllocationLocked && canAssignLecturers && <form onSubmit={saveLecturerAssignment}>
           <h3>Giao chỉ tiêu chính thức</h3>
           <label>Giảng viên<select name="lecturerId" required value={selectedLecturerId ?? ''} onChange={e => setSelectedLecturerId(Number(e.target.value) || null)}><option value="">-- Chọn giảng viên --</option>
-            {unassignedLecturers.map(x => <option key={x.id} value={x.id} disabled={x.availableArticles <= 0}>{x.code} — {x.fullName} · còn {x.availableArticles} bài</option>)}
+            {unassignedLecturers.map(x => <option key={x.id} value={x.id} >{x.code} — {x.fullName} · còn {x.availableArticles} bài</option>)}
           </select></label>
-          <label>Số bài giao<input name="allocatedArticleCount" type="number" min="1" max={selectedLecturer?.availableArticles} step="1" required disabled={!selectedLecturer} /></label>
+          <label>Số sản phẩm giao<input name="allocatedArticleCount" type="number" min="1"  step="1" required disabled={!selectedLecturer} /></label>
           {selectedLecturer && <p className="muted">
             {selectedLecturer.fullName} cam kết {selectedLecturer.committedArticles} bài; đã giao {selectedLecturer.assignedArticles} bài;
-            có thể giao thêm tối đa <strong>{selectedLecturer.availableArticles} bài</strong>.
+            bộ môn còn có thể giao <strong>{selectedLecturer.availableArticles} sản phẩm</strong>.
           </p>}
-          {unassignedLecturers.length > 0 && unassignedLecturers.every(x => x.availableArticles <= 0) && <p className="muted">Không còn giảng viên chưa được phân công có khả năng nhận thêm theo cam kết.</p>}
-          <button className="primary" disabled={busy || !selectedLecturer || selectedLecturer.availableArticles <= 0}>Giao chỉ tiêu</button>
+          {unassignedLecturers.length > 0 && unassignedLecturers.every(x => x.availableArticles <= 0) && <p className="muted">Bộ môn đã giao đủ số sản phẩm được phân bổ.</p>}
+          <button className="primary" disabled={busy || !selectedLecturer}>Giao chỉ tiêu</button>
         </form>}
       </section>}
 
@@ -760,7 +760,7 @@ export function ResearchTargets({ lookups, canEdit, canEditAllocations, roles }:
             )}
 
             <label>
-              Số bài phân bổ
+              Số sản phẩm phân bổ
               <input
                 name="allocatedArticleCount"
                 type="number"

@@ -11,10 +11,10 @@ public static class ProductReviewPolicy
             return (Roles.DepartmentHead, ProductStatuses.DepartmentHeadApproved);
         if ((status == ProductStatuses.Submitted && departmentHeadIsAuthor ||
              status == ProductStatuses.DepartmentHeadApproved) && !deanIsAuthor)
-            return (Roles.FacultyDean, ProductStatuses.FacultyDeanApproved);
+            return (Roles.FacultyDean, ProductStatuses.Approved);
         if (status is ProductStatuses.Submitted or ProductStatuses.DepartmentHeadApproved or
             ProductStatuses.FacultyDeanApproved or ProductStatuses.ResearchOfficeApproved)
-            return (Roles.ResearchOffice, ProductStatuses.Approved);
+            return (deanIsAuthor ? Roles.Admin : Roles.FacultyDean, ProductStatuses.Approved);
         throw new BusinessRuleException("Sản phẩm không ở bước xét duyệt.");
     }
 }

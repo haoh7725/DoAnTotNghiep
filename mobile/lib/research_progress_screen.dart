@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'api_client.dart';
+import 'product_detail_screen.dart';
 
 class ResearchProgressScreen extends StatefulWidget {
   const ResearchProgressScreen({super.key, required this.client});
@@ -18,6 +19,7 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
   Future<dynamic>? _progressFuture;
   Future<dynamic>? _targetFuture;
   Future<dynamic>? _departmentFuture;
+  Future<dynamic>? _assignmentsFuture;
   Future<List<dynamic>>? _comparisonFuture;
 
   @override
@@ -38,7 +40,21 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
 
       if (!mounted) return;
 
-      final yearId = years.isEmpty ? null : (years.first['id'] as num).toInt();
+      years.sort(
+        (a, b) =>
+            b['startDate'].toString().compareTo(a['startDate'].toString()),
+      );
+      final today = DateTime.now().toIso8601String().substring(0, 10);
+      final currentYears = years.where(
+        (y) =>
+            y['startDate'].toString().compareTo(today) <= 0 &&
+            y['endDate'].toString().compareTo(today) >= 0,
+      );
+      final yearId = years.isEmpty
+          ? null
+          : ((currentYears.isEmpty ? years.first : currentYears.first)['id']
+                    as num)
+                .toInt();
 
       setState(() {
         _years = years;
@@ -79,11 +95,13 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
     final progress = widget.client.getMyResearchProgress(yearId);
     final target = widget.client.getMyProductTargetProgress(yearId);
     final department = widget.client.getMyDepartmentTargetProgress(yearId);
+    final assignments = widget.client.getMyAssignedTargets(yearId);
+    _assignmentsFuture = assignments;
     _progressFuture = progress;
     _targetFuture = target;
     _departmentFuture = department;
     _comparisonFuture = Future.wait([target, department]);
-    return [progress, target, department];
+    return [progress, target, department, assignments];
   }
 
   Widget _buildComparisonChart() {
@@ -209,13 +227,13 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
                 Text(data['departmentName']?.toString() ?? 'Chưa xác định'),
                 const SizedBox(height: 12),
                 if (hasAllocation)
-                  Text('Chỉ tiêu bài báo: ${_number(allocated)}')
+                  Text('Chỉ tiêu sản phẩm NCKH: ${_number(allocated)}')
                 else
                   const Text(
                     'Bộ môn chưa được phân bổ chỉ tiêu '
                     'trong năm học này.',
                   ),
-                Text('Bài báo đã duyệt: ${_number(approved)}'),
+                Text('Sản phẩm đã công nhận: ${_number(approved)}'),
                 const SizedBox(height: 12),
                 if (percent != null) ...[
                   Text(
@@ -229,8 +247,8 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Tỷ lệ = bài báo đã duyệt / '
-                    'chỉ tiêu bài báo được phân bổ × 100%.',
+                    'Tỷ lệ = sản phẩm đã công nhận / '
+                    'chỉ tiêu sản phẩm được phân bổ × 100%.',
                   ),
                 ] else
                   Text(
@@ -242,9 +260,9 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
                   ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Mỗi bài báo đã duyệt hoàn tất được tính một lần, '
-                  'theo bộ môn hiện tại của người đứng tên gửi '
-                  'và năm học của kế hoạch.',
+                  'Tổng hợp cả 4 loại NCKH theo phân công chỉ tiêu. '
+                  'Bài báo cần được công nhận và đã xuất bản; '
+                  'các loại khác cần được công nhận. Mỗi sản phẩm tính một lần.',
                 ),
               ],
             ),
@@ -361,6 +379,112 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
     );
   }
 
+  Widget _buildAssignedTargets() {
+    return FutureBuilder<dynamic>(
+      future: _assignmentsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+        if (snapshot.hasError || snapshot.data is! List) {
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Không tải được chỉ tiêu cá nhân.'),
+                  TextButton(
+                    onPressed: _refreshProgress,
+                    child: const Text('Thử lại'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        final assignments = snapshot.data as List;
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Chỉ tiêu được giao cho tôi',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Theo phân công của Trưởng bộ môn; theo dõi riêng với cam kết kế hoạch ở trên.',
+                ),
+                if (assignments.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 12),
+                    child: Text('Chưa được giao chỉ tiêu trong năm học này.'),
+                  ),
+                for (final assignment in assignments) ...[
+                  const Divider(height: 28),
+                  Text(
+                    '${assignment['productTypeName']} · Chỉ tiêu #${assignment['targetId']}',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    'Được giao: ${assignment['allocatedArticleCount']} sản phẩm',
+                  ),
+                  Text(
+                    'Đã liên kết: ${assignment['registeredArticles']} · Đã hoàn thành: ${assignment['approvedArticles']}',
+                  ),
+                  if (assignment['deadline'] != null)
+                    Text('Hạn hoàn thành: ${assignment['deadline']}'),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Hoàn thành: ${_number(assignment['completionPercent'])}%',
+                  ),
+                  LinearProgressIndicator(
+                    value:
+                        (((assignment['completionPercent'] as num?)
+                                        ?.toDouble() ??
+                                    0) /
+                                100)
+                            .clamp(0.0, 1.0)
+                            .toDouble(),
+                  ),
+                  for (final product
+                      in (assignment['linkedProducts'] as List? ?? []))
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('${product['title']}'),
+                      subtitle: Text(
+                        productStatusLabel(product['status'] as String?),
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => ProductDetailScreen(
+                              client: widget.client,
+                              productId: (product['id'] as num).toInt(),
+                            ),
+                          ),
+                        );
+                        if (mounted) await _refreshProgress();
+                      },
+                    ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   String _number(dynamic value) {
     if (value == null) return 'Chưa có';
     final number = value as num;
@@ -426,6 +550,8 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
                   const SizedBox(height: 16),
                   _buildTargetProgress(),
                   const SizedBox(height: 16),
+                  _buildAssignedTargets(),
+                  const SizedBox(height: 16),
                   _buildDepartmentProgress(),
                   const SizedBox(height: 16),
                   FutureBuilder<dynamic>(
@@ -455,10 +581,14 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
                       );
 
                       final hasEvaluation =
-                          data['hasFinalizedEvaluation'] == true;
+                          data['hasFinalizedEvaluation'] == true ||
+                          data['isLive'] == true;
                       final isPoints = data['evaluationUnit'] == 'DIEM';
                       final isLegacy = data['evaluationUnit'] == 'LEGACY';
-                      final requiredValue = (data[isPoints ? 'requiredPoints' : 'requiredHours'] as num?)?.toDouble();
+                      final requiredValue =
+                          (data[isPoints ? 'requiredPoints' : 'requiredHours']
+                                  as num?)
+                              ?.toDouble();
                       final unitLabel = isPoints ? 'điểm' : 'giờ';
                       final percent = (data['completionPercent'] as num?)
                           ?.toDouble();
@@ -477,10 +607,14 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              Text(isLegacy ? 'Kết quả theo quy chế trước đây' : 'Mức hoàn thành định mức $unitLabel NCKH theo kết quả đã chốt'),
+                              Text(
+                                isLegacy
+                                    ? 'Kết quả theo quy chế trước đây'
+                                    : 'Tổng giờ NCKH tự cập nhật từ sản phẩm đã công nhận',
+                              ),
                               const SizedBox(height: 16),
                               Text(
-                                'Định mức: '
+                                'Ngưỡng hoàn thành: '
                                 '${_number(requiredValue)} $unitLabel',
                               ),
                               if (!hasEvaluation)
@@ -522,10 +656,14 @@ class _ResearchProgressScreenState extends State<ResearchProgressScreen> {
                                     minHeight: 12,
                                   ),
                                   const SizedBox(height: 8),
-                                  Text('Tỷ lệ = $unitLabel đã ghi nhận / định mức $unitLabel × 100%.'),
+                                  Text(
+                                    'Tỷ lệ = $unitLabel đã ghi nhận / định mức $unitLabel × 100%.',
+                                  ),
                                 ] else
                                   Text(
-                                    isLegacy ? 'Kết quả cũ được giữ nguyên; xem căn cứ xếp loại trong kết quả thi đua.' : requiredValue == null
+                                    isLegacy
+                                        ? 'Kết quả cũ được giữ nguyên; xem căn cứ xếp loại trong kết quả thi đua.'
+                                        : requiredValue == null
                                         ? 'Chưa được giao định mức $unitLabel.'
                                         : 'Định mức bằng 0; '
                                               'không tính phần trăm.',

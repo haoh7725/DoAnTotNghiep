@@ -7,7 +7,7 @@ public static class PermissionRules
         { Role: "GIANG_VIEN", Scope: "CA_NHAN", FacultyId: null, DepartmentId: null } => true,
         { Role: "TRUONG_BO_MON", Scope: "BO_MON", FacultyId: > 0, DepartmentId: > 0 } => true,
         { Role: "TRUONG_KHOA", Scope: "KHOA", FacultyId: > 0, DepartmentId: null } => true,
-        { Role: "PHONG_QLKH" or "BAN_GIAM_HIEU" or "QUAN_TRI", Scope: "TOAN_TRUONG", FacultyId: null, DepartmentId: null } => true,
+        { Role: "QUAN_TRI", Scope: "TOAN_TRUONG", FacultyId: null, DepartmentId: null } => true,
         _ => false
     };
     public static bool CanRead(IEnumerable<Permission> permissions, long currentAccountId,

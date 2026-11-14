@@ -17,6 +17,7 @@ public sealed class ProductSnapshot
         // Copy all content fields from product
         Title = product.Title;
         WorkIdentifier = product.WorkIdentifier;
+        RecognitionQuantity = product.RecognitionQuantity;
         Description = product.Description;
         PublicationInfo = product.PublicationInfo;
         PublishedDate = product.PublishedDate;
@@ -28,6 +29,7 @@ public sealed class ProductSnapshot
     }
 
     public long ProductId { get; private set; }
+    public decimal RecognitionQuantity { get; private set; } = 1m;
     public int Version { get; private set; }
     public long SnapshotByAccountId { get; private set; }
     public DateTimeOffset SnapshotAt { get; private set; }

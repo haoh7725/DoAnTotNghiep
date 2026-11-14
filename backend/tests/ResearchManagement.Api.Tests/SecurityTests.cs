@@ -12,8 +12,8 @@ public class SecurityTests
     [InlineData("TRUONG_KHOA", "KHOA", 1L, 2L, false)]
     [InlineData("TRUONG_BO_MON", "BO_MON", 1L, 2L, true)]
     [InlineData("TRUONG_BO_MON", "BO_MON", null, 2L, false)]
-    [InlineData("PHONG_QLKH", "TOAN_TRUONG", null, null, true)]
-    [InlineData("BAN_GIAM_HIEU", "TOAN_TRUONG", null, null, true)]
+    [InlineData("PHONG_QLKH", "TOAN_TRUONG", null, null, false)]
+    [InlineData("BAN_GIAM_HIEU", "TOAN_TRUONG", null, null, false)]
     [InlineData("UNKNOWN", "TOAN_TRUONG", null, null, false)]
     public void ValidatesRoleAndScopeTogether(string role, string scope, long? faculty, long? department, bool expected)
         => Assert.Equal(expected, PermissionRules.IsValid(new(role, scope, faculty, department)));
