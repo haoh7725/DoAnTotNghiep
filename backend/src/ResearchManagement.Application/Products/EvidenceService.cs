@@ -45,7 +45,7 @@ public sealed class EvidenceService(
         var product = await products.GetByIdAsync(productId, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
 
-        EnsureEvidenceEditable(product);
+        EnsureEvidenceUploadable(product);
         await EnsureOwnerOrAdminAsync(product, cancellationToken);
 
         if (file.Length == 0)
@@ -146,6 +146,12 @@ public sealed class EvidenceService(
     {
         if (product.Status is not (ProductStatuses.Draft or ProductStatuses.Returned))
             throw new BusinessRuleException("Chỉ được thay đổi minh chứng khi sản phẩm ở trạng thái Nháp hoặc Trả lại.");
+    }
+
+    private static void EnsureEvidenceUploadable(Product product)
+    {
+        if (product.Status == ProductStatuses.Approved)
+            throw new BusinessRuleException("Sản phẩm đã công nhận nên không thể bổ sung minh chứng.");
     }
 
     private async Task EnsureCanReadAsync(Product product, CancellationToken cancellationToken)

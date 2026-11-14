@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using ResearchManagement.Application.Auth.Abstractions;
 using ResearchManagement.Application.Common;
 using ResearchManagement.Infrastructure.Persistence;
+using ResearchManagement.Api.Infrastructure;
 
 namespace ResearchManagement.Api.Controllers;
 
@@ -12,12 +13,13 @@ namespace ResearchManagement.Api.Controllers;
 [Authorize]
 public sealed class ResearchProgressController(
     ApplicationDbContext db,
-    ICurrentUser currentUser) : ControllerBase
+    ICurrentUser currentUser, AnnualResearchService calculator) : ControllerBase
 {
     [HttpGet("targets/{targetId:long}")]
     [Authorize(Policy = ResearchManagement.Api.Authorization.Policies.Management)]
     public async Task<IActionResult> TargetProgress(long targetId, CancellationToken ct)
     {
+        var today = AnnualResearchService.Today();
         var target = await db.ResearchTargets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == targetId, ct)
             ?? throw new NotFoundException("Không tìm thấy chỉ tiêu NCKH.");
         var canViewWholeFaculty = currentUser.CanAccess(target.FacultyId, null);
@@ -39,7 +41,7 @@ public sealed class ResearchProgressController(
                               join type in db.ProductTypes.AsNoTracking() on item.ProductTypeId equals type.Id
                               where allocation.ResearchTargetId == targetId && product.ResearchTargetId == targetId && type.Id == target.ProductTypeId
                                   && product.SubmittedByLecturerId == personal.LecturerId
-                                  && product.Status == "DA_DUYET" && (type.Code != "BAI_BAO" || product.ArticleStatus == "DA_XUAT_BAN")
+                                  && product.Status == "DA_DUYET" && product.PublishedDate <= today && (type.Code != "BAI_BAO" || product.ArticleStatus == "DA_XUAT_BAN")
                               group product by allocation.DepartmentId into grouped
                               select new { DepartmentId = grouped.Key, Count = grouped.Select(x => x.Id).Distinct().Count() })
             .ToDictionaryAsync(x => x.DepartmentId, x => x.Count, ct);
@@ -53,7 +55,7 @@ public sealed class ResearchProgressController(
                                    join item in db.ResearchPlanItems.AsNoTracking() on product.ResearchPlanItemId equals item.Id
                                    join type in db.ProductTypes.AsNoTracking() on item.ProductTypeId equals type.Id
                                    where product.ResearchTargetId == targetId && type.Id == target.ProductTypeId &&
-                                       product.Status == "DA_DUYET" && (type.Code != "BAI_BAO" || product.ArticleStatus == "DA_XUAT_BAN") &&
+                                       product.Status == "DA_DUYET" && product.PublishedDate <= today && (type.Code != "BAI_BAO" || product.ArticleStatus == "DA_XUAT_BAN") &&
                                        db.LecturerTargetAllocations.Any(personal =>
                                            personal.LecturerId == product.SubmittedByLecturerId &&
                                            db.ResearchTargetAllocations.Any(allocation =>
@@ -72,6 +74,7 @@ public sealed class ResearchProgressController(
     [FromQuery] long academicYearId,
     CancellationToken ct)
     {
+        var today = AnnualResearchService.Today();
         if (academicYearId <= 0)
             throw new BusinessRuleException("Vui lòng chọn năm học.");
 
@@ -129,6 +132,7 @@ public sealed class ResearchProgressController(
                 on item.ProductTypeId equals productType.Id
             where plan.AcademicYearId == academicYearId
                 && product.Status == "DA_DUYET"
+                && product.PublishedDate <= today
                 && (productType.Code != "BAI_BAO" || product.ArticleStatus == "DA_XUAT_BAN")
                 && product.ResearchTargetId.HasValue
                 && db.LecturerTargetAllocations.Any(personal =>
@@ -273,6 +277,7 @@ public sealed class ResearchProgressController(
             ?? throw new NotFoundException(
                 "Không tìm thấy năm học.");
 
+        var live = await calculator.Calculate(lecturer.Id, academicYearId, ct);
         var norm = await db.ResearchNorms.AsNoTracking()
             .Where(x =>
                 x.LecturerId == lecturer.Id &&
@@ -328,14 +333,17 @@ public sealed class ResearchProgressController(
             AcademicYearId = year.Id,
             AcademicYearCode = year.Code,
             LecturerName = lecturer.FullName,
-            RequiredHours = norm?.RequiredHours,
+            RequiredHours = AnnualResearchService.RequiredHours,
             RequiredPoints = norm?.RequiredPoints,
-            EvaluationUnit = evaluationUnit,
+            EvaluationUnit = "GIO",
             HasFinalizedEvaluation = evaluation != null,
-            ConfirmedHours = confirmedHours,
-            ConfirmedPoints = confirmedPoints,
-            ConfirmedProductCount = confirmedProductCount,
-            CompletionPercent = completionPercent,
+            ConfirmedHours = live.TotalHours,
+            ConfirmedPoints = 0m,
+            ConfirmedProductCount = live.Products.Count,
+            CompletionPercent = decimal.Round(live.TotalHours * 100 / AnnualResearchService.RequiredHours, 2),
+            IsLive = true,
+            Classification = live.Issues.Count > 0 ? "Cần kiểm tra quy đổi" : live.Classification,
+            Issues = live.Issues,
             EvaluatedAt = evaluation?.EvaluatedAt
         });
     }

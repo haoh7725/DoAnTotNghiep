@@ -26,6 +26,9 @@ class ApiClient {
   Future<dynamic> getMyProductTargetProgress(int academicYearId) =>
       get('/research-progress/targets/me?academicYearId=$academicYearId');
 
+  Future<dynamic> getMyAssignedTargets(int academicYearId) =>
+      get('/lecturer-target-allocations/mine?academicYearId=$academicYearId');
+
   Future<dynamic> get(String path) => _request('GET', path);
   Future<dynamic> post(String path, [Object? body]) =>
       _request('POST', path, body);
@@ -191,6 +194,20 @@ class ApiClient {
   Future<dynamic> updateArticleProgress(int id, Map<String, dynamic> data) =>
       patch('/products/$id/article-progress', data);
 
+  Future<List<dynamic>> getArticleProgressRequests(int productId) async =>
+      (await get('/products/$productId/article-progress-requests'))
+          as List<dynamic>;
+
+  Future<dynamic> createArticleProgressRequest(
+    int productId,
+    Map<String, dynamic> data,
+  ) => post('/products/$productId/article-progress-requests', data);
+
+  Future<dynamic> reviewArticleProgressRequest(
+    int requestId,
+    Map<String, dynamic> data,
+  ) => post('/article-progress-requests/$requestId/review', data);
+
   Future<dynamic> submitProduct(int id) => post('/products/$id/submit');
 
   Future<List<dynamic>> getReviewHistory(int id) async {
@@ -204,8 +221,38 @@ class ApiClient {
   }
 
   // Evaluations / Emulation
-  Future<dynamic> getMyEvaluation(int academicYearId) =>
-      get('/evaluations/me?academicYearId=$academicYearId');
+  Future<dynamic> getMyEvaluation(int academicYearId) async {
+    final result = Map<String, dynamic>.from(
+      await get('/annual-research/me?academicYearId=$academicYearId') as Map,
+    );
+    return {
+      ...result,
+      'status': 'TAM_TINH',
+      'lecturerNameSnapshot': result['lecturerName'],
+      'lecturerCodeSnapshot': result['lecturerCode'],
+      'classification': (result['issues'] as List? ?? []).isNotEmpty
+          ? 'Cần kiểm tra quy đổi'
+          : result['classification'],
+      'classificationBasis':
+          'Tự tổng hợp từ sản phẩm đã công nhận. Từ 586 giờ là hoàn thành yêu cầu giờ; tiến độ số lượng chỉ tiêu được xét riêng. ${(result['issues'] as List? ?? []).join('; ')}',
+      'details': (result['products'] as List? ?? [])
+          .map(
+            (p) => {
+              'productId': p['productId'],
+              'productTitle': p['title'],
+              'productTypeName': p['typeName'],
+              'convertedValue': p['hours'],
+              'unit': 'GIO',
+              'calculationBasis': p['basis'],
+              'ruleCode': p['ruleCode'],
+              'baseValue': p['baseHours'],
+              'authorCoefficient': p['coefficient'],
+            },
+          )
+          .toList(),
+      'totalPoints': 0,
+    };
+  }
 
   // Research plans
   Future<dynamic> getResearchPlan(int id) => get('/research-plans/$id');

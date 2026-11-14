@@ -9,12 +9,13 @@ export function LecturerOverview({ fullName, years, yearId, onYearChange, onOpen
 }) {
   const [products, setProducts] = useState<Product[]>([])
   const [targets, setTargets] = useState<Target[]>([])
+  const [hours, setHours] = useState(0)
   const [error, setError] = useState(''); const [loading, setLoading] = useState(true)
   useEffect(() => {
     if (!yearId) return
     let active = true; setLoading(true); setError('')
-    Promise.all([api<Product[]>(`/products/mine?academicYearId=${yearId}`), api<Target[]>(`/lecturer-target-allocations/mine?academicYearId=${yearId}`)])
-      .then(([p, t]) => { if (active) { setProducts(p); setTargets(t) } })
+    Promise.all([api<Product[]>(`/products/mine?academicYearId=${yearId}`), api<Target[]>(`/lecturer-target-allocations/mine?academicYearId=${yearId}`), api<{ totalHours: number }>(`/annual-research/me?academicYearId=${yearId}`)])
+      .then(([p, t, annual]) => { if (active) { setProducts(p); setTargets(t); setHours(annual.totalHours) } })
       .catch(e => { if (active) setError(e.message) }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [yearId])
@@ -31,7 +32,8 @@ export function LecturerOverview({ fullName, years, yearId, onYearChange, onOpen
       <div className="lecturer-work-cards">
         <button onClick={() => onOpen('products')}><span>Cần bổ sung</span><strong>{returned.length}</strong><small>sản phẩm bị trả lại</small></button>
         <button onClick={() => onOpen('products')}><span>Chưa gửi duyệt</span><strong>{drafts.length}</strong><small>bản nháp</small></button>
-        <button onClick={() => onOpen('my-targets')}><span>Chỉ tiêu hoàn thành</span><strong>{completed}/{allocated}</strong><small>bài do bạn phụ trách</small></button>
+        <button onClick={() => onOpen('my-targets')}><span>Tiến độ sản phẩm được giao</span><strong>{allocated ? Math.round(completed * 100 / allocated) : 0}%</strong><small>{completed}/{allocated} sản phẩm hoàn thành</small></button>
+        <button onClick={() => onOpen('evaluations')}><span>Tổng giờ NCKH</span><strong>{hours.toLocaleString('vi-VN')}</strong><small>ngưỡng hoàn thành năm: 586 giờ</small></button>
         <button onClick={() => onOpen('products')}><span>Đã công nhận</span><strong>{products.filter(x => x.status === 'DA_DUYET').length}</strong><small>sản phẩm tham gia</small></button>
       </div>
       <section className="panel"><h2>Việc cần làm</h2>

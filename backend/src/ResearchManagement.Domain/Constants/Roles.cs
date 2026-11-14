@@ -11,7 +11,7 @@ public static class Roles
     public const string Admin = "QUAN_TRI";
 
     public static readonly string[] All =
-        [Lecturer, DepartmentHead, FacultyDean, ResearchOffice, BoardOfDirectors, Admin];
+        [Lecturer, DepartmentHead, FacultyDean, Admin];
 }
 
 /// <summary>Giá trị cột phan_quyen.pham_vi.</summary>

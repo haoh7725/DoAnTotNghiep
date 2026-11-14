@@ -21,7 +21,7 @@ public sealed class ProductsController(
     WorkflowNotificationDispatcher workflowNotifications) : ControllerBase
 {
     [HttpGet("api/products/pending-review")]
-    [Authorize(Roles = "TRUONG_BO_MON,TRUONG_KHOA,PHONG_QLKH,QUAN_TRI")]
+    [Authorize(Roles = "TRUONG_BO_MON,TRUONG_KHOA,TRUONG_KHOA,QUAN_TRI")]
     public async Task<IActionResult> PendingReview(CancellationToken cancellationToken)
     {
         var accountId = currentUser.Id
@@ -200,6 +200,7 @@ public sealed class ProductsController(
     // PATCH /api/products/{id}/article-progress
     // Chỉ cập nhật trạng thái xuất bản, không mở khóa toàn bộ nội dung sản phẩm.
     [HttpPatch("api/products/{id:long}/article-progress")]
+    [Authorize(Roles = "QUAN_TRI")]
     public async Task<ActionResult<ProductResponse>> UpdateArticleProgress(
         long id,
         [FromBody] UpdateArticleProgressRequest request,
@@ -270,7 +271,14 @@ public sealed class ProductsController(
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
         var result = await ExecuteInTransactionAsync(async () =>
         {
+            if (request.ClassificationId.HasValue)
+            {
+                var currentProduct = await db.Products.AsNoTracking().SingleAsync(p => p.Id == id, cancellationToken);
+                await ValidateClassification(currentProduct.ResearchPlanItemId, request.ClassificationId, cancellationToken);
+            }
             var reviewed = await productService.ReviewAsync(id, request, cancellationToken);
+            if (reviewed.Status == ProductStatuses.Approved)
+                await ValidateClassification(reviewed.ResearchPlanItemId, reviewed.ClassificationId, cancellationToken);
             if (request.Action.Trim().Equals("APPROVE", StringComparison.OrdinalIgnoreCase))
             {
                 if (reviewed.Status != ProductStatuses.Approved)

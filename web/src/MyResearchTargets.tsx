@@ -4,6 +4,7 @@ import { api } from './api'
 type MyTarget = {
   id: number
   targetId: number
+  productTypeName: string
   academicYearCode: string
   allocatedArticleCount: number
   registeredArticles: number
@@ -17,7 +18,7 @@ type MyTarget = {
 
 const reviewStatus: Record<string, string> = {
   NHAP: 'Nháp', NOP: 'Đã gửi duyệt', TRUONG_BO_MON_DUYET: 'Trưởng bộ môn đã duyệt',
-  TRUONG_KHOA_DUYET: 'Trưởng khoa đã duyệt', PHONG_QLKH_DUYET: 'Phòng QLKH đã duyệt',
+  TRUONG_KHOA_DUYET: 'Trưởng khoa đã duyệt', PHONG_QLKH_DUYET: 'Trưởng khoa đã duyệt',
   DA_DUYET: 'Đã duyệt', TRA_LAI: 'Yêu cầu bổ sung',
 }
 
@@ -45,15 +46,15 @@ export function MyResearchTargets({ onOpenProducts, onOpenProduct, yearId }: { o
   const completed = items.reduce((sum, x) => sum + x.approvedArticles, 0)
 
   return <>
-    <p className="eyebrow">PHÂN CÔNG BÀI BÁO</p>
-    <h1>Chỉ tiêu bài báo của tôi</h1>
-    <p className="muted">Mỗi bài tính số lượng cho một giảng viên phụ trách. Đồng tác giả được ghi nhận công trình và quy đổi đóng góp riêng.</p>
+    <p className="eyebrow">PHÂN CÔNG NCKH</p>
+    <h1>Chỉ tiêu NCKH của tôi</h1>
+    <p className="muted">Theo dõi từng loại sản phẩm được giao. Mỗi sản phẩm tính số lượng cho một giảng viên phụ trách; đồng tác giả được quy đổi đóng góp riêng.</p>
     {error && <p className="alert" role="alert">{error}</p>}
     {loading ? <p className="loading">Đang tải chỉ tiêu…</p> : <>
       <div className="personal-target-summary">
-        <article><span>Được phân công</span><strong>{allocated}</strong><small>bài báo</small></article>
-        <article><span>Đã hoàn thành</span><strong>{completed}</strong><small>đã duyệt và xuất bản</small></article>
-        <article><span>Còn lại</span><strong>{Math.max(0, allocated - completed)}</strong><small>bài cần hoàn thành</small></article>
+        <article><span>Được phân công</span><strong>{allocated}</strong><small>sản phẩm NCKH</small></article>
+        <article><span>Đã hoàn thành</span><strong>{completed}</strong><small>sản phẩm đã công nhận</small></article>
+        <article><span>Còn lại</span><strong>{Math.max(0, allocated - completed)}</strong><small>sản phẩm cần hoàn thành</small></article>
       </div>
       {items.length === 0 ? <section className="panel">
         <h2>Chưa có chỉ tiêu được giao</h2>
@@ -63,7 +64,7 @@ export function MyResearchTargets({ onOpenProducts, onOpenProduct, yearId }: { o
         const percent = Math.max(0, item.completionPercent)
         return <section className="panel personal-target-card" key={item.id}>
           <div className="section-top">
-            <div><h2>Năm học {item.academicYearCode}</h2><p className="muted">Giao ngày {item.allocationDate} · Hạn hoàn thành: {item.deadline ?? 'Chưa quy định'}</p></div>
+            <div><h2>{item.productTypeName} · {item.academicYearCode}</h2><p className="muted">Chỉ tiêu #{item.targetId} · Giao ngày {item.allocationDate} · Hạn hoàn thành: {item.deadline ?? 'Chưa quy định'}</p></div>
             <span className={`personal-target-status ${item.isCompleted ? 'done' : ''}`}>{item.isCompleted ? 'Đã hoàn thành' : 'Đang thực hiện'}</span>
           </div>
           <div className="personal-target-numbers">
@@ -73,7 +74,7 @@ export function MyResearchTargets({ onOpenProducts, onOpenProduct, yearId }: { o
             <span>Còn lại <strong>{remaining}</strong></span>
           </div>
           <div className="personal-target-progress" aria-label={`Hoàn thành ${percent}%`}><span style={{ width: `${Math.min(100, percent)}%` }} /></div>
-          <p className="muted">Tiến độ: <strong>{percent}%</strong>. Chỉ bài báo đã liên kết chỉ tiêu, được duyệt và xuất bản mới được tính.</p>
+          <p className="muted">Tiến độ: <strong>{percent}%</strong>. Sản phẩm phải liên kết đúng chỉ tiêu và được công nhận; bài báo còn cần đã xuất bản.</p>
           {item.linkedProducts.length > 0 ? <div className="linked-target-products">
             <strong>Sản phẩm đã liên kết</strong>
             {item.linkedProducts.map(product => <button key={product.id} onClick={() => onOpenProduct(product.id)}>

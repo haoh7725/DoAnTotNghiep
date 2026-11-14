@@ -7,6 +7,7 @@ import './Reports.css'
 type Target = {
   id: number
   facultyId: number
+  productTypeId: number
   academicYearId: number
   assignedArticleCount: number
   status: string
@@ -34,6 +35,7 @@ export function ManagementProgressDashboard({ lookups, onOpenTargets }: {
   onOpenTargets: () => void
 }) {
   const [targets, setTargets] = useState<Target[]>([])
+  const [types, setTypes] = useState<{ id: number; name: string }[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [progress, setProgress] = useState<Progress | null>(null)
   const [loading, setLoading] = useState(true)
@@ -42,6 +44,7 @@ export function ManagementProgressDashboard({ lookups, onOpenTargets }: {
   useEffect(() => {
     let active = true
     setLoading(true)
+    api<{ id: number; name: string }[]>('/product-types').then(rows => { if (active) setTypes(rows) }).catch(() => {})
     api<Target[]>('/research-targets')
       .then(data => {
         if (!active) return
@@ -76,7 +79,7 @@ export function ManagementProgressDashboard({ lookups, onOpenTargets }: {
   const targetLabel = (target: Target) => {
     const faculty = lookups?.faculties.find(item => item.id === target.facultyId)?.name ?? `Khoa #${target.facultyId}`
     const year = lookups?.academicYears.find(item => item.id === target.academicYearId)?.code ?? `Năm học #${target.academicYearId}`
-    return `${faculty} — ${year}`
+    return `${types.find(t => t.id === target.productTypeId)?.name ?? 'NCKH'} · ${faculty} — ${year} · #${target.id}`
   }
   const chartData = useMemo(() => progress?.units.map(unit => ({
     ...unit,
@@ -88,9 +91,14 @@ export function ManagementProgressDashboard({ lookups, onOpenTargets }: {
       <div>
         <p className="eyebrow">GIÁM SÁT CHỈ TIÊU</p>
         <h2>Tiến độ hoàn thành theo đơn vị</h2>
-        <p className="muted">Tỷ lệ được tính từ số bài báo đã duyệt trên chỉ tiêu được giao.</p>
+        <p className="muted">Tỷ lệ tính từ sản phẩm đã công nhận theo từng chỉ tiêu và phạm vi đơn vị bạn quản lý.</p>
       </div>
       <button onClick={onOpenTargets}>Mở nghiệp vụ chỉ tiêu</button>
+    </div>
+    <div className="management-progress-summary">
+      <div><span>Chỉ tiêu đang quản lý</span><strong>{targets.length}</strong></div>
+      <div><span>Đang phân bổ</span><strong>{targets.filter(t => ['DA_TIEP_NHAN', 'CONG_BO'].includes(t.status)).length}</strong></div>
+      <div><span>Đã khóa phân bổ</span><strong>{targets.filter(t => t.status === 'DA_KHOA').length}</strong></div>
     </div>
     {targets.length > 1 && <label>Chỉ tiêu đang theo dõi
       <select value={selectedId ?? ''} onChange={event => setSelectedId(Number(event.target.value) || null)}>
@@ -99,8 +107,8 @@ export function ManagementProgressDashboard({ lookups, onOpenTargets }: {
     </label>}
     {loading ? <p role="status">Đang tải tiến độ…</p> : error ? <p className="alert" role="alert">{error}</p> : !selected || !progress ? <p className="empty">Chưa có chỉ tiêu phù hợp để giám sát.</p> : <>
       <div className="management-progress-summary">
-        <div><span>Chỉ tiêu</span><strong>{progress.assignedArticleCount} bài</strong></div>
-        <div><span>Đã duyệt</span><strong>{progress.approvedArticles} bài</strong></div>
+        <div><span>Được giao</span><strong>{progress.assignedArticleCount} sản phẩm</strong></div>
+        <div><span>Đã công nhận</span><strong>{progress.approvedArticles} sản phẩm</strong></div>
         <div><span>Hoàn thành</span><strong>{progress.completionPercent}%</strong></div>
       </div>
       <div className="management-progress-total" aria-label={`Hoàn thành ${progress.completionPercent}%`}>

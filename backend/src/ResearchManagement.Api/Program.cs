@@ -28,6 +28,7 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddScoped<WorkflowNotificationDispatcher>();
+builder.Services.AddScoped<AnnualResearchService>();
 
 var jwt = JwtOptions.FromConfiguration(builder.Configuration);
 builder.Services
@@ -144,7 +145,7 @@ app.MapControllers();
 await using (var schemaScope = app.Services.CreateAsyncScope())
 {
     var schemaDb = schemaScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    foreach (var migration in new[] { "ConversionSharingMigration.sql", "ProductBusinessRulesMigration.sql", "ProjectRequirementsMigration.sql", "TargetConsistencyMigration.sql", "ReferenceResearchTaxonomyMigration.sql", "TargetProductTypesMigration.sql" })
+    foreach (var migration in new[] { "ConversionSharingMigration.sql", "ProductBusinessRulesMigration.sql", "ProjectRequirementsMigration.sql", "TargetConsistencyMigration.sql", "ReferenceResearchTaxonomyMigration.sql", "TargetProductTypesMigration.sql", "FacultyWorkflow2023Migration.sql", "ArticleProgressRequestsMigration.sql" })
     {
         await using var migrationStream = typeof(Program).Assembly.GetManifestResourceStream(migration)!;
         using var migrationReader = new StreamReader(migrationStream);

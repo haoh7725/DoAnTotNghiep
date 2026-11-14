@@ -10,8 +10,8 @@ type Summary = { id: number; lecturerId: number; academicYearId: number; academi
 type DetailLine = { id: number; productId: number; productTitle: string; productTypeName: string; ruleCode: string; ruleVersion: number; baseValue: number; authorCoefficient: number; convertedValue: number; unit: string; calculationBasis: string }
 type Detail = Summary & { classificationBasis: string | null; lecturerCodeSnapshot: string; lecturerNameSnapshot: string; details: DetailLine[] }
 
-const office = (user: Profile) => user.roles.some(x => x.role === 'PHONG_QLKH' || x.role === 'QUAN_TRI')
-const manager = (user: Profile) => user.roles.some(x => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'BAN_GIAM_HIEU'].includes(x.role))
+const office = (user: Profile) => user.roles.some(x => x.role === 'TRUONG_KHOA' || x.role === 'QUAN_TRI')
+const manager = (user: Profile) => user.roles.some(x => ['TRUONG_BO_MON', 'TRUONG_KHOA', 'REMOVED_BOARD'].includes(x.role))
 const unitName = (unit: string) => unit === 'GIO' ? 'Giờ NCKH' : unit === 'DIEM' ? 'Điểm NCKH' : 'Quy chế trước đây'
 const fmt = (value: number) => value.toLocaleString('vi-VN', { maximumFractionDigits: 4 })
 
@@ -30,7 +30,7 @@ function MyEvaluation({ lookups }: { lookups: Lookups | null }) {
   useEffect(() => { if (!year && lookups?.academicYears.length) setYear(String(preferredAcademicYear(lookups.academicYears).id)) }, [lookups, year])
   async function load() { if (!year) return; setLoading(true); setError(''); setData(null); try { setData(await api<Detail>(`/evaluations/me?academicYearId=${year}`)) } catch (e) { setError((e as Error).message) } finally { setLoading(false) } }
   useEffect(() => { if (year) void load() }, [year]) // eslint-disable-line react-hooks/exhaustive-deps
-  return <><p className="eyebrow">ĐÁNH GIÁ THI ĐUA</p><h1>Kết quả đánh giá của tôi</h1><p className="muted">Kết quả chỉ hiển thị sau khi Phòng Quản lý khoa học chốt.</p>{!lookups?.academicYears.length ? <p className="alert" role="alert">Chưa có năm học. Vui lòng liên hệ quản trị viên để cấu hình năm học trước.</p> : <section className="panel evaluation-filter"><YearSelect lookups={lookups} value={year} onChange={setYear} /><button className="primary" disabled={!year || loading} onClick={load}>{loading ? 'Đang tải…' : 'Xem kết quả'}</button></section>}{error && <p className="alert" role="alert">{error}</p>}{data && <EvaluationDetail data={data} />}</>
+  return <><p className="eyebrow">ĐÁNH GIÁ THI ĐUA</p><h1>Kết quả đánh giá của tôi</h1><p className="muted">Kết quả chỉ hiển thị sau khi Trưởng khoa chốt.</p>{!lookups?.academicYears.length ? <p className="alert" role="alert">Chưa có năm học. Vui lòng liên hệ quản trị viên để cấu hình năm học trước.</p> : <section className="panel evaluation-filter"><YearSelect lookups={lookups} value={year} onChange={setYear} /><button className="primary" disabled={!year || loading} onClick={load}>{loading ? 'Đang tải…' : 'Xem kết quả'}</button></section>}{error && <p className="alert" role="alert">{error}</p>}{data && <EvaluationDetail data={data} />}</>
 }
 
 function ReadOnlyEvaluationResults({ lookups }: { lookups: Lookups | null }) {

@@ -7,6 +7,8 @@ COPY infra/database/18_project_requirements.sql ./infra/database/18_project_requ
 COPY infra/database/19_target_consistency.sql ./infra/database/19_target_consistency.sql
 COPY infra/database/20_reference_research_taxonomy.sql ./infra/database/20_reference_research_taxonomy.sql
 COPY infra/database/21_target_product_types.sql ./infra/database/21_target_product_types.sql
+COPY infra/database/22_faculty_workflow_2023.sql ./infra/database/22_faculty_workflow_2023.sql
+COPY infra/database/23_article_progress_requests.sql ./infra/database/23_article_progress_requests.sql
 RUN dotnet restore backend/ResearchManagement.slnx
 RUN dotnet publish backend/src/ResearchManagement.Api/ResearchManagement.Api.csproj -c Release -o /app/publish --no-restore
 

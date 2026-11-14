@@ -17,8 +17,8 @@ public static class Policies
     public static void Register(AuthorizationOptions options)
     {
         options.AddPolicy(Admin, p => p.RequireRole(Roles.Admin));
-        options.AddPolicy(ResearchOffice, p => p.RequireRole(Roles.ResearchOffice, Roles.Admin));
+        options.AddPolicy(ResearchOffice, p => p.RequireRole(Roles.FacultyDean, Roles.Admin));
         options.AddPolicy(Management, p => p.RequireRole(
-            Roles.DepartmentHead, Roles.FacultyDean, Roles.ResearchOffice, Roles.BoardOfDirectors, Roles.Admin));
+            Roles.DepartmentHead, Roles.FacultyDean, Roles.Admin));
     }
 }

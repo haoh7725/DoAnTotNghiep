@@ -152,6 +152,7 @@ public sealed class ProductService(
             request.ResearchTargetId);
         product.SetExternalAuthorCount(request.ExternalAuthorCount);
         product.SetWorkIdentifier(request.WorkIdentifier);
+        product.SetRecognitionQuantity(request.RecognitionQuantity);
         product.ClassificationId = request.ClassificationId;
 
         if (planItem.Status == "CHUA_THUC_HIEN")
@@ -224,7 +225,7 @@ public sealed class ProductService(
                 throw new BusinessRuleException("Đã dùng hết số bài được phân công. Bạn có thể sửa bài đã liên kết hoặc bỏ liên kết bài nháp/trả lại trước khi thay bằng bài khác.");
             TargetRules.EnsurePublicationMatches(target.JournalConferenceId, journalConferenceId);
             if (target.Deadline.HasValue && target.Deadline.Value < VietnamToday())
-                throw new BusinessRuleException("Chỉ tiêu đã quá hạn; Phòng QLKH cần gia hạn trước khi liên kết thêm bài.");
+                throw new BusinessRuleException("Chỉ tiêu đã quá hạn; Trưởng khoa cần gia hạn trước khi liên kết thêm bài.");
     }
 
     public async Task<ProductResponse> UpdateAsync(
@@ -260,6 +261,7 @@ public sealed class ProductService(
         product.Update(request.Title, request.Description, request.PublicationInfo, request.PublishedDate,
             requestedArticleStatus, request.JournalIndex, request.JournalClassification, request.ProjectLevel);
         if (request.WorkIdentifier is not null) product.SetWorkIdentifier(request.WorkIdentifier);
+        if (request.RecognitionQuantity.HasValue) product.SetRecognitionQuantity(request.RecognitionQuantity.Value);
         if (request.ExternalAuthorCount.HasValue) product.SetExternalAuthorCount(request.ExternalAuthorCount.Value);
         if (request.ClassificationId.HasValue) product.ClassificationId = request.ClassificationId;
 
@@ -279,14 +281,21 @@ public sealed class ProductService(
             ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
 
         if (!currentUser.IsInRole(Roles.Admin) && !currentUser.IsInRole(Roles.DepartmentHead) &&
-            !currentUser.IsInRole(Roles.FacultyDean) && !currentUser.IsInRole(Roles.ResearchOffice))
+            !currentUser.IsInRole(Roles.FacultyDean) && !currentUser.IsInRole(Roles.FacultyDean))
             throw new ForbiddenException("Chỉ người duyệt được chuyển bước tiến độ bài viết.");
         if (!currentUser.IsInRole(Roles.Admin))
         {
             var reviewStep = await GetReviewStepAsync(product, cancellationToken);
             if (!currentUser.IsInRole(reviewStep.Role))
                 throw new ForbiddenException("Chỉ người duyệt ở bước hiện tại được chuyển tiến độ bài viết.");
+            var scope = await lecturerAccess.GetAccessInfoAsync(product.SubmittedByLecturerId, cancellationToken)
+                ?? throw new NotFoundException("Không tìm thấy đơn vị tác giả.");
+            if (!currentUser.Assignments.Any(a => a.Role == reviewStep.Role && ScopeRules.CanAccess([a], scope.FacultyId, scope.DepartmentId)))
+                throw new ForbiddenException("Không có quyền chuyển tiến độ ngoài đơn vị được phân công.");
         }
+        foreach (var authorId in (await coAuthors.GetByProductIdAsync(product.Id, cancellationToken)).Select(x => x.LecturerId).Append(product.SubmittedByLecturerId))
+            if ((await lecturers.GetByIdAsync(authorId, cancellationToken))?.AccountId == currentUser.Id)
+                throw new ForbiddenException("Không được tự xác nhận tiến độ công bố của sản phẩm mình tham gia.");
         if (product.Status == ProductStatuses.Approved)
             throw new BusinessRuleException("Sản phẩm đã được duyệt hoàn tất nên không thể cập nhật tiến độ bài viết.");
 
@@ -387,9 +396,9 @@ public sealed class ProductService(
             throw new ForbiddenException("Bạn không có quyền xét duyệt sản phẩm ngoài đơn vị được phân công.");
 
         if (request.ScoreEquivalent.HasValue &&
-            requiredRole != Roles.ResearchOffice &&
+            requiredRole != Roles.FacultyDean &&
             !currentUser.IsInRole(Roles.Admin))
-            throw new BusinessRuleException("Chỉ Phòng QLKH được nhập điểm quy đổi ở bước duyệt cuối.");
+            throw new BusinessRuleException("Chỉ Trưởng khoa được nhập điểm quy đổi ở bước duyệt cuối.");
 
         var actorId = GetCurrentAccountId();
         var authorAccountIds = new HashSet<long> { owner.AccountId };
@@ -406,6 +415,12 @@ public sealed class ProductService(
         if (action == "APPROVE")
         {
             var nextStatus = approvalStatus;
+            if (request.ClassificationId.HasValue)
+            {
+                if (nextStatus != ProductStatuses.Approved)
+                    throw new BusinessRuleException("Chỉ người công nhận cuối được xác nhận phân loại quy đổi.");
+                product.ClassificationId = request.ClassificationId;
+            }
             await AdvanceArticleStatusByReviewerAsync(product, nextStatus, request, cancellationToken);
             if (nextStatus == ProductStatuses.Approved)
                 await EnsureReadyForFinalApprovalAsync(product, cancellationToken);
@@ -483,8 +498,8 @@ public sealed class ProductService(
 
     public async Task<ProductResponse> CorrectRecognitionDateAsync(long id, DateOnly date, string reason, CancellationToken ct)
     {
-        if (!currentUser.IsInRole(Roles.ResearchOffice) && !currentUser.IsInRole(Roles.Admin))
-            throw new ForbiddenException("Chỉ Phòng QLKH hoặc quản trị viên được bổ sung ngày công nhận.");
+        if (!currentUser.IsInRole(Roles.FacultyDean) && !currentUser.IsInRole(Roles.Admin))
+            throw new ForbiddenException("Chỉ Trưởng khoa hoặc quản trị viên được bổ sung ngày công nhận.");
         var product = await products.GetByIdAsync(id, ct) ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
         await EnsureCanReadAsync(product, ct);
         if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 1000)
@@ -547,6 +562,8 @@ public sealed class ProductService(
 
     private async Task EnsureReadyForFinalApprovalAsync(Product product, CancellationToken cancellationToken)
     {
+        if (!product.ClassificationId.HasValue)
+            throw new BusinessRuleException("Phải xác nhận phân loại quy đổi trước khi công nhận sản phẩm.");
         var item = await planItems.GetByIdAsync(product.ResearchPlanItemId, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy nội dung kế hoạch của sản phẩm.");
         var type = await productTypes.GetByIdAsync(item.ProductTypeId, cancellationToken)
@@ -570,7 +587,7 @@ public sealed class ProductService(
         if (nextProductStatus == ProductStatuses.Approved)
         {
             if (current != "DA_XUAT_BAN" && request.ArticleStatus != "DA_XUAT_BAN")
-                throw new BusinessRuleException("Phòng QLKH phải xác nhận bài đã xuất bản trước khi công nhận cuối.");
+                throw new BusinessRuleException("Trưởng khoa phải xác nhận bài đã xuất bản trước khi công nhận cuối.");
             if (request.ArticleStatus == "DA_XUAT_BAN")
             {
                 ArticleProgressPolicy.ValidateTransition(current, "DA_XUAT_BAN", evidenceCount);
@@ -580,17 +597,7 @@ public sealed class ProductService(
             return;
         }
 
-        var next = current switch
-        {
-            "DANG_VIET" => "DANG_PHAN_BIEN",
-            "DANG_PHAN_BIEN" => "DA_NHAN_XET",
-            _ => current
-        };
-        if (next != current)
-        {
-            ArticleProgressPolicy.ValidateTransition(current, next, evidenceCount);
-            product.UpdateArticleProgress(next, product.PublishedDate, product.PublicationInfo);
-        }
+        // Reviewers confirm external publication stages separately against evidence.
     }
 
     private async Task<ProductResponse> ToResponseAsync(
@@ -660,7 +667,10 @@ public sealed class ProductService(
             product.ExternalAuthorCount,
             product.ClassificationId,
             responseItem?.ProductTypeId ?? 0,
-            responseType?.Code ?? "", product.WorkIdentifier, requiredRole, canReview, canEdit);
+            responseType?.Code ?? "", product.WorkIdentifier, requiredRole, canReview, canEdit,
+            product.RecognitionQuantity, responseType?.Code == "BAI_BAO" &&
+            ownerLecturer?.AccountId == currentUser.Id && product.Status != ProductStatuses.Approved &&
+            ArticleProgressPolicy.Rank(product.ArticleStatus) is >= 0 and < 3);
     }
 
     private static ProductSummaryResponse ToSummary(Product p) =>

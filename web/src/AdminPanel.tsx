@@ -12,6 +12,8 @@ const tabs = [{ key: 'faculties', label: 'Khoa' }, { key: 'departments', label: 
 
 export function AdminPanel({ onChanged, currentAccountId }: { onChanged: () => void; currentAccountId: number }) {
   const [tab, setTab] = useState('faculties'); const [items, setItems] = useState<Entity[]>([])
+  const [search, setSearch] = useState('')
+  const visibleItems = items.filter(item => Object.values(item).some(value => String(value ?? '').toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi'))))
   const [faculties, setFaculties] = useState<Faculty[]>([]); const [departments, setDepartments] = useState<Department[]>([])
   const [error, setError] = useState(''); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false)
   const [edit, setEdit] = useState<Entity | null | undefined>(undefined); const [accountAction, setAccountAction] = useState<AccountAction | null>(null)
@@ -19,11 +21,11 @@ export function AdminPanel({ onChanged, currentAccountId }: { onChanged: () => v
   const editFormRef = useAutoReveal<HTMLFormElement>(edit !== undefined, edit?.id ?? `new-${tab}`)
   useEffect(() => {
     let active = true; setLoading(true); setError(''); setItems([])
-    Promise.all([api<Entity[] | { items: Account[]; total: number }>(`/admin/${tab}${tab === 'accounts' ? `?page=${page}&pageSize=20` : ''}`), api<Faculty[]>('/admin/faculties'), api<Department[]>('/admin/departments')])
+    Promise.all([api<Entity[] | { items: Account[]; total: number }>(`/admin/${tab}${tab === 'accounts' ? `?page=${page}&pageSize=20&search=${encodeURIComponent(search)}` : ''}`), api<Faculty[]>('/admin/faculties'), api<Department[]>('/admin/departments')])
       .then(([data, fs, ds]) => { if (active) { setItems(Array.isArray(data) ? data : data.items); setTotal(Array.isArray(data) ? data.length : data.total); setFaculties(fs); setDepartments(ds) } })
       .catch(e => { if (active) setError(e.message) }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [tab, revision, page])
+  }, [tab, revision, page, search])
   async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const data = Object.fromEntries(new FormData(e.currentTarget))
     const payload = tab === 'departments' ? { ...data, facultyId: Number(data.facultyId) } : tab === 'accounts' ? { ...data, email: data.email || null } : data
@@ -49,8 +51,8 @@ export function AdminPanel({ onChanged, currentAccountId }: { onChanged: () => v
         : <><label>Mã<input name="code" required maxLength={tab === 'academic-years' ? 20 : 30} defaultValue={value('code')} /></label>{tab !== 'academic-years' && <label>Tên<input name="name" required maxLength={200} defaultValue={value('name')} /></label>}{tab === 'departments' && <label>Khoa<select name="facultyId" required defaultValue={value('facultyId')}><option value="">Chọn khoa</option>{faculties.map(f => <option value={f.id} key={f.id}>{f.name}</option>)}</select></label>}{tab === 'academic-years' && <><label>Ngày bắt đầu<input type="date" name="startDate" required defaultValue={value('startDate')} /></label><label>Ngày kết thúc<input type="date" name="endDate" required defaultValue={value('endDate')} /></label></>}</>}
     </div><div className="actions"><button className="primary" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu'}</button><button type="button" disabled={busy} onClick={() => setEdit(undefined)}>Hủy</button></div></form>}
     <section className="panel"><div className="section-top"><h2>{tabs.find(t => t.key === tab)?.label}</h2><button className="primary" disabled={busy || loading} onClick={() => { setEdit(null); setAccountAction(null); setError('') }}>+ Thêm mới</button></div>
-      {loading ? <p role="status">Đang tải…</p> : <><div className="table-wrap"><table><thead><tr><th>Mã / tài khoản</th><th>Tên / thời gian</th><th>Thông tin</th><th>Thao tác</th></tr></thead><tbody>
-        {items.map(item => <tr key={item.id}><td>{'username' in item ? item.username : item.code}</td><td>{'fullName' in item ? item.fullName : 'name' in item ? item.name : `${item.startDate} → ${item.endDate}`}</td><td>{'status' in item ? item.status === 'HOAT_DONG' ? 'Hoạt động' : 'Khóa' : 'facultyId' in item ? faculties.find(f => f.id === item.facultyId)?.name : '—'}</td><td><div className="actions"><button disabled={busy} onClick={() => { setEdit(item); setAccountAction(null); setError('') }}>Sửa</button>{'username' in item && <><button disabled={busy} onClick={() => { setEdit(undefined); setAccountAction({ type: 'permissions', account: item }); setError('') }}>Phân quyền</button><button disabled={busy} onClick={() => { setEdit(undefined); setAccountAction({ type: 'password', account: item }); setError('') }}>Đặt mật khẩu</button></>}<button disabled={busy || ('username' in item && item.id === currentAccountId)} className="danger" onClick={() => remove(item)}>Xóa</button></div></td></tr>)}
+      <label>Tìm kiếm danh sách đang xem<input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Mã hoặc tên" /></label>{loading ? <p role="status">Đang tải…</p> : <><div className="table-wrap"><table><thead><tr><th>Mã / tài khoản</th><th>Tên / thời gian</th><th>Thông tin</th><th>Thao tác</th></tr></thead><tbody>
+        {visibleItems.map(item => <tr key={item.id}><td>{'username' in item ? item.username : item.code}</td><td>{'fullName' in item ? item.fullName : 'name' in item ? item.name : `${item.startDate} → ${item.endDate}`}</td><td>{'status' in item ? item.status === 'HOAT_DONG' ? 'Hoạt động' : 'Khóa' : 'facultyId' in item ? faculties.find(f => f.id === item.facultyId)?.name : '—'}</td><td><div className="actions"><button disabled={busy} onClick={() => { setEdit(item); setAccountAction(null); setError('') }}>Sửa</button>{'username' in item && <><button disabled={busy} onClick={() => { setEdit(undefined); setAccountAction({ type: 'permissions', account: item }); setError('') }}>Phân quyền</button><button disabled={busy} onClick={() => { setEdit(undefined); setAccountAction({ type: 'password', account: item }); setError('') }}>Đặt mật khẩu</button></>}<button disabled={busy || ('username' in item && item.id === currentAccountId)} className="danger" onClick={() => remove(item)}>Xóa</button></div></td></tr>)}
       </tbody></table></div>{!items.length && <p className="empty">Chưa có dữ liệu.</p>}{tab === 'accounts' && <div className="actions"><button disabled={page === 1} onClick={() => setPage(x => x - 1)}>Trước</button><span>Trang {page} · {total} tài khoản</span><button disabled={page * 20 >= total} onClick={() => setPage(x => x + 1)}>Sau</button></div>}{error && <button onClick={() => setRevision(x => x + 1)}>Tải lại</button>}</>}
     </section></>
 }

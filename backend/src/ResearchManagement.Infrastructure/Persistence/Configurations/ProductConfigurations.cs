@@ -10,6 +10,7 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
     {
         builder.ToTable("san_pham", "nckh");
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.RecognitionQuantity).HasColumnName("so_luong_quy_doi").HasPrecision(12, 4).HasDefaultValue(1m);
 
         builder.Property(x => x.Id).HasColumnName("id");
         builder.Property(x => x.ResearchPlanItemId).HasColumnName("noi_dung_ke_hoach_id").IsRequired();

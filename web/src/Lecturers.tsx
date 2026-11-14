@@ -24,7 +24,7 @@ const genderNames: Record<string, string> = { NAM: 'Nam', NU: 'Nữ', KHAC: 'Kh�
 
 /* ===== Quy tắc quyền, phản chiếu LecturerAccess.cs (backend vẫn là nơi quyết định cuối cùng) ===== */
 export const isOffice = (user: Profile) =>
-  user.roles.some(r => (r.role === 'PHONG_QLKH' || r.role === 'QUAN_TRI') && r.scope === 'TOAN_TRUONG')
+  user.roles.some(r => (r.role === 'TRUONG_KHOA' || r.role === 'QUAN_TRI') && r.scope === 'TOAN_TRUONG')
 export const canBrowseLecturers = (user: Profile) => user.roles.some(r => r.role !== 'GIANG_VIEN')
 
 function permissionsFor(user: Profile, lecturer: Lecturer) {
@@ -236,9 +236,9 @@ function LecturerDetail({ user, lookups, lecturerId, onBack }: {
   const perm = permissionsFor(user, lecturer)
   const level = perm.office ? 'office' : perm.owner ? 'owner' : 'view'
   const notice = {
-    office: 'Bạn có quyền Phòng QLKH / Quản trị: được sửa toàn bộ hồ sơ và lý lịch khoa học của giảng viên này.',
-    owner: 'Đây là hồ sơ của bạn. Bạn được sửa thông tin cá nhân và lý lịch khoa học. Mã, bộ môn, học hàm, học vị và chức vụ do Phòng QLKH quản lý.',
-    view: 'Bạn chỉ có quyền xem hồ sơ này. Việc chỉnh sửa thuộc về giảng viên và Phòng QLKH.',
+    office: 'Bạn có quyền Trưởng khoa / Quản trị: được sửa toàn bộ hồ sơ và lý lịch khoa học của giảng viên này.',
+    owner: 'Đây là hồ sơ của bạn. Bạn được sửa thông tin cá nhân và lý lịch khoa học. Mã, bộ môn, học hàm, học vị và chức vụ do Trưởng khoa quản lý.',
+    view: 'Bạn chỉ có quyền xem hồ sơ này. Việc chỉnh sửa thuộc về giảng viên và Trưởng khoa.',
   }[level]
   return <>
     {back}
@@ -294,7 +294,7 @@ function PlanReopenSection({ lecturer, lookups }: { lecturer: Lecturer; lookups:
   }
 
   return <section className="panel">
-    <div className="section-top"><div><h2>Điều chỉnh kế hoạch NCKH</h2><p className="muted">Phòng QLKH có thể mở lại kế hoạch đã đăng ký; giảng viên sẽ nhận thông báo và phải đăng ký lại.</p></div></div>
+    <div className="section-top"><div><h2>Điều chỉnh kế hoạch NCKH</h2><p className="muted">Trưởng khoa có thể mở lại kế hoạch đã đăng ký; giảng viên sẽ nhận thông báo và phải đăng ký lại.</p></div></div>
     {error && <p className="alert" role="alert">{error}</p>}
     <label>Năm học<select value={yearId} onChange={e => setYearId(e.target.value)}><option value="">Chọn năm học</option>{years.map(year => <option key={year.id} value={year.id}>{year.code}</option>)}</select></label>
     {loading ? <p>Đang kiểm tra kế hoạch…</p> : yearId && !plan ? <p className="empty">Giảng viên chưa có kế hoạch trong năm học này.</p> : plan && <div className="section-top">
@@ -321,7 +321,7 @@ function PersonalSection({ lecturer, perm, lookups, onSaved }: {
     const personal = { fullName: String(f.get('fullName') ?? '').trim(), birthDate: text('birthDate'), gender: text('gender'), email: text('email'), phone: text('phone') }
     setBusy(true); setError(''); setSaved(false)
     try {
-      // Phòng QLKH/Quản trị sửa đủ trường qua PUT /{id}; giảng viên chính chủ chỉ gửi trường cá nhân qua PUT /me.
+      // Trưởng khoa/Quản trị sửa đủ trường qua PUT /{id}; giảng viên chính chủ chỉ gửi trường cá nhân qua PUT /me.
       const updated = perm.office
         ? await api<Lecturer>(`/lecturers/${lecturer.id}`, 'PUT', { ...personal, departmentId: Number(f.get('departmentId')), code: String(f.get('code') ?? '').trim(),
           academicRank: text('academicRank'), degree: text('degree'), position: text('position') })
@@ -360,11 +360,11 @@ function PersonalSection({ lecturer, perm, lookups, onSaved }: {
               {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
               : <input value={`${lecturer.departmentName} — ${lecturer.facultyName}`} disabled readOnly />}</label>
         </div>
-        {!perm.editManaged && <p className="muted">Các trường có biểu tượng khóa do Phòng QLKH quản lý. Liên hệ Phòng QLKH nếu cần điều chỉnh.</p>}
+        {!perm.editManaged && <p className="muted">Các trường có biểu tượng khóa do Trưởng khoa quản lý. Liên hệ Trưởng khoa nếu cần điều chỉnh.</p>}
         <div className="actions"><button className="primary" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu thay đổi'}</button>
           <button type="button" disabled={busy} onClick={() => { setEditing(false); setError('') }}>Hủy</button></div>
       </form>}
   </section>
 }
 
-const Lock = () => <span className="lec-lock" title="Chỉ Phòng QLKH được sửa" aria-label="Bị khóa, chỉ Phòng QLKH được sửa">🔒</span>
+const Lock = () => <span className="lec-lock" title="Chỉ Trưởng khoa được sửa" aria-label="Bị khóa, chỉ Trưởng khoa được sửa">🔒</span>

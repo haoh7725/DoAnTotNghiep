@@ -15,9 +15,7 @@ public sealed record LecturerCommitmentCapacity(
 
     public void EnsureCanAssign(int requestedArticles)
     {
-        if (requestedArticles > AvailableArticles)
-            throw new BusinessRuleException(
-                $"Giảng viên chỉ còn có thể nhận {AvailableArticles} bài " +
-                $"(cam kết {CommittedArticles}, đã giao {AssignedArticles}).");
+        if (requestedArticles <= 0)
+            throw new BusinessRuleException("Số sản phẩm được giao phải lớn hơn 0.");
     }
 }

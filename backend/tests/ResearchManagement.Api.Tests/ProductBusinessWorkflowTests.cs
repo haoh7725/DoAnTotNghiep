@@ -47,14 +47,14 @@ public sealed class ProductBusinessWorkflowTests
 
     [Theory]
     [InlineData(false, false, Roles.DepartmentHead, ProductStatuses.DepartmentHeadApproved)]
-    [InlineData(true, false, Roles.FacultyDean, ProductStatuses.FacultyDeanApproved)]
-    [InlineData(true, true, Roles.ResearchOffice, ProductStatuses.Approved)]
+    [InlineData(true, false, Roles.FacultyDean, ProductStatuses.Approved)]
+    [InlineData(true, true, Roles.Admin, ProductStatuses.Approved)]
     public void Submitted_product_skips_conflicted_reviewers(bool head, bool dean, string role, string status)
         => Assert.Equal((role, status), ProductReviewPolicy.Next(ProductStatuses.Submitted, head, dean));
 
     [Fact]
     public void Dean_conflict_routes_department_approved_product_to_office()
-        => Assert.Equal((Roles.ResearchOffice, ProductStatuses.Approved),
+        => Assert.Equal((Roles.Admin, ProductStatuses.Approved),
             ProductReviewPolicy.Next(ProductStatuses.DepartmentHeadApproved, false, true));
 
     [Theory]
@@ -293,7 +293,7 @@ public sealed class ProductBusinessWorkflowTests
             Assert.Equal("Tốt", (await db.Evaluations.FindAsync(pointDetail.Id))!.Classification);
             Assert.Equal("DIEM", (await db.Evaluations.FindAsync(pointDetail.Id))!.EvaluationUnit);
             user.Use(owner);
-            var progress = Assert.IsType<OkObjectResult>(await new ResearchProgressController(db, user).Mine(publicationYearId, default));
+            var progress = Assert.IsType<OkObjectResult>(await new ResearchProgressController(db, user, new ResearchManagement.Api.Infrastructure.AnnualResearchService(db)).Mine(publicationYearId, default));
             var progressJson = System.Text.Json.JsonSerializer.SerializeToElement(progress.Value);
             Assert.Equal("DIEM", progressJson.GetProperty("EvaluationUnit").GetString());
             Assert.Equal(100m, progressJson.GetProperty("CompletionPercent").GetDecimal());

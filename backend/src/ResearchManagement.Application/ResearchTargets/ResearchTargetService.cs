@@ -59,6 +59,7 @@ public sealed class ResearchTargetService(
             request.JournalConferenceId,
             request.ProductTypeId);
         researchTarget.MarkAssigned(currentUser.Id ?? throw new ForbiddenException("Không xác định được tài khoản giao chỉ tiêu."));
+        researchTarget.Accept(currentUser.Id!.Value, DateTimeOffset.UtcNow);
 
         await researchTargets.AddAsync(researchTarget, cancellationToken);
         await researchTargets.SaveChangesAsync(cancellationToken);

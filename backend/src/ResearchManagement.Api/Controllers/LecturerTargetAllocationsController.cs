@@ -20,6 +20,7 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
     [HttpGet("mine")]
     public async Task<IActionResult> Mine(CancellationToken ct, [FromQuery] long? academicYearId = null)
     {
+        var today = CurrentVietnamDate();
         var accountId = currentUser.Id ?? throw new ForbiddenException("Không xác định được tài khoản.");
         var lecturer = await db.Lecturers.AsNoTracking().SingleOrDefaultAsync(x => x.AccountId == accountId, ct)
             ?? throw new NotFoundException("Tài khoản chưa liên kết với giảng viên.");
@@ -34,7 +35,7 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
                               RegisteredArticles = db.Products.Count(x => x.ResearchTargetId == target.Id && x.SubmittedByLecturerId == lecturer.Id),
                               ApprovedArticles = db.Products.Count(x => x.ResearchTargetId == target.Id &&
                                   x.SubmittedByLecturerId == lecturer.Id &&
-                                  x.Status == "DA_DUYET" && (type.Code != "BAI_BAO" || x.ArticleStatus == "DA_XUAT_BAN") &&
+                                  x.Status == "DA_DUYET" && x.PublishedDate <= today && (type.Code != "BAI_BAO" || x.ArticleStatus == "DA_XUAT_BAN") &&
                                   db.ResearchPlanItems.Any(item => item.Id == x.ResearchPlanItemId &&
                                       db.ProductTypes.Any(type => type.Id == item.ProductTypeId && type.Id == target.ProductTypeId))),
                               LinkedProducts = db.Products.Where(x => x.ResearchTargetId == target.Id &&
@@ -48,7 +49,7 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
     }
 
     [HttpGet]
-    [Authorize(Roles = "TRUONG_BO_MON,PHONG_QLKH,QUAN_TRI")]
+    [Authorize(Roles = "TRUONG_BO_MON,TRUONG_KHOA,QUAN_TRI")]
     public async Task<IActionResult> List([FromQuery] long departmentAllocationId, CancellationToken ct)
     {
         var allocation = await GetAllocation(departmentAllocationId, ct);
@@ -63,7 +64,7 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
     }
 
     [HttpGet("options")]
-    [Authorize(Roles = "TRUONG_BO_MON,PHONG_QLKH,QUAN_TRI")]
+    [Authorize(Roles = "TRUONG_BO_MON,TRUONG_KHOA,QUAN_TRI")]
     public async Task<IActionResult> Options([FromQuery] long departmentAllocationId, CancellationToken ct)
     {
         var allocation = await GetAllocation(departmentAllocationId, ct);
@@ -76,6 +77,8 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
             .Select(x => new { x.Id, x.Code, x.FullName })
             .ToListAsync(ct);
         var rows = new List<object>(lecturers.Count);
+        var assignedInDepartment = await db.LecturerTargetAllocations.Where(x => x.DepartmentAllocationId == allocation.Id).SumAsync(x => x.AllocatedArticleCount, ct);
+        var remainingInDepartment = Math.Max(0, allocation.AllocatedArticleCount - assignedInDepartment);
         foreach (var lecturer in lecturers)
         {
             var capacity = await GetCommitmentCapacity(
@@ -87,7 +90,7 @@ public sealed class LecturerTargetAllocationsController(ApplicationDbContext db,
                 lecturer.FullName,
                 capacity.CommittedArticles,
                 capacity.AssignedArticles,
-                capacity.AvailableArticles
+                AvailableArticles = remainingInDepartment
             });
         }
         return Ok(rows);

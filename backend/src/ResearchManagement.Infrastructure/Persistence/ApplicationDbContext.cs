@@ -46,6 +46,7 @@ public sealed class ApplicationDbContext(
     public DbSet<ProductCoAuthor> ProductCoAuthors => Set<ProductCoAuthor>();
     public DbSet<ProductEvidence> ProductEvidences => Set<ProductEvidence>();
     public DbSet<ReviewHistory> ReviewHistories => Set<ReviewHistory>();
+    public DbSet<ArticleProgressRequest> ArticleProgressRequests => Set<ArticleProgressRequest>();
     public DbSet<ProductSnapshot> ProductSnapshots => Set<ProductSnapshot>();
     public DbSet<ProductFeedback> ProductFeedbacks => Set<ProductFeedback>();
     public DbSet<PlagiarismCheck> PlagiarismChecks => Set<PlagiarismCheck>();

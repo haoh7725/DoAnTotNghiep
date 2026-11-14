@@ -60,7 +60,8 @@ public sealed class EvaluationsController(
         return visible;
     }
 
-    [HttpPost, Authorize(Policy = Policies.ResearchOffice)]
+    // Legacy builder retained for historical model compatibility. New writes use annual-research.
+    [NonAction]
     public async Task<ActionResult<EvaluationDetailResponse>> Create(CreateEvaluationRequest request, CancellationToken ct)
     {
         if (request.Unit is not ("GIO" or "DIEM")) throw new BusinessRuleException("Vui lòng chọn Giờ NCKH hoặc Điểm NCKH.");
@@ -179,7 +180,7 @@ public sealed class EvaluationsController(
         };
     }
 
-    [HttpPost("{id:long}/finalize"), Authorize(Policy = Policies.ResearchOffice)]
+    [NonAction]
     public async Task<ActionResult<EvaluationDetailResponse>> Finalize(long id, FinalizeEvaluationRequest request, CancellationToken ct)
     {
         var evaluation = await db.Evaluations.SingleOrDefaultAsync(x => x.Id == id, ct)
