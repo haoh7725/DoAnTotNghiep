@@ -11,7 +11,7 @@ namespace ResearchManagement.Api.Infrastructure;
 public static class ScientificProfileDocument
 {
     public sealed record Product(string Title, string TypeName, string TypeCode, DateOnly? PublishedDate,
-        string? PublicationInfo, string? ProjectLevel, string? AuthorRole);
+        string? PublicationInfo, string? ProjectLevel, string? AuthorRole, long? ProductId = null);
     public sealed record Section(string Title, string[] Headers, int[] Widths, List<string[]> Rows);
     private static string Text(object? value) => value?.ToString() is { Length: > 0 } text ? text : "—";
     private static string Date(DateOnly? value) => value?.ToString("dd/MM/yyyy") ?? "—";
@@ -44,21 +44,15 @@ public static class ScientificProfileDocument
         Add("Ngoại ngữ", ["Ngoại ngữ", "Mức độ sử dụng"], [6, 14], d.Languages.Select(e => new[] { e.Name, e.Proficiency }));
         Add("III. QUÁ TRÌNH CÔNG TÁC CHUYÊN MÔN", ["Thời gian", "Nơi công tác", "Công việc đảm nhiệm"], [5, 7, 8],
             d.Employment.Select(e => new[] { $"{Date(e.FromDate)} - {Date(e.ToDate)}", e.Organization, e.Position }));
-        Add("IV. QUÁ TRÌNH NGHIÊN CỨU KHOA HỌC\n1. Đề tài đã và đang tham gia (kê khai)",
-            ["TT", "Tên đề tài", "Năm bắt đầu / hoàn thành", "Cấp đề tài", "Trách nhiệm tham gia"], [1, 8, 3, 4, 4],
-            d.ResearchProjects.Select((e, i) => new[] { (i + 1).ToString(), e.Title, $"{Text(e.StartYear)} / {Text(e.EndYear)}", e.Level, e.Responsibility }));
-        Add("2. Công trình khoa học đã công bố (kê khai)", ["TT", "Tên công trình", "Năm công bố", "Loại / Nơi công bố"], [1, 9, 3, 7],
-            d.Publications.Select((e, i) => new[] { (i + 1).ToString(), e.Title, Text(e.Year), e.Journal }));
-        var groups = new[] { ("DE_TAI", "3. Đề tài nghiên cứu khoa học đã công nhận"), ("BAI_BAO", "4. Bài báo khoa học đã công nhận"),
-            ("HOI_NGHI_HOI_THAO", "5. Hội nghị / Hội thảo đã công nhận"), ("SACH", "6. Sách và giáo trình đã công nhận") };
+        // Legacy declarations remain stored, but section IV uses recognized products only.
+        var seenIds = new HashSet<long>();
+        var approvedProducts = products.Where(p => !p.ProductId.HasValue || seenIds.Add(p.ProductId.Value)).ToList();
+        var groups = new[] { ("DE_TAI", "IV. QUÁ TRÌNH NGHIÊN CỨU KHOA HỌC\nIV.1. Đề tài nghiên cứu khoa học"), ("BAI_BAO", "IV.2. Bài báo khoa học"),
+            ("HOI_NGHI_HOI_THAO", "IV.3. Hội nghị / Hội thảo"), ("SACH", "IV.4. Sách và giáo trình") };
         foreach (var (code, title) in groups)
             Add(title, ["TT", "Tên sản phẩm", "Ngày công bố / nghiệm thu", code == "DE_TAI" ? "Cấp đề tài / Đơn vị nghiệm thu" : "Nơi công bố", "Vai trò"], [1, 8, 3, 5, 3],
-                products.Where(p => p.TypeCode == code).Select((p, i) => new[] { (i + 1).ToString(), p.Title, Date(p.PublishedDate),
+                approvedProducts.Where(p => p.TypeCode == code).Select((p, i) => new[] { (i + 1).ToString(), p.Title, Date(p.PublishedDate),
                     code == "DE_TAI" ? $"{Text(p.ProjectLevel)}\n{Text(p.PublicationInfo)}" : Text(p.PublicationInfo), Role(p.AuthorRole) }));
-        var others = products.Where(p => !groups.Any(g => g.Item1 == p.TypeCode)).ToList();
-        if (others.Count > 0)
-            Add("Sản phẩm được công nhận khác", ["TT", "Tên sản phẩm", "Loại", "Ngày công bố", "Nơi công bố / Vai trò"], [1, 8, 3, 3, 5],
-                others.Select((p, i) => new[] { (i + 1).ToString(), p.Title, p.TypeName, Date(p.PublishedDate), $"{Text(p.PublicationInfo)}\n{Role(p.AuthorRole)}" }));
         if (profile is not null && new[] { profile.Expertise, profile.ResearchFields, profile.ResearchDirections, profile.ActivitySummary }.Any(x => !string.IsNullOrWhiteSpace(x)))
             Add("Thông tin chuyên môn và hoạt động khoa học", ["Thông tin", "Nội dung"], [6, 14], (string[][])
             [

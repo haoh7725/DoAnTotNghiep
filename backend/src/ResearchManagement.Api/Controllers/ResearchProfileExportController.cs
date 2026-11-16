@@ -23,7 +23,7 @@ public sealed class ResearchProfileExportController(ApplicationDbContext db, ICu
         var query = from p in db.Products.AsNoTracking() join item in db.ResearchPlanItems on p.ResearchPlanItemId equals item.Id
             join type in db.ProductTypes on item.ProductTypeId equals type.Id
             where p.Status == "DA_DUYET" && type.Code != "CHUNG_NHAN" && (p.SubmittedByLecturerId == lecturerId || db.ProductCoAuthors.Any(a => a.ProductId == p.Id && a.LecturerId == lecturerId))
-            select new { p.Title, TypeName = type.Name, TypeCode = type.Code, p.PublishedDate, p.PublicationInfo,
+            select new { p.Id, p.Title, TypeName = type.Name, TypeCode = type.Code, p.PublishedDate, p.PublicationInfo,
                 p.ProjectLevel, AuthorRole = p.SubmittedByLecturerId == lecturerId ? "TAC_GIA_CHINH" : db.ProductCoAuthors
                     .Where(a => a.ProductId == p.Id && a.LecturerId == lecturerId).Select(a => a.AuthorRole).FirstOrDefault() };
         if (academicYearId.HasValue)
@@ -37,7 +37,7 @@ public sealed class ResearchProfileExportController(ApplicationDbContext db, ICu
         var details = JsonSerializer.Deserialize<ScientificProfileDetails>(profile?.DetailsJson ?? "{}", new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? new();
         var department = await db.Departments.AsNoTracking().SingleAsync(x => x.Id == lecturer.DepartmentId, ct);
         var sections = ScientificProfileDocument.Build(lecturer, department.Name, details, profile,
-            rows.Select(x => new ScientificProfileDocument.Product(x.Title, x.TypeName, x.TypeCode, x.PublishedDate, x.PublicationInfo, x.ProjectLevel, x.AuthorRole)).ToList());
+            rows.Select(x => new ScientificProfileDocument.Product(x.Title, x.TypeName, x.TypeCode, x.PublishedDate, x.PublicationInfo, x.ProjectLevel, x.AuthorRole, x.Id)).ToList());
         if (format == "xlsx")
         {
             return File(ScientificProfileDocument.Excel(sections),"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",$"NCKH-{lecturer.Code}.xlsx");
