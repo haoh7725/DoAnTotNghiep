@@ -8,9 +8,23 @@
 .scientific-signatures { display: grid; grid-template-columns: 1fr 1fr; text-align: center; gap: 24px; margin: 24px 0 50px; }
 .scientific-summary summary { cursor: pointer; font-weight: 700; }
 .scientific-summary h4 { margin-bottom: 8px; }
+.research-group { margin: 20px 0; }
+.research-group h4 { margin: 0 0 10px; color: #245d47; }
+.research-group > p { margin: 6px 0; }
+.scientific-profile .research-table { width: 100%; table-layout: fixed; }
+.scientific-profile .research-table th, .scientific-profile .research-table td { min-width: 0; overflow-wrap: anywhere; }
+.research-table th:first-child { width: 5%; }
+.research-table th:nth-child(2) { width: 37%; }
+.research-table th:nth-child(3) { width: 9%; }
+.research-table th:nth-child(4) { width: 30%; }
 @media (max-width: 650px) {
   .scientific-profile > .section-top, .scientific-section > .section-top { flex-direction: column; align-items: flex-start; gap: 12px; }
   .scientific-entry { padding: 12px; }
+  .research-table, .research-table tbody, .research-table tr, .scientific-profile .research-table td { display: block; width: 100%; box-sizing: border-box; }
+  .research-table thead { display: none; }
+  .research-table tr { padding: 8px 0; border-bottom: 1px solid #dce5de; }
+  .scientific-profile .research-table td { max-width: none; border: 0; padding: 4px 0; }
+  .research-table td::before { content: attr(data-label) ': '; font-weight: 600; }
 }
 @media print {
   @page { size: A4; margin: 15mm; }

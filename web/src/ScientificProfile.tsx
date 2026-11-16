@@ -102,22 +102,26 @@ function FieldInput({ field, value, onChange }: { field: Field; value: Value; on
   </label>
 }
 
-export function ProfileSection({ lecturer, profile, approvedResearch = [], canEdit, onSaved }: {
+export function ProfileSection({ lecturer, profile, approvedResearch: research = [], canEdit, onSaved }: {
   lecturer: Lecturer; profile: ScientificProfile; approvedResearch?: ApprovedResearch[]; canEdit: boolean; onSaved: (p: ScientificProfile) => void
 }) {
   const [editing, setEditing] = useState(false)
+  // A product may be returned for overlapping academic years; keep one display row per product.
+  const approvedResearch = Array.from(new Map(research.map(p => [p.id, p])).values())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
   const [details, setDetails] = useState<Details>(profile.details ?? {})
   const [summary, setSummary] = useState<Row>(() => Object.fromEntries(summaries.map(f => [f.key, profile[f.key as keyof ScientificProfile] as Value])))
   const current = editing ? details : profile.details ?? {}
-  const researchTypes = [ ['DE_TAI', 'Đề tài'], ['BAI_BAO', 'Bài báo'], ['HOI_NGHI_HOI_THAO', 'Hội nghị / hội thảo'], ['SACH', 'Sách và giáo trình'] ]
+  const researchTypes = [ ['DE_TAI', 'a. Đề tài nghiên cứu khoa học'], ['BAI_BAO', 'b. Bài báo khoa học'], ['HOI_NGHI_HOI_THAO', 'c. Hội nghị / Hội thảo'], ['SACH', 'd. Sách và giáo trình'] ]
+  const authorRoles: Record<string, string> = { TAC_GIA_CHINH: 'Tác giả chính', DONG_TAC_GIA: 'Đồng tác giả', TAC_GIA_LIEN_HE: 'Tác giả liên hệ' }
   const normalizedTitle = (value: Value | undefined) => String(value ?? '').trim().toLocaleLowerCase('vi-VN')
   const withApprovedResearch = (key: ListKey, manualRows: Row[]) => {
     if (key !== 'publications') return manualRows
     const known = new Set(manualRows.map(row => normalizedTitle(row.title)))
     const automatic: Row[] = approvedResearch
+      .filter(item => editing || !researchTypes.some(([code]) => code === item.productTypeCode))
       .filter(item => !known.has(normalizedTitle(item.title)))
       .map(item => ({
         title: item.title,
@@ -173,11 +177,6 @@ export function ProfileSection({ lecturer, profile, approvedResearch = [], canEd
       {!editing && <div className="actions scientific-controls"><button onClick={() => window.print()}>In / Lưu PDF</button>
         {canEdit && <button className="primary" onClick={beginEdit}>{profile.updatedAt ? 'Chỉnh sửa lý lịch' : 'Lập lý lịch'}</button>}</div>}</div>
     {saved && <p className="lec-ok scientific-controls" role="status">Đã lưu đầy đủ lý lịch khoa học.</p>}
-    {!editing && <section><h3>Sản phẩm NCKH đã công nhận</h3><div className="actions"><a href={`/api/lecturers/${lecturer.id}/research-export/xlsx`}>Xuất Excel</a><a href={`/api/lecturers/${lecturer.id}/research-export/pdf`}>Xuất PDF</a></div>
-      <div className="form-grid">{researchTypes.map(([code, name]) => <section className="panel" key={code}><h4>{name}</h4>
-        {approvedResearch.filter(p => p.productTypeCode === code).map(p => <p key={p.id}>{p.title}<br /><small>{p.publishedDate ?? 'Chưa có ngày công nhận'} · {p.publicationInfo ?? '—'}</small></p>)}
-        {!approvedResearch.some(p => p.productTypeCode === code) && <p>Chưa có sản phẩm được công nhận.</p>}
-      </section>)}</div></section>}
     <form onSubmit={save}>
       {error && <p className="alert" role="alert">{error}</p>}
       <fieldset disabled={busy} className="scientific-fieldset">
@@ -188,7 +187,9 @@ export function ProfileSection({ lecturer, profile, approvedResearch = [], canEd
         </section>
         {groups.map(g => {
           const rows = rowsOf(current, g.key)
-          const visibleRows = editing ? rows : withApprovedResearch(g.key, rows)
+          const readRows = g.key === 'publications' ? rows.filter(row => !approvedResearch.some(p =>
+            researchTypes.some(([code]) => p.productTypeCode === code) && normalizedTitle(p.title) === normalizedTitle(row.title))) : rows
+          const visibleRows = editing ? rows : withApprovedResearch(g.key, readRows)
           const approvedRows = editing ? approvedRowsFor(g.key, rows) : []
           return <section key={g.key} className="scientific-section"><div className="section-top"><h3>{g.title}</h3>
             {editing && <button type="button" disabled={rows.length >= g.max} onClick={() => updateRows(g.key, [...rows, g.key === 'education' ? { level: 'DAI_HOC' } : {}])}>+ Thêm dòng ({rows.length}/{g.max})</button>}</div>
@@ -208,6 +209,23 @@ export function ProfileSection({ lecturer, profile, approvedResearch = [], canEd
               : !editing && <p className="muted">Chưa kê khai.</p>}
           </section>
         })}
+        {!editing && <section className="scientific-section approved-research"><div className="section-top">
+          <h3>IV.3. Sản phẩm NCKH đã công nhận</h3>
+          <div className="actions scientific-controls"><a href={`/api/lecturers/${lecturer.id}/research-export/xlsx`}>Xuất Excel</a><a href={`/api/lecturers/${lecturer.id}/research-export/pdf`}>Xuất PDF</a></div>
+        </div>{researchTypes.map(([code, name]) => {
+          const products = approvedResearch.filter(p => p.productTypeCode === code)
+          return <section className="research-group" key={code}><h4>{name}</h4>
+            {products.length ? <table className="research-table"><thead><tr>
+              <th scope="col">TT</th><th scope="col">Tên sản phẩm</th><th scope="col">Năm</th>
+              <th scope="col">{code === 'DE_TAI' ? 'Cấp đề tài / Đơn vị nghiệm thu' : 'Nơi công bố'}</th><th scope="col">Vai trò</th>
+            </tr></thead><tbody>{products.map((p, index) => <tr key={p.id}>
+              <td data-label="TT">{index + 1}</td><td data-label="Tên sản phẩm">{p.title}</td>
+              <td data-label="Năm">{p.publishedDate?.slice(0, 4) ?? '—'}</td>
+              <td data-label={code === 'DE_TAI' ? 'Cấp / Đơn vị' : 'Nơi công bố'}>{[code === 'DE_TAI' ? p.projectLevel : null, p.publicationInfo].filter(Boolean).join(' · ') || '—'}</td>
+              <td data-label="Vai trò">{authorRoles[p.authorRole ?? ''] ?? p.authorRole ?? '—'}</td>
+            </tr>)}</tbody></table> : <p className="muted">Chưa có sản phẩm được công nhận.</p>}
+          </section>
+        })}</section>}
         <section className="scientific-section"><h3>Thông tin kê khai</h3>{scalarSection(declaration)}
           <div className="scientific-signatures"><p><strong>Xác nhận của cơ quan</strong><br /><span className="muted">(Ký tên, đóng dấu trên bản in)</span></p>
             <p><strong>Người khai ký tên</strong><br /><span className="muted">(Ghi rõ chức danh, học vị)</span><br /><br />{[lecturer.academicRank, lecturer.degree, lecturer.fullName].filter(Boolean).join(' · ')}</p></div>

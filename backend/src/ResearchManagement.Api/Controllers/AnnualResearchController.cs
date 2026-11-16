@@ -94,7 +94,7 @@ public sealed class AnnualResearchController(ApplicationDbContext db, ICurrentUs
             proposal.TopThirtyQuota,
             proposal.EmulationFighterQuota,
             RequiredHours = rows.FirstOrDefault()?.RequiredHours,
-            Policy = "Chỉ hiển thị, không lưu. Top 10% tổng giờ là Lao động tiên tiến; từ sau top 10% đến hết top 30% là Chiến sĩ thi đua. Chỉ xét người đạt định mức giờ của năm học; số suất làm tròn lên. Đồng giờ tại ranh giới được cảnh báo.",
+            Policy = "Chỉ hiển thị, không lưu. Top 10% tổng giờ là Chiến sĩ thi đua; những người còn lại đến hết top 30% là Lao động tiên tiến. Chỉ xét người đạt định mức giờ của năm học; số suất làm tròn lên. Đồng giờ tại ranh giới được cảnh báo.",
             proposal.Candidates
         });
     }

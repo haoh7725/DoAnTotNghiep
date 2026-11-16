@@ -16,26 +16,26 @@ public static class AnnualAwardProposal
         var population = rows.Count;
         var eligible = rows.Where(x => x.TotalHours >= x.RequiredHours && x.Issues.Count == 0)
             .OrderByDescending(x => x.TotalHours).ThenBy(x => x.LecturerCode).ToList();
-        var advancedQuota = population == 0 ? 0 : (int)Math.Ceiling(population * 0.10m);
+        var fighterQuota = population == 0 ? 0 : (int)Math.Ceiling(population * 0.10m);
         var topThirtyQuota = population == 0 ? 0 : (int)Math.Ceiling(population * 0.30m);
-        var advancedCount = Math.Min(advancedQuota, eligible.Count);
-        var topThirtyCount = Math.Min(Math.Max(topThirtyQuota, advancedCount), eligible.Count);
-        var advancedCutoff = advancedCount > 0 ? eligible[advancedCount - 1].TotalHours : (decimal?)null;
-        var topThirtyCutoff = topThirtyCount > advancedCount ? eligible[topThirtyCount - 1].TotalHours : (decimal?)null;
+        var fighterCount = Math.Min(fighterQuota, eligible.Count);
+        var topThirtyCount = Math.Min(Math.Max(topThirtyQuota, fighterCount), eligible.Count);
+        var fighterCutoff = fighterCount > 0 ? eligible[fighterCount - 1].TotalHours : (decimal?)null;
+        var topThirtyCutoff = topThirtyCount > fighterCount ? eligible[topThirtyCount - 1].TotalHours : (decimal?)null;
 
         var candidates = eligible.Select((x, index) =>
         {
-            var title = index < advancedCount ? AdvancedLaborTitle :
-                index < topThirtyCount ? EmulationFighterTitle : null;
-            var tiedAtAdvanced = advancedCutoff.HasValue && x.TotalHours == advancedCutoff &&
-                eligible.Count(item => item.TotalHours == advancedCutoff) > 1;
+            var title = index < fighterCount ? EmulationFighterTitle :
+                index < topThirtyCount ? AdvancedLaborTitle : null;
+            var tiedAtFighter = fighterCutoff.HasValue && x.TotalHours == fighterCutoff &&
+                eligible.Count(item => item.TotalHours == fighterCutoff) > 1;
             var tiedAtTopThirty = topThirtyCutoff.HasValue && x.TotalHours == topThirtyCutoff &&
                 eligible.Count(item => item.TotalHours == topThirtyCutoff) > 1;
             return new Candidate(x.LecturerId, x.LecturerName, x.LecturerCode, x.TotalHours,
-                index + 1, title, tiedAtAdvanced || tiedAtTopThirty);
+                index + 1, title, tiedAtFighter || tiedAtTopThirty);
         }).ToList();
 
-        return new(population, eligible.Count, advancedQuota, topThirtyQuota,
-            Math.Max(0, topThirtyQuota - advancedQuota), candidates);
+        return new(population, eligible.Count, Math.Max(0, topThirtyQuota - fighterQuota), topThirtyQuota,
+            fighterQuota, candidates);
     }
 }

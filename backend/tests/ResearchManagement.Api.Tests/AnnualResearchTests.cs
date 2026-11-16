@@ -40,12 +40,12 @@ public sealed class AnnualResearchTests
 
         var proposal = AnnualAwardProposal.Build(rows);
 
-        Assert.Equal(1, proposal.AdvancedLaborQuota);
+        Assert.Equal(2, proposal.AdvancedLaborQuota);
         Assert.Equal(3, proposal.TopThirtyQuota);
-        Assert.Equal(2, proposal.EmulationFighterQuota);
-        Assert.Equal(AnnualAwardProposal.AdvancedLaborTitle, proposal.Candidates[0].ProposedTitle);
+        Assert.Equal(1, proposal.EmulationFighterQuota);
+        Assert.Equal(AnnualAwardProposal.EmulationFighterTitle, proposal.Candidates[0].ProposedTitle);
         Assert.All(proposal.Candidates.Skip(1).Take(2), candidate =>
-            Assert.Equal(AnnualAwardProposal.EmulationFighterTitle, candidate.ProposedTitle));
+            Assert.Equal(AnnualAwardProposal.AdvancedLaborTitle, candidate.ProposedTitle));
         Assert.Null(proposal.Candidates[3].ProposedTitle);
     }
 
@@ -59,9 +59,9 @@ public sealed class AnnualResearchTests
 
         var proposal = AnnualAwardProposal.Build(rows);
 
-        Assert.Equal(1, proposal.AdvancedLaborQuota);
+        Assert.Equal(0, proposal.AdvancedLaborQuota);
         Assert.Equal(1, proposal.TopThirtyQuota);
-        Assert.Equal(0, proposal.EmulationFighterQuota);
+        Assert.Equal(1, proposal.EmulationFighterQuota);
     }
 
     [Fact]

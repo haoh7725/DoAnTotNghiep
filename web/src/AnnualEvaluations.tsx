@@ -4,9 +4,11 @@ import type { Lookups, Profile } from './api'
 
 type Product = { productId: number; typeName: string; title: string; targetId: number | null; ruleCode: string; hours: number; basis: string }
 type Target = { id: number; typeName: string; assigned: number; registered: number; approved: number; percent: number; completed: boolean; hours: number }
-type Result = { lecturerId: number; lecturerName: string; lecturerCode: string; requiredHours: number; totalHours: number; assignedTargets: number; completedTargets: number; classification: string; products: Product[]; targets: Target[]; issues: string[] }
-type Nominations = { population: number; eligible: number; requiredHours: number; advancedLaborQuota: number; topThirtyQuota: number; emulationFighterQuota: number; policy: string; candidates: { lecturerId: number; lecturerName: string; lecturerCode: string; totalHours: number; rank: number; proposedTitle: string | null; tiedAtBoundary: boolean }[] }
-const fmt = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 4 })
+type Result = { lecturerId: number; lecturerName: string; lecturerCode: string; requiredHours?: number; totalHours: number; assignedTargets: number; completedTargets: number; classification: string; products: Product[]; targets: Target[]; issues: string[] }
+type Nominations = { population: number; eligible: number; requiredHours?: number | null; advancedLaborQuota: number; topThirtyQuota: number; emulationFighterQuota: number; policy: string; candidates: { lecturerId: number; lecturerName: string; lecturerCode: string; totalHours: number; rank: number; proposedTitle: string | null; tiedAtBoundary: boolean }[] }
+const fmt = (n: number | null | undefined) => typeof n === 'number' && Number.isFinite(n)
+  ? n.toLocaleString('vi-VN', { maximumFractionDigits: 4 })
+  : 'Chưa có dữ liệu'
 
 export function AnnualEvaluations({ user, lookups }: { user: Profile; lookups: Lookups | null }) {
   const manager = user.roles.some(r => ['TRUONG_KHOA', 'TRUONG_BO_MON', 'QUAN_TRI'].includes(r.role))
@@ -54,7 +56,7 @@ export function AnnualEvaluations({ user, lookups }: { user: Profile; lookups: L
         {canFinalize && <button className="primary" disabled={busy || detail.issues.length > 0} onClick={() => void finalize()}>Chốt kết quả năm</button>}
       </section>
     </>}
-    {canFinalize && !detail && <section className="panel"><h2>Đề xuất danh hiệu</h2><p>Danh sách chỉ được tính và hiển thị, không lưu: top 10% tổng giờ là Lao động tiên tiến; nhóm tiếp theo đến hết top 30% là Chiến sĩ thi đua.</p>
+    {canFinalize && !detail && <section className="panel"><h2>Đề xuất danh hiệu</h2><p>Danh sách chỉ được tính và hiển thị, không lưu: top 10% tổng giờ là Chiến sĩ thi đua; những người còn lại đến hết top 30% là Lao động tiên tiến.</p>
       <label>Khoa<select value={faculty} onChange={e => setFaculty(e.target.value)}><option value="">Chọn khoa</option>{lookups?.faculties.filter(f => user.roles.some(r => r.role === 'QUAN_TRI' || r.role === 'TRUONG_KHOA' && r.facultyId === f.id)).map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
       <button disabled={busy || !faculty} onClick={async () => { setBusy(true); setError(''); try { setNominations(await api<Nominations>(`/annual-research/nominations?academicYearId=${year}&facultyId=${faculty}`)) } catch (e) { setError((e as Error).message) } finally { setBusy(false) } }}>Xem danh sách đề xuất</button>
       {nominations && <><p>{nominations.eligible}/{nominations.population} giảng viên đạt định mức {fmt(nominations.requiredHours)} giờ. Suất dự kiến: {nominations.advancedLaborQuota} Lao động tiên tiến và {nominations.emulationFighterQuota} Chiến sĩ thi đua. {nominations.policy}</p>
