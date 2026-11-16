@@ -64,7 +64,7 @@ public sealed class AnnualResearchController(ApplicationDbContext db, ICurrentUs
         var attempt = (await db.Evaluations.Where(x => x.LecturerId == lecturerId && x.AcademicYearId == request.AcademicYearId).MaxAsync(x => (int?)x.Attempt, ct) ?? 0) + 1;
         var e = new Evaluation(l.Id, request.AcademicYearId, attempt, user.Id!.Value, l.Code, l.FullName,
             l.DepartmentId, l.AcademicRank, l.Degree, "GIO");
-        e.Finalize(result.Classification, $"Tổng {result.TotalHours:0.####}/586 giờ; hoàn thành {result.CompletedTargets}/{result.AssignedTargets} chỉ tiêu. Hai kết quả được xét độc lập.");
+        e.Finalize(result.Classification, $"Tổng {result.TotalHours:0.####}/{result.RequiredHours:0.####} giờ; hoàn thành {result.CompletedTargets}/{result.AssignedTargets} chỉ tiêu. Hai kết quả được xét độc lập.");
         db.Evaluations.Add(e);
         await db.SaveChangesAsync(ct);
         foreach (var line in result.Products)
@@ -93,7 +93,8 @@ public sealed class AnnualResearchController(ApplicationDbContext db, ICurrentUs
             proposal.AdvancedLaborQuota,
             proposal.TopThirtyQuota,
             proposal.EmulationFighterQuota,
-            Policy = "Chỉ hiển thị, không lưu. Top 10% tổng giờ là Lao động tiên tiến; từ sau top 10% đến hết top 30% là Chiến sĩ thi đua. Chỉ xét người đạt ít nhất 586 giờ; số suất làm tròn lên. Đồng giờ tại ranh giới được cảnh báo.",
+            RequiredHours = rows.FirstOrDefault()?.RequiredHours,
+            Policy = "Chỉ hiển thị, không lưu. Top 10% tổng giờ là Lao động tiên tiến; từ sau top 10% đến hết top 30% là Chiến sĩ thi đua. Chỉ xét người đạt định mức giờ của năm học; số suất làm tròn lên. Đồng giờ tại ranh giới được cảnh báo.",
             proposal.Candidates
         });
     }

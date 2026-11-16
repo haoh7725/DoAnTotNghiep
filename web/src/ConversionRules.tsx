@@ -72,7 +72,7 @@ export function ConversionRules() {
           <label className="wide">Tên quy định<input required maxLength={300} value={edit.name} onChange={e => change({ name: e.target.value })} /></label>
         </div><h3>Mức quy đổi và hiệu lực</h3><div className="form-grid">
           <label>Mức gốc của một công trình<input type="number" min="0" step="0.0001" required value={edit.conversionValue} onChange={e => change({ conversionValue: Number(e.target.value) })} /><small>Nhập theo văn bản căn cứ, chưa chia cho tác giả.</small></label>
-          <label>Đơn vị<input readOnly value="Giờ NCKH" /><small>Đánh giá năm hiện hành sử dụng giờ và ngưỡng 586 giờ.</small></label>
+          <label>Đơn vị<input readOnly value="Giờ NCKH" /><small>Ngưỡng hoàn thành được cấu hình riêng trong từng năm học.</small></label>
           <label>Hiệu lực từ<input type="date" required value={edit.effectiveFrom} onChange={e => change({ effectiveFrom: e.target.value })} /></label>
           <label>Hiệu lực đến<input type="date" min={edit.effectiveFrom} value={edit.effectiveTo ?? ''} onChange={e => change({ effectiveTo: e.target.value || null })} /></label>
           <label className="wide">Văn bản căn cứ<input required maxLength={512} value={edit.legalBasis} onChange={e => change({ legalBasis: e.target.value })} placeholder="Số quyết định, ngày ban hành, điều/mục áp dụng" /></label>

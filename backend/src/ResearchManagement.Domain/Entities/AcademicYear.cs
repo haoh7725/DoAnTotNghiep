@@ -5,4 +5,5 @@ public sealed class AcademicYear
     public string Code { get; set; } = "";
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
+    public decimal RequiredResearchHours { get; set; } = 586m;
 }

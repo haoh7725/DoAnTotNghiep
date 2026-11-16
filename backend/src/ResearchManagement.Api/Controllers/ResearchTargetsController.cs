@@ -307,7 +307,7 @@ public sealed class ResearchTargetsController(
             var notification = new ResearchManagement.Domain.Entities.Notification(
                 accountId,
                 "HE_THONG",
-                $"{facultyName} được Phòng QLKH giao {assignedArticleCount} bài báo trong năm học {academicYearCode}. Vui lòng tiếp nhận và phân bổ xuống các bộ môn.",
+                $"{facultyName} được Trưởng khoa giao {assignedArticleCount} bài báo trong năm học {academicYearCode}. Vui lòng tiếp nhận và phân bổ xuống các bộ môn.",
                 $"CHI_TIEU_CHO_TIEP_NHAN:{targetId}:{accountId}",
                 actionPath: "research-targets");
             notification.MarkAsSent();

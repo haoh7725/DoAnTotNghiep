@@ -288,7 +288,7 @@ public static class CleanOperationalDataSeeder
     {
         var rules = await db.ConversionRules.AsNoTracking().Where(x => x.Unit == "GIO" && x.Code.StartsWith("QD2023_") && x.ClassificationId != null)
             .OrderByDescending(x => x.Priority).ThenByDescending(x => x.Version).ToListAsync(ct);
-        foreach (var year in years)
+        foreach (var year in years.Where(x => x.Code != "2026-2027"))
         foreach (var lecturer in lecturers.Where(x => x.Id != demoLecturerId))
         {
             var approved = records.Where(x => x.Year.Id == year.Id && x.Lecturer.Id == lecturer.Id && x.DesiredStatus == ProductStatuses.Approved).ToList();
@@ -298,7 +298,8 @@ public static class CleanOperationalDataSeeder
             var total = approved.Sum(x => rules.First(r => r.ClassificationId == x.Product.ClassificationId).ConversionValue * x.Product.RecognitionQuantity);
             var evaluation = new Evaluation(lecturer.Id, year.Id, 1, evaluator, lecturer.Code, lecturer.FullName,
                 lecturer.DepartmentId, lecturer.AcademicRank, lecturer.Degree, "GIO");
-            evaluation.Finalize(total >= 586 ? "Hoàn thành" : "Chưa hoàn thành", $"Tổng {total:0.####}/586 giờ từ sản phẩm đã công nhận và phân loại QD2023.");
+            evaluation.Finalize(total >= year.RequiredResearchHours ? "Hoàn thành" : "Chưa hoàn thành",
+                $"Tổng {total:0.####}/{year.RequiredResearchHours:0.####} giờ từ sản phẩm đã công nhận và phân loại QD2023.");
             db.Evaluations.Add(evaluation); await db.SaveChangesAsync(ct);
             foreach (var record in approved)
             {

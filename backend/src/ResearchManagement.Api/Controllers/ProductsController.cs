@@ -291,7 +291,7 @@ public sealed class ProductsController(
                         .Select(x => x.AccountId).Distinct().ToListAsync(cancellationToken);
                     foreach (var accountId in authorAccountIds)
                         await workflowNotifications.QueueForAccountAsync(accountId,
-                            $"Sản phẩm '{reviewed.Title}' đã được Phòng QLKH công nhận hoàn tất.",
+                            $"Sản phẩm '{reviewed.Title}' đã được Trưởng khoa công nhận hoàn tất.",
                             $"PRODUCT_APPROVED:{reviewed.Id}", $"products:{reviewed.Id}", reviewed.Id, cancellationToken);
                 }
                 await db.SaveChangesAsync(cancellationToken);

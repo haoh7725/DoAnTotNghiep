@@ -1,6 +1,6 @@
 # Nghiệp vụ NCKH cấp khoa theo tài liệu chỉnh sửa
 
-Hệ thống sử dụng bốn nhóm NCKH, bảng giờ trong hai ảnh do người dùng cung cấp và ngưỡng hoàn thành năm là 586 giờ. Bảng ảnh chưa chỉ rõ ngày hiệu lực và cách chia giờ giữa tác giả; danh mục được đặt mốc cấu hình 01/01/2023, kế thừa hệ số tác giả đã cấu hình trước đó để khoa kiểm tra lại.
+Hệ thống sử dụng bốn nhóm NCKH và bảng giờ trong hai ảnh do người dùng cung cấp. Định mức hoàn thành được cấu hình chung theo từng năm học; năm 2026-2027 mặc định 586 giờ. Bảng ảnh chưa chỉ rõ ngày hiệu lực và cách chia giờ giữa tác giả; danh mục được đặt mốc cấu hình 01/01/2023, kế thừa hệ số tác giả đã cấu hình trước đó để khoa kiểm tra lại.
 
 ## Vai trò và luồng
 
@@ -26,14 +26,16 @@ Hệ thống sử dụng bốn nhóm NCKH, bảng giờ trong hai ảnh do ngư�
 - POST `/api/annual-research/{lecturerId}/finalize`: Trưởng khoa chốt ảnh chụp kết quả; body có `academicYearId`. Không chốt khi còn vấn đề quy đổi hoặc tự chốt cho mình.
 - GET `/api/evaluations` và `/api/evaluations/{id}` tiếp tục cung cấp kết quả lịch sử. Các API tạo/chốt cũ theo điểm và định mức riêng không còn được công bố.
 - Mỗi sản phẩm chỉ tính một lần cho một giảng viên trong năm công bố/nghiệm thu. Không cộng thêm giờ chỉ vì liên kết sản phẩm với chỉ tiêu.
-- Tỷ lệ chỉ tiêu = số sản phẩm được công nhận / số được giao. Mức hoàn thành năm = tổng giờ so với 586. Hai kết quả độc lập.
+- Tỷ lệ chỉ tiêu = số sản phẩm được công nhận / số được giao. Mức hoàn thành năm = tổng giờ so với định mức chung của năm học. Hai kết quả độc lập.
 - 25 nhóm quy đổi mới bao gồm đơn vị bài, đề tài, quyển, năm thực hiện và trang dịch gốc. `recognitionQuantity` mặc định 1; chỉ các nhóm tính theo năm/trang được nhận số khác 1.
 - Hội thảo cấp khoa không ISBN tại HUIT có mức 88 giờ/bài, giới hạn 120 giờ/giảng viên/năm học sau hệ số tác giả.
 - Hồ sơ có ngày tương lai, thiếu ngày, trùng công trình, chưa có phân loại phù hợp hoặc thiếu hệ số sẽ hiển thị vấn đề và không được chốt. Không tự sửa ngày hoặc đoán phân loại của dữ liệu cũ.
 
 ## Đề xuất danh hiệu
 
-Danh sách chỉ được tính và hiển thị, không lưu kết quả. Giảng viên đạt ít nhất 586 giờ và không có vấn đề quy đổi được xếp theo tổng giờ giảm dần trong khoa. Top 10% hiển thị là Lao động tiên tiến; nhóm từ sau top 10% đến hết top 30% hiển thị là Chiến sĩ thi đua. Số suất làm tròn lên; đồng giờ tại ranh giới được cảnh báo. Hệ thống không tạo quyết định hoặc lưu danh hiệu.
+Danh sách chỉ được tính và hiển thị, không lưu kết quả. Giảng viên đạt định mức giờ của năm học và không có vấn đề quy đổi được xếp theo tổng giờ giảm dần trong khoa. Top 10% hiển thị là Lao động tiên tiến; nhóm từ sau top 10% đến hết top 30% hiển thị là Chiến sĩ thi đua. Số suất làm tròn lên; đồng giờ tại ranh giới được cảnh báo. Hệ thống không tạo quyết định hoặc lưu danh hiệu.
+
+Định mức giờ nằm trong danh mục Năm học. Quản trị viên có thể sửa trước khi năm học có kết quả đánh giá đã chốt; sau đó hệ thống khóa giá trị để bảo toàn căn cứ lịch sử.
 
 ## Hồ sơ và báo cáo
 

@@ -35,7 +35,7 @@ public class UpdateMyLecturerRequest
     public string? Phone { get; set; }
 }
 
-/// <summary>Toàn bộ thông tin giảng viên, do Phòng QLKH/Quản trị sửa qua PUT /api/lecturers/{id}.</summary>
+/// <summary>Toàn bộ thông tin giảng viên, do Trưởng khoa/Quản trị sửa qua PUT /api/lecturers/{id}.</summary>
 public class UpdateLecturerRequest : UpdateMyLecturerRequest
 {
     [Range(1, long.MaxValue)]

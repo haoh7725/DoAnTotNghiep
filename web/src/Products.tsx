@@ -378,7 +378,7 @@ function ProductDetail({ id, user, onBack }: { id: number; user: Profile | null;
         <button className={tab === 'plagiarism' ? 'active' : ''} onClick={() => setTab('plagiarism')}>Kiểm tra tương đồng</button>
         <button className={tab === 'history' ? 'active' : ''} onClick={() => setTab('history')}>Lịch sử xét duyệt</button>
         <button className={tab === 'snapshots' ? 'active' : ''} onClick={() => setTab('snapshots')}>Phiên bản</button>
-        <button className={tab === 'feedback' ? 'active' : ''} onClick={() => setTab('feedback')}>Phản hồi QLKH</button>
+        <button className={tab === 'feedback' ? 'active' : ''} onClick={() => setTab('feedback')}>Phản hồi Trưởng khoa</button>
       </div>
 
       {tab === 'info' && <>
@@ -861,7 +861,7 @@ export function ProductForm({ product, onSubmit, busy, error, planItems, targets
         <div className="form-grid">
           <label>{isArticle || isConference ? 'DOI / mã công trình' : 'Mã công trình / quyết định'}<input name="workIdentifier" maxLength={255} defaultValue={product?.workIdentifier ?? ''} /></label>
           {classes.length > 0 && <label>Phân loại đề xuất<select name="classificationId" value={classification} onChange={e => setClassification(e.target.value)}>
-            <option value="">Để QLKH xác nhận</option>{classes.map(c => <option value={c.id} key={c.id}>{c.name}</option>)}
+            <option value="">Để Trưởng khoa xác nhận</option>{classes.map(c => <option value={c.id} key={c.id}>{c.name}</option>)}
           </select></label>}
           {(isBook || isProject) && <label>Số đơn vị quy đổi<input name="recognitionQuantity" type="number" min="0.0001" max="10000" step="0.0001" defaultValue={product?.recognitionQuantity ?? 1} /><small>Dịch sách: số trang bản gốc. Đề tài tính theo năm: số năm thực hiện được duyệt trong kỳ này. Các loại còn lại: 1 đơn vị/công trình.</small></label>}
           {(isArticle || isConference) && <>

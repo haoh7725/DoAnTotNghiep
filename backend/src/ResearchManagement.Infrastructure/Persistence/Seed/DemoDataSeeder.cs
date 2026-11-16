@@ -602,7 +602,7 @@ public static class DemoDataSeeder
             if (rule is null)
             {
                 rule = new ConversionRule(typeId, spec.Item3, 1, spec.Item4,
-                    "Mức tham khảo theo bảng quy đổi trong tài liệu quydinhquydoi.docx; cần QLKH xác nhận trước khi áp dụng.",
+                    "Mức tham khảo theo bảng quy đổi trong tài liệu quydinhquydoi.docx; cần Trưởng khoa xác nhận trước khi áp dụng.",
                     spec.Item5, "GIO", 200, "Tác giả chính và đồng tác giả theo quy định được cấu hình.",
                     new DateOnly(2024, 1, 1), new DateOnly(2027, 12, 31), "Tài liệu tham khảo quy đổi NCKH");
                 rule.ClassificationId = classId;
@@ -754,7 +754,7 @@ public static class DemoDataSeeder
                     new ReviewHistory(product.Id, owner.AccountId, ProductStatuses.Draft, ProductStatuses.Submitted, "Giảng viên nộp sản phẩm."),
                     new ReviewHistory(product.Id, departmentHeadId == 0 ? officeAccountId : departmentHeadId, ProductStatuses.Submitted, ProductStatuses.DepartmentHeadApproved, "Bộ môn xác nhận nội dung."),
                     new ReviewHistory(product.Id, deanId == 0 ? officeAccountId : deanId, ProductStatuses.DepartmentHeadApproved, ProductStatuses.FacultyDeanApproved, "Khoa thống nhất đề nghị công nhận."),
-                    new ReviewHistory(product.Id, officeAccountId, ProductStatuses.FacultyDeanApproved, ProductStatuses.ResearchOfficeApproved, "Phòng QLKH kiểm tra minh chứng."),
+                    new ReviewHistory(product.Id, officeAccountId, ProductStatuses.FacultyDeanApproved, ProductStatuses.ResearchOfficeApproved, "Trưởng khoa kiểm tra minh chứng."),
                     new ReviewHistory(product.Id, officeAccountId, ProductStatuses.ResearchOfficeApproved, ProductStatuses.Approved, "Công nhận sản phẩm."));
             }
 
@@ -1087,7 +1087,7 @@ public static class DemoDataSeeder
                 (ProductStatuses.Draft, ProductStatuses.Submitted, lecturer.AccountId, "Giảng viên nộp sản phẩm."),
                 (ProductStatuses.Submitted, ProductStatuses.DepartmentHeadApproved, departmentHeadAccountId, "Bộ môn xác nhận nội dung."),
                 (ProductStatuses.DepartmentHeadApproved, ProductStatuses.FacultyDeanApproved, facultyDeanAccountId, "Khoa thống nhất đề nghị công nhận."),
-                (ProductStatuses.FacultyDeanApproved, ProductStatuses.ResearchOfficeApproved, officeAccountId, "Phòng QLKH kiểm tra minh chứng."),
+                (ProductStatuses.FacultyDeanApproved, ProductStatuses.ResearchOfficeApproved, officeAccountId, "Trưởng khoa kiểm tra minh chứng."),
                 (ProductStatuses.ResearchOfficeApproved, ProductStatuses.Approved, officeAccountId, "Công nhận sản phẩm.")
             };
             foreach (var transition in transitions)
@@ -1630,7 +1630,7 @@ public static class DemoDataSeeder
                         db.Notifications.Add(Sent(new Notification(
                             accountId,
                             "HE_THONG",
-                            $"{faculty.Name} được Phòng QLKH giao {target.AssignedArticleCount} bài báo trong năm học {year.Code}. Chỉ tiêu đã được tiếp nhận và phân bổ.",
+                            $"{faculty.Name} được Trưởng khoa giao {target.AssignedArticleCount} bài báo trong năm học {year.Code}. Chỉ tiêu đã được tiếp nhận và phân bổ.",
                             key,
                             actionPath: "research-targets")));
                 }

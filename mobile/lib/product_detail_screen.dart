@@ -16,7 +16,7 @@ String productStatusLabel(String? s) {
     case 'TRUONG_KHOA_DUYET':
       return 'Trưởng khoa đã duyệt';
     case 'PHONG_QLKH_DUYET':
-      return 'Phòng QLKH đã duyệt';
+      return 'Trưởng khoa đã duyệt';
     case 'DA_DUYET':
       return 'Đã duyệt';
     case 'TRA_LAI':

@@ -9,6 +9,8 @@ COPY infra/database/20_reference_research_taxonomy.sql ./infra/database/20_refer
 COPY infra/database/21_target_product_types.sql ./infra/database/21_target_product_types.sql
 COPY infra/database/22_faculty_workflow_2023.sql ./infra/database/22_faculty_workflow_2023.sql
 COPY infra/database/23_article_progress_requests.sql ./infra/database/23_article_progress_requests.sql
+COPY infra/database/24_academic_year_research_hours.sql ./infra/database/24_academic_year_research_hours.sql
+COPY infra/database/25_faculty_workflow_wording.sql ./infra/database/25_faculty_workflow_wording.sql
 RUN dotnet restore backend/ResearchManagement.slnx
 RUN dotnet publish backend/src/ResearchManagement.Api/ResearchManagement.Api.csproj -c Release -o /app/publish --no-restore
 

@@ -234,7 +234,7 @@ class ApiClient {
           ? 'Cần kiểm tra quy đổi'
           : result['classification'],
       'classificationBasis':
-          'Tự tổng hợp từ sản phẩm đã công nhận. Từ 586 giờ là hoàn thành yêu cầu giờ; tiến độ số lượng chỉ tiêu được xét riêng. ${(result['issues'] as List? ?? []).join('; ')}',
+          'Tự tổng hợp từ sản phẩm đã công nhận. Định mức năm học là ${result['requiredHours']} giờ; tiến độ số lượng chỉ tiêu được xét riêng. ${(result['issues'] as List? ?? []).join('; ')}',
       'details': (result['products'] as List? ?? [])
           .map(
             (p) => {

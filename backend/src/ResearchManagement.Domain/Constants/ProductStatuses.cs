@@ -15,7 +15,7 @@ public static class ProductStatuses
     /// <summary>Trưởng khoa đã duyệt.</summary>
     public const string FacultyDeanApproved = "TRUONG_KHOA_DUYET";
 
-    /// <summary>Phòng QLKH đã duyệt (hoàn tất).</summary>
+    /// <summary>Trạng thái legacy của luồng Phòng QLKH, chỉ giữ để đọc dữ liệu cũ.</summary>
     public const string ResearchOfficeApproved = "PHONG_QLKH_DUYET";
 
     /// <summary>Đã duyệt hoàn toàn, tính điểm quy đổi.</summary>

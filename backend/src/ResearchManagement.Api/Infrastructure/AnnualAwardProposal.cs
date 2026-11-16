@@ -14,7 +14,7 @@ public static class AnnualAwardProposal
     public static Result Build(IReadOnlyList<AnnualResearchService.Result> rows)
     {
         var population = rows.Count;
-        var eligible = rows.Where(x => x.TotalHours >= AnnualResearchService.RequiredHours && x.Issues.Count == 0)
+        var eligible = rows.Where(x => x.TotalHours >= x.RequiredHours && x.Issues.Count == 0)
             .OrderByDescending(x => x.TotalHours).ThenBy(x => x.LecturerCode).ToList();
         var advancedQuota = population == 0 ? 0 : (int)Math.Ceiling(population * 0.10m);
         var topThirtyQuota = population == 0 ? 0 : (int)Math.Ceiling(population * 0.30m);

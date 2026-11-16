@@ -145,7 +145,7 @@ app.MapControllers();
 await using (var schemaScope = app.Services.CreateAsyncScope())
 {
     var schemaDb = schemaScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    foreach (var migration in new[] { "ConversionSharingMigration.sql", "ProductBusinessRulesMigration.sql", "ProjectRequirementsMigration.sql", "TargetConsistencyMigration.sql", "ReferenceResearchTaxonomyMigration.sql", "TargetProductTypesMigration.sql", "FacultyWorkflow2023Migration.sql", "ArticleProgressRequestsMigration.sql" })
+    foreach (var migration in new[] { "ConversionSharingMigration.sql", "ProductBusinessRulesMigration.sql", "ProjectRequirementsMigration.sql", "TargetConsistencyMigration.sql", "ReferenceResearchTaxonomyMigration.sql", "TargetProductTypesMigration.sql", "FacultyWorkflow2023Migration.sql", "ArticleProgressRequestsMigration.sql", "AcademicYearResearchHoursMigration.sql", "FacultyWorkflowWordingMigration.sql" })
     {
         await using var migrationStream = typeof(Program).Assembly.GetManifestResourceStream(migration)!;
         using var migrationReader = new StreamReader(migrationStream);

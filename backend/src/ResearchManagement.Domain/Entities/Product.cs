@@ -96,7 +96,7 @@ public sealed class Product : BaseEntity
 
     public string Status { get; private set; } = ProductStatuses.Draft;
 
-    /// <summary>Điểm quy đổi do Phòng QLKH nhập khi duyệt cuối.</summary>
+    /// <summary>Điểm quy đổi do Trưởng khoa nhập khi duyệt cuối.</summary>
     public decimal? ScoreEquivalent { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
