@@ -142,7 +142,7 @@ public sealed class ResearchPlansController(
                 .SingleAsync(cancellationToken);
             await workflowNotifications.QueueForAccountAsync(
                 ownerAccountId,
-                $"Phòng QLKH đã mở lại kế hoạch NCKH để bạn điều chỉnh. Lý do: {reason}",
+                $"Trưởng khoa đã mở lại kế hoạch NCKH để bạn điều chỉnh. Lý do: {reason}",
                 $"RESEARCH_PLAN_REOPENED:{reopened.Id}:{Guid.NewGuid():N}",
                 "research-plans",
                 null,

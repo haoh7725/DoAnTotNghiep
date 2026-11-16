@@ -27,7 +27,7 @@ Authorization: Bearer {{token}}
 GET {{ResearchManagement.Api_HostAddress}}/api/lecturers?page=1&pageSize=20&keyword=nguyen
 Authorization: Bearer {{token}}
 
-### Tạo giảng viên (PHONG_QLKH hoặc QUAN_TRI)
+### Tạo giảng viên (TRUONG_KHOA hoặc QUAN_TRI)
 POST {{ResearchManagement.Api_HostAddress}}/api/lecturers
 Authorization: Bearer {{token}}
 Content-Type: application/json

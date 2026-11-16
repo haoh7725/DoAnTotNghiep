@@ -25,5 +25,6 @@ public sealed class AcademicYearConfiguration : IEntityTypeConfiguration<Academi
         b.HasIndex(x=>x.Code).IsUnique();
         b.Property(x=>x.StartDate).HasColumnName("ngay_bat_dau");
         b.Property(x=>x.EndDate).HasColumnName("ngay_ket_thuc");
+        b.Property(x=>x.RequiredResearchHours).HasColumnName("dinh_muc_gio_nckh").HasPrecision(14, 4).HasDefaultValue(586m);
     }
 }

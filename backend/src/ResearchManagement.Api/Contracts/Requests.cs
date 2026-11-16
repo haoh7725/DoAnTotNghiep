@@ -2,7 +2,8 @@ using System.ComponentModel.DataAnnotations;
 namespace ResearchManagement.Api.Contracts;
 public sealed record FacultyRequest([Required, StringLength(30)] string Code, [Required, StringLength(200)] string Name);
 public sealed record DepartmentRequest([Range(1, long.MaxValue)] long FacultyId, [Required, StringLength(30)] string Code, [Required, StringLength(200)] string Name);
-public sealed record AcademicYearRequest([Required, StringLength(20)] string Code, DateOnly StartDate, DateOnly EndDate);
+public sealed record AcademicYearRequest([Required, StringLength(20)] string Code, DateOnly StartDate, DateOnly EndDate,
+    [Range(typeof(decimal), "0.0001", "9999999")] decimal RequiredResearchHours = 586m);
 public sealed record CreateAccountRequest(
     [Required, StringLength(100), RegularExpression(@"[a-zA-Z0-9._-]+", ErrorMessage = "Tên đăng nhập chỉ gồm chữ không dấu, số, dấu chấm, gạch dưới hoặc gạch ngang.")] string Username,
     [Required, StringLength(200)] string FullName,

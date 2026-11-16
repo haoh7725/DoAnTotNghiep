@@ -5,6 +5,8 @@ using ResearchManagement.Api.Authorization;
 using ResearchManagement.Api.Contracts;
 using ResearchManagement.Domain.Entities;
 using ResearchManagement.Infrastructure.Persistence;
+using ResearchManagement.Application.AcademicYears;
+using ResearchManagement.Application.Common;
 namespace ResearchManagement.Api.Controllers;
 [ApiController, Route("api/admin"), Authorize(Policy = Policies.Admin)]
 public sealed class CatalogController(ApplicationDbContext db) : ControllerBase
@@ -54,16 +56,21 @@ public sealed class CatalogController(ApplicationDbContext db) : ControllerBase
         db.Remove(item); await db.SaveChangesAsync(ct); return NoContent();
     }
     [HttpGet("academic-years")]
-    public async Task<IActionResult> Years(CancellationToken ct) => Ok(await db.AcademicYears.AsNoTracking().OrderByDescending(x=>x.StartDate).ToListAsync(ct));
+    public async Task<IActionResult> Years(CancellationToken ct) => Ok(await db.AcademicYears.AsNoTracking().OrderByDescending(x=>x.StartDate)
+        .Select(x => new { x.Id, x.Code, x.StartDate, x.EndDate, x.RequiredResearchHours,
+            IsResearchHoursLocked = db.Evaluations.Any(e => e.AcademicYearId == x.Id && e.Status == "CHOT") }).ToListAsync(ct));
     [HttpGet("academic-years/{id:long}")]
-    public async Task<IActionResult> Year(long id, CancellationToken ct) => await db.AcademicYears.FindAsync([id], ct) is { } item ? Ok(item) : NotFound();
+    public async Task<IActionResult> Year(long id, CancellationToken ct) => await db.AcademicYears.AsNoTracking()
+        .Where(x => x.Id == id).Select(x => new { x.Id, x.Code, x.StartDate, x.EndDate, x.RequiredResearchHours,
+            IsResearchHoursLocked = db.Evaluations.Any(e => e.AcademicYearId == x.Id && e.Status == "CHOT") })
+        .SingleOrDefaultAsync(ct) is { } item ? Ok(item) : NotFound();
     [HttpPost("academic-years")]
     public async Task<IActionResult> CreateYear(AcademicYearRequest r, CancellationToken ct)
     {
         if (r.StartDate == default || r.EndDate < r.StartDate) return BadRequest(new { title = "Ngày kết thúc phải từ ngày bắt đầu trở đi." });
         if (await db.AcademicYears.AnyAsync(x => x.StartDate <= r.EndDate && x.EndDate >= r.StartDate, ct))
             return Conflict(new { title = "Khoảng thời gian năm học bị chồng lấn; không thể xác định duy nhất kỳ ghi nhận công trình." });
-        var item = new AcademicYear { Code = r.Code.Trim(), StartDate = r.StartDate, EndDate = r.EndDate };
+        var item = new AcademicYear { Code = r.Code.Trim(), StartDate = r.StartDate, EndDate = r.EndDate, RequiredResearchHours = r.RequiredResearchHours };
         db.Add(item); await db.SaveChangesAsync(ct); return Created($"/api/admin/academic-years/{item.Id}", item);
     }
     [HttpPut("academic-years/{id:long}")]
@@ -73,9 +80,12 @@ public sealed class CatalogController(ApplicationDbContext db) : ControllerBase
         var item = await db.AcademicYears.FindAsync([id], ct); if (item is null) return NotFound();
         if (await db.AcademicYears.AnyAsync(x => x.Id != id && x.StartDate <= r.EndDate && x.EndDate >= r.StartDate, ct))
             return Conflict(new { title = "Khoảng thời gian năm học bị chồng lấn." });
-        if ((item.StartDate != r.StartDate || item.EndDate != r.EndDate) && await db.Evaluations.AnyAsync(x => x.AcademicYearId == id, ct))
-            return Conflict(new { title = "Năm học đã có đánh giá; không được đổi khoảng thời gian ghi nhận." });
-        item.Code = r.Code.Trim(); item.StartDate = r.StartDate; item.EndDate = r.EndDate; await db.SaveChangesAsync(ct); return Ok(item);
+        var hasFinalizedResults = await db.Evaluations.AnyAsync(x => x.AcademicYearId == id && x.Status == "CHOT", ct);
+        AcademicYearSettingsPolicy.EnsureCanUpdate(hasFinalizedResults, item.StartDate, item.EndDate,
+            item.RequiredResearchHours, r.StartDate, r.EndDate, r.RequiredResearchHours);
+        item.Code = r.Code.Trim(); item.StartDate = r.StartDate; item.EndDate = r.EndDate;
+        item.RequiredResearchHours = r.RequiredResearchHours;
+        await db.SaveChangesAsync(ct); return Ok(item);
     }
     [HttpDelete("academic-years/{id:long}")]
     public async Task<IActionResult> DeleteYear(long id, CancellationToken ct)

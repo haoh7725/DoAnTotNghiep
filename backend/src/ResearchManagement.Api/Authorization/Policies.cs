@@ -8,10 +8,10 @@ public static class Policies
     /// <summary>Chỉ QUAN_TRI.</summary>
     public const string Admin = "Admin";
 
-    /// <summary>PHONG_QLKH hoặc QUAN_TRI.</summary>
+    /// <summary>Tên policy legacy; quyền hiện tại thuộc TRUONG_KHOA hoặc QUAN_TRI.</summary>
     public const string ResearchOffice = "ResearchOffice";
 
-    /// <summary>Mọi vai trò quản lý: TRUONG_BO_MON, TRUONG_KHOA, PHONG_QLKH, BAN_GIAM_HIEU, QUAN_TRI.</summary>
+    /// <summary>Mọi vai trò quản lý hiện tại: TRUONG_BO_MON, TRUONG_KHOA, QUAN_TRI.</summary>
     public const string Management = "Management";
 
     public static void Register(AuthorizationOptions options)

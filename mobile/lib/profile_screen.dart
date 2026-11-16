@@ -166,7 +166,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Expanded(
                     child: Text(
                       'Tài khoản này chưa được liên kết với hồ sơ giảng viên. '
-                      'Vui lòng liên hệ Phòng QLKH để cập nhật.',
+                      'Vui lòng liên hệ Trưởng khoa để cập nhật.',
                     ),
                   ),
                 ],

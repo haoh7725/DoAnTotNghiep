@@ -6,6 +6,7 @@ public static class Roles
     public const string Lecturer = "GIANG_VIEN";
     public const string DepartmentHead = "TRUONG_BO_MON";
     public const string FacultyDean = "TRUONG_KHOA";
+    // Legacy: giữ để đọc tài khoản/lịch sử cũ; không còn nằm trong Roles.All.
     public const string ResearchOffice = "PHONG_QLKH";
     public const string BoardOfDirectors = "BAN_GIAM_HIEU";
     public const string Admin = "QUAN_TRI";

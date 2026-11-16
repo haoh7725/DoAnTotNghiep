@@ -29,7 +29,7 @@ public sealed class Lecturer : BaseEntity
     public string? Degree { get; private set; }
     public string? Position { get; private set; }
 
-    /// <summary>Cập nhật toàn bộ thông tin, do Phòng QLKH/Quản trị thực hiện.</summary>
+    /// <summary>Cập nhật toàn bộ thông tin, do Trưởng khoa/Quản trị thực hiện.</summary>
     public void Update(
         long departmentId, string code, string fullName,
         DateOnly? birthDate, string? gender, string? email, string? phone,

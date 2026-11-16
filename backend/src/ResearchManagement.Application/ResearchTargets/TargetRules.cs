@@ -9,7 +9,7 @@ public static class TargetRules
         if (today < yearStart || today > yearEnd)
             throw new BusinessRuleException("Không thể giao hoặc liên kết thêm bài ngoài năm học của chỉ tiêu.");
         if (deadline.HasValue && today > deadline.Value)
-            throw new BusinessRuleException("Chỉ tiêu đã quá hạn. Phòng QLKH cần gia hạn có lý do trước khi tiếp tục phân công hoặc liên kết bài.");
+            throw new BusinessRuleException("Chỉ tiêu đã quá hạn. Trưởng khoa cần gia hạn có lý do trước khi tiếp tục phân công hoặc liên kết bài.");
     }
 
     public static void EnsurePublicationMatches(long? requiredPublication, long? actualPublication)

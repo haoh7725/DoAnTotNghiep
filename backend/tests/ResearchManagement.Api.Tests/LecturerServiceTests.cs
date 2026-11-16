@@ -18,7 +18,7 @@ public class LecturerServiceTests
     private readonly FakeProfileRepository _profiles = new();
     private readonly FakeAccounts _accounts = new(100, 101, 102, 103);
 
-    private static FakeUser Office() => new(1, new RoleAssignmentDto(Roles.ResearchOffice, Scopes.Global, null, null));
+    private static FakeUser LegacyOffice() => new(1, new RoleAssignmentDto(Roles.ResearchOffice, Scopes.Global, null, null));
     private static FakeUser Admin() => new(2, new RoleAssignmentDto(Roles.Admin, Scopes.Global, null, null));
     private static FakeUser Board() => new(3, new RoleAssignmentDto(Roles.BoardOfDirectors, Scopes.Global, null, null));
     private static FakeUser Head(long faculty, long department) =>
@@ -48,20 +48,20 @@ public class LecturerServiceTests
     // ---- Tạo, sửa, xóa ----
 
     [Fact]
-    public async Task AccountOptions_OnlyResearchOfficeOrAdminCanRead()
+    public async Task AccountOptions_OnlyFacultyDeanOrAdminCanRead()
     {
-        Assert.Equal(4, (await Lecturers(Office()).GetAvailableAccountOptionsAsync(default)).Count);
+        Assert.Equal(4, (await Lecturers(Dean(1)).GetAvailableAccountOptionsAsync(default)).Count);
         Assert.Equal(4, (await Lecturers(Admin()).GetAvailableAccountOptionsAsync(default)).Count);
         await Assert.ThrowsAsync<ForbiddenException>(() =>
-            Lecturers(Dean(1)).GetAvailableAccountOptionsAsync(default));
+            Lecturers(LegacyOffice()).GetAvailableAccountOptionsAsync(default));
         await Assert.ThrowsAsync<ForbiddenException>(() =>
             Lecturers(Board()).GetAvailableAccountOptionsAsync(default));
     }
 
     [Fact]
-    public async Task Create_ByOffice_ReturnsDepartmentAndFacultyFromBaseData()
+    public async Task Create_ByFacultyDean_ReturnsDepartmentAndFacultyFromBaseData()
     {
-        var result = await Lecturers(Office()).CreateAsync(NewRequest(departmentId: 30), default);
+        var result = await Lecturers(Dean(2)).CreateAsync(NewRequest(departmentId: 30), default);
 
         Assert.Equal("Nguyễn Văn A", result.FullName);
         Assert.Equal(30, result.DepartmentId);
@@ -77,27 +77,32 @@ public class LecturerServiceTests
     }
 
     [Fact]
+    public async Task Create_ByFacultyDeanOutsideFaculty_IsForbidden() =>
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            Lecturers(Dean(1)).CreateAsync(NewRequest(departmentId: 30), default));
+
+    [Fact]
     public async Task Create_RejectsDuplicateCodeAndAlreadyLinkedAccount()
     {
         Seed(100, 10, "GV001");
 
         await Assert.ThrowsAsync<ConflictException>(() =>
-            Lecturers(Office()).CreateAsync(NewRequest(accountId: 101, code: "GV001"), default));
+            Lecturers(Dean(1)).CreateAsync(NewRequest(accountId: 101, code: "GV001"), default));
         await Assert.ThrowsAsync<ConflictException>(() =>
-            Lecturers(Office()).CreateAsync(NewRequest(accountId: 100, code: "GV002"), default));
+            Lecturers(Dean(1)).CreateAsync(NewRequest(accountId: 100, code: "GV002"), default));
     }
 
     [Fact]
     public async Task Create_RejectsUnknownAccountDepartmentAndFutureBirthDate()
     {
         await Assert.ThrowsAsync<BusinessRuleException>(() =>
-            Lecturers(Office()).CreateAsync(NewRequest(accountId: 999), default));
+            Lecturers(Dean(1)).CreateAsync(NewRequest(accountId: 999), default));
         await Assert.ThrowsAsync<BusinessRuleException>(() =>
-            Lecturers(Office()).CreateAsync(NewRequest(departmentId: 999), default));
+            Lecturers(Dean(1)).CreateAsync(NewRequest(departmentId: 999), default));
 
         var future = NewRequest();
         future.BirthDate = new DateOnly(2999, 1, 1);
-        await Assert.ThrowsAsync<BusinessRuleException>(() => Lecturers(Office()).CreateAsync(future, default));
+        await Assert.ThrowsAsync<BusinessRuleException>(() => Lecturers(Dean(1)).CreateAsync(future, default));
     }
 
     [Fact]
@@ -107,19 +112,19 @@ public class LecturerServiceTests
         request.Email = "   ";
         request.Position = "";
 
-        var result = await Lecturers(Office()).CreateAsync(request, default);
+        var result = await Lecturers(Dean(1)).CreateAsync(request, default);
 
         Assert.Null(result.Email);
         Assert.Null(result.Position);
     }
 
     [Fact]
-    public async Task Update_ByOffice_MovesDepartmentAndKeepsOwnCode()
+    public async Task Update_ByAdmin_MovesDepartmentAndKeepsOwnCode()
     {
         var lecturer = Seed(100, 10, "GV001");
         var request = new UpdateLecturerRequest { DepartmentId = 30, Code = "GV001", FullName = "Tên mới", Degree = "Thạc sĩ" };
 
-        var result = await Lecturers(Office()).UpdateAsync(lecturer.Id, request, default);
+        var result = await Lecturers(Admin()).UpdateAsync(lecturer.Id, request, default);
 
         Assert.Equal(30, result.DepartmentId);
         Assert.Equal(2, result.FacultyId);
@@ -138,13 +143,23 @@ public class LecturerServiceTests
     }
 
     [Fact]
+    public async Task Update_ByFacultyDeanOutsideFaculty_IsForbidden()
+    {
+        var lecturer = Seed(100, 30, "GV001");
+        var request = new UpdateLecturerRequest { DepartmentId = 30, Code = "GV001", FullName = "X" };
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            Lecturers(Dean(1)).UpdateAsync(lecturer.Id, request, default));
+    }
+
+    [Fact]
     public async Task Update_CodeUsedByAnotherLecturer_Conflicts()
     {
         var first = Seed(100, 10, "GV001");
         Seed(101, 10, "GV002");
         var request = new UpdateLecturerRequest { DepartmentId = 10, Code = "GV002", FullName = "X" };
 
-        await Assert.ThrowsAsync<ConflictException>(() => Lecturers(Office()).UpdateAsync(first.Id, request, default));
+        await Assert.ThrowsAsync<ConflictException>(() => Lecturers(Dean(1)).UpdateAsync(first.Id, request, default));
     }
 
     [Fact]
@@ -174,7 +189,7 @@ public class LecturerServiceTests
     {
         var lecturer = Seed(100, 10, "GV001");
 
-        await Assert.ThrowsAsync<ForbiddenException>(() => Lecturers(Office()).DeleteAsync(lecturer.Id, default));
+        await Assert.ThrowsAsync<ForbiddenException>(() => Lecturers(Dean(1)).DeleteAsync(lecturer.Id, default));
         await Lecturers(Admin()).DeleteAsync(lecturer.Id, default);
         await Assert.ThrowsAsync<NotFoundException>(() => Lecturers(Admin()).DeleteAsync(lecturer.Id, default));
     }
@@ -197,7 +212,7 @@ public class LecturerServiceTests
     {
         var lecturer = Seed(100, 20, "GV001");
 
-        foreach (var user in new[] { Owner(100), Head(1, 20), Dean(1), Office(), Board() })
+        foreach (var user in new[] { Owner(100), Head(1, 20), Dean(1), Admin() })
             Assert.Equal(lecturer.Id, (await Lecturers(user).GetByIdAsync(lecturer.Id, default)).Id);
     }
 
@@ -212,7 +227,7 @@ public class LecturerServiceTests
 
     [Fact]
     public async Task Read_UnknownId_IsNotFound() =>
-        await Assert.ThrowsAsync<NotFoundException>(() => Lecturers(Office()).GetByIdAsync(404, default));
+        await Assert.ThrowsAsync<NotFoundException>(() => Lecturers(Dean(1)).GetByIdAsync(404, default));
 
     [Fact]
     public void Visibility_ReflectsAssignments()
@@ -261,13 +276,15 @@ public class LecturerServiceTests
     }
 
     [Fact]
-    public async Task Profile_Edit_OwnerAndOfficeOnly()
+    public async Task Profile_Edit_OwnerFacultyDeanAndAdminOnly()
     {
         var lecturer = Seed(100, 10, "GV001");
         var request = new ScientificProfileRequest { Expertise = "X" };
 
-        await Profiles(Office()).UpsertAsync(lecturer.Id, request, default);
-        foreach (var user in new[] { Head(1, 10), Dean(1), Board(), Owner(101) })
+        await Profiles(Owner(100)).UpsertAsync(lecturer.Id, request, default);
+        await Profiles(Dean(1)).UpsertAsync(lecturer.Id, request, default);
+        await Profiles(Admin()).UpsertAsync(lecturer.Id, request, default);
+        foreach (var user in new[] { Head(1, 10), Dean(2), LegacyOffice(), Board(), Owner(101) })
             await Assert.ThrowsAsync<ForbiddenException>(() => Profiles(user).UpsertAsync(lecturer.Id, request, default));
     }
 
@@ -389,8 +406,9 @@ public class LecturerServiceTests
     {
         var lecturer = Seed(100, 10, "GV001");
         var request = new ScientificProfileRequest { Details = new() { Hometown = "Huế" } };
-        await Profiles(Office()).UpsertAsync(lecturer.Id, request, default);
+        await Profiles(Dean(1)).UpsertAsync(lecturer.Id, request, default);
         Assert.Equal("Huế", (await Profiles(Head(1, 10)).GetAsync(lecturer.Id, default)).Details.Hometown);
+        await Assert.ThrowsAsync<ForbiddenException>(() => Profiles(Dean(2)).UpsertAsync(lecturer.Id, request, default));
         await Assert.ThrowsAsync<ForbiddenException>(() => Profiles(Head(1, 10)).UpsertAsync(lecturer.Id, request, default));
         await Assert.ThrowsAsync<ForbiddenException>(() => Profiles(Owner(101)).GetAsync(lecturer.Id, default));
     }

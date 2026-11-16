@@ -2,7 +2,7 @@ export type Permission = { role: string; scope: string; facultyId: number | null
 export type Profile = { id: number; username: string; fullName: string; email: string | null; roles: Permission[] }
 export type Faculty = { id: number; code: string; name: string }
 export type Department = Faculty & { facultyId: number }
-export type AcademicYear = { id: number; code: string; startDate: string; endDate: string }
+export type AcademicYear = { id: number; code: string; startDate: string; endDate: string; requiredResearchHours: number; isResearchHoursLocked?: boolean }
 export type Lookups = { faculties: Faculty[]; departments: Department[]; academicYears: AcademicYear[] }
 export const preferredAcademicYear = (years: AcademicYear[], today = new Date()) => {
   const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`

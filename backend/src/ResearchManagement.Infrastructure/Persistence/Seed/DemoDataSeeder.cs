@@ -40,16 +40,21 @@ public static class DemoDataSeeder
         }
 
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var passwordService = scope.ServiceProvider.GetRequiredService<IPasswordService>();
         if (configuration["Seed:OperationalDatasetVersion"] == CleanOperationalDataSeeder.Version)
         {
             var cleanEnvironment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
             var cleanStorage = scope.ServiceProvider.GetRequiredService<IFileStorage>();
             await CleanOperationalDataSeeder.SeedAsync(db, cleanStorage, cleanEnvironment, cancellationToken);
+            await EnsureElectricalFacultyDemoAsync(db, passwordService, cancellationToken);
             logger.LogInformation("Đã bảo đảm bộ dữ liệu vận hành {Version}.", CleanOperationalDataSeeder.Version);
             return;
         }
         if (await db.Database.SqlQueryRaw<int>("SELECT COUNT(*)::int AS \"Value\" FROM nckh.cau_hinh_nghiep_vu WHERE ma='faculty_workflow_2023'").SingleAsync(cancellationToken) > 0)
+        {
+            await EnsureElectricalFacultyDemoAsync(db, passwordService, cancellationToken);
             return;
+        }
         var existingMarker = await db.Accounts.SingleOrDefaultAsync(
             x => x.Username == MarkerUsername, cancellationToken);
         if (existingMarker is not null)
@@ -59,14 +64,13 @@ public static class DemoDataSeeder
             await EnsureReferenceConversionRulesAsync(db, cancellationToken);
             await EnsureLargeReportEvaluationsAsync(db, existingMarker.Id, cancellationToken);
             await RepairSeedEvaluationClassificationsAsync(db, cancellationToken);
+            await EnsureElectricalFacultyDemoAsync(db, passwordService, cancellationToken);
             logger.LogInformation("Dữ liệu mẫu đã tồn tại; giữ nguyên hồ sơ và kết quả người dùng đã chỉnh sửa.");
             return;
         }
 
         var environment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
         var fileStorage = scope.ServiceProvider.GetRequiredService<IFileStorage>();
-        var passwordService = scope.ServiceProvider.GetRequiredService<IPasswordService>();
-
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
         try
@@ -340,6 +344,7 @@ public static class DemoDataSeeder
             await NormalizeNguyenMinhAnhProductsAsync(db, cancellationToken);
             await EnsureUncommittedDemoLecturerAsync(db, passwordService, cancellationToken);
             await EnsureUncommittedNguyenAnhThuAsync(db, passwordService, cancellationToken);
+            await EnsureElectricalFacultyDemoAsync(db, passwordService, cancellationToken);
             await NormalizeApprovedProductDatesAsync(db, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             logger.LogInformation("Đã tạo dữ liệu mẫu nghiệp vụ thành công.");
@@ -375,6 +380,135 @@ public static class DemoDataSeeder
             return new ProductEvidence(productId, accountId, fileName, objectKey,
                 info.Length, description);
         }
+    }
+
+    private static async Task EnsureElectricalFacultyDemoAsync(
+        ApplicationDbContext db,
+        IPasswordService passwordService,
+        CancellationToken cancellationToken)
+    {
+        var faculty = await db.Faculties.SingleOrDefaultAsync(
+            x => x.Code == "DDT", cancellationToken);
+        if (faculty is null)
+        {
+            faculty = new Faculty("DDT", "Khoa Công nghệ Điện – Điện tử");
+            db.Faculties.Add(faculty);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        var departmentSpecs = new[]
+        {
+            (Code: "KTDIEN", Name: "Bộ môn Công nghệ Kỹ thuật Điện"),
+            (Code: "DTVT", Name: "Bộ môn Công nghệ Kỹ thuật Điện tử – Viễn thông")
+        };
+        foreach (var spec in departmentSpecs)
+        {
+            if (!await db.Departments.AnyAsync(x => x.Code == spec.Code, cancellationToken))
+                db.Departments.Add(new Department
+                {
+                    FacultyId = faculty.Id,
+                    Code = spec.Code,
+                    Name = spec.Name
+                });
+        }
+        await db.SaveChangesAsync(cancellationToken);
+
+        var departments = await db.Departments
+            .Where(x => x.Code == "KTDIEN" || x.Code == "DTVT")
+            .ToDictionaryAsync(x => x.Code, cancellationToken);
+        var lecturerSpecs = new[]
+        {
+            new
+            {
+                Username = "gv.ddt.nguyenhoanganh", Code = "DDT001",
+                FullName = "TS. Nguyễn Hoàng Anh", Email = "nguyenhoanganh.ddt@huit.edu.vn",
+                DepartmentCode = "KTDIEN", BirthDate = new DateOnly(1982, 3, 12), Gender = "NAM",
+                AcademicRank = (string?)null, Degree = "TIẾN SĨ", Position = "Giảng viên chính",
+                Expertise = "Hệ thống điện", ResearchFields = "Năng lượng tái tạo",
+                ResearchDirections = "Điều khiển và tối ưu hệ thống điện"
+            },
+            new
+            {
+                Username = "gv.ddt.tranminhquan", Code = "DDT002",
+                FullName = "ThS. Trần Minh Quân", Email = "tranminhquan.ddt@huit.edu.vn",
+                DepartmentCode = "KTDIEN", BirthDate = new DateOnly(1988, 7, 21), Gender = "NAM",
+                AcademicRank = (string?)null, Degree = "THẠC SĨ", Position = "Giảng viên",
+                Expertise = "Kỹ thuật điện", ResearchFields = "Thiết bị điện",
+                ResearchDirections = "Giám sát và chẩn đoán thiết bị điện"
+            },
+            new
+            {
+                Username = "gv.ddt.lethanhha", Code = "DDT003",
+                FullName = "TS. Lê Thanh Hà", Email = "lethanhha.ddt@huit.edu.vn",
+                DepartmentCode = "DTVT", BirthDate = new DateOnly(1984, 11, 8), Gender = "NU",
+                AcademicRank = (string?)null, Degree = "TIẾN SĨ", Position = "Giảng viên chính",
+                Expertise = "Điện tử viễn thông", ResearchFields = "Mạng truyền thông",
+                ResearchDirections = "Mạng không dây và Internet vạn vật"
+            },
+            new
+            {
+                Username = "gv.ddt.phamngocmai", Code = "DDT004",
+                FullName = "ThS. Phạm Ngọc Mai", Email = "phamngocmai.ddt@huit.edu.vn",
+                DepartmentCode = "DTVT", BirthDate = new DateOnly(1990, 5, 17), Gender = "NU",
+                AcademicRank = (string?)null, Degree = "THẠC SĨ", Position = "Giảng viên",
+                Expertise = "Kỹ thuật điện tử", ResearchFields = "Hệ thống nhúng",
+                ResearchDirections = "Thiết kế hệ thống nhúng và cảm biến thông minh"
+            }
+        };
+
+        foreach (var spec in lecturerSpecs)
+        {
+            var account = await db.Accounts.Include(x => x.RoleAssignments)
+                .SingleOrDefaultAsync(x => x.Username == spec.Username, cancellationToken);
+            if (account is null)
+            {
+                account = new Account(spec.Username, string.Empty, spec.FullName, spec.Email);
+                account.SetPasswordHash(passwordService.Hash(account, DefaultPassword));
+                account.AddRole(new RoleAssignment(Roles.Lecturer, Scopes.Personal));
+                db.Accounts.Add(account);
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            else if (!account.RoleAssignments.Any(x =>
+                         x.Role == Roles.Lecturer && x.Scope == Scopes.Personal))
+            {
+                account.AddRole(new RoleAssignment(Roles.Lecturer, Scopes.Personal));
+                await db.SaveChangesAsync(cancellationToken);
+            }
+
+            var lecturer = await db.Lecturers.SingleOrDefaultAsync(
+                x => x.Code == spec.Code, cancellationToken);
+            if (lecturer is null)
+            {
+                lecturer = new Lecturer(
+                    departments[spec.DepartmentCode].Id,
+                    account.Id,
+                    spec.Code,
+                    spec.FullName,
+                    spec.BirthDate,
+                    spec.Gender,
+                    spec.Email,
+                    null,
+                    spec.AcademicRank,
+                    spec.Degree,
+                    spec.Position);
+                db.Lecturers.Add(lecturer);
+                await db.SaveChangesAsync(cancellationToken);
+            }
+
+            if (!await db.ScientificProfiles.AnyAsync(
+                    x => x.LecturerId == lecturer.Id, cancellationToken))
+            {
+                db.ScientificProfiles.Add(new ScientificProfile(
+                    lecturer.Id,
+                    spec.Expertise,
+                    spec.ResearchFields,
+                    spec.ResearchDirections,
+                    "Giảng viên demo của Khoa Công nghệ Điện – Điện tử.",
+                    DateTimeOffset.UtcNow));
+            }
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
     }
 
     private static async Task NormalizeApprovedProductDatesAsync(ApplicationDbContext db, CancellationToken ct)
@@ -468,7 +602,7 @@ public static class DemoDataSeeder
             if (rule is null)
             {
                 rule = new ConversionRule(typeId, spec.Item3, 1, spec.Item4,
-                    "Mức tham khảo theo bảng quy đổi trong tài liệu quydinhquydoi.docx; cần QLKH xác nhận trước khi áp dụng.",
+                    "Mức tham khảo theo bảng quy đổi trong tài liệu quydinhquydoi.docx; cần Trưởng khoa xác nhận trước khi áp dụng.",
                     spec.Item5, "GIO", 200, "Tác giả chính và đồng tác giả theo quy định được cấu hình.",
                     new DateOnly(2024, 1, 1), new DateOnly(2027, 12, 31), "Tài liệu tham khảo quy đổi NCKH");
                 rule.ClassificationId = classId;
@@ -620,7 +754,7 @@ public static class DemoDataSeeder
                     new ReviewHistory(product.Id, owner.AccountId, ProductStatuses.Draft, ProductStatuses.Submitted, "Giảng viên nộp sản phẩm."),
                     new ReviewHistory(product.Id, departmentHeadId == 0 ? officeAccountId : departmentHeadId, ProductStatuses.Submitted, ProductStatuses.DepartmentHeadApproved, "Bộ môn xác nhận nội dung."),
                     new ReviewHistory(product.Id, deanId == 0 ? officeAccountId : deanId, ProductStatuses.DepartmentHeadApproved, ProductStatuses.FacultyDeanApproved, "Khoa thống nhất đề nghị công nhận."),
-                    new ReviewHistory(product.Id, officeAccountId, ProductStatuses.FacultyDeanApproved, ProductStatuses.ResearchOfficeApproved, "Phòng QLKH kiểm tra minh chứng."),
+                    new ReviewHistory(product.Id, officeAccountId, ProductStatuses.FacultyDeanApproved, ProductStatuses.ResearchOfficeApproved, "Trưởng khoa kiểm tra minh chứng."),
                     new ReviewHistory(product.Id, officeAccountId, ProductStatuses.ResearchOfficeApproved, ProductStatuses.Approved, "Công nhận sản phẩm."));
             }
 
@@ -953,7 +1087,7 @@ public static class DemoDataSeeder
                 (ProductStatuses.Draft, ProductStatuses.Submitted, lecturer.AccountId, "Giảng viên nộp sản phẩm."),
                 (ProductStatuses.Submitted, ProductStatuses.DepartmentHeadApproved, departmentHeadAccountId, "Bộ môn xác nhận nội dung."),
                 (ProductStatuses.DepartmentHeadApproved, ProductStatuses.FacultyDeanApproved, facultyDeanAccountId, "Khoa thống nhất đề nghị công nhận."),
-                (ProductStatuses.FacultyDeanApproved, ProductStatuses.ResearchOfficeApproved, officeAccountId, "Phòng QLKH kiểm tra minh chứng."),
+                (ProductStatuses.FacultyDeanApproved, ProductStatuses.ResearchOfficeApproved, officeAccountId, "Trưởng khoa kiểm tra minh chứng."),
                 (ProductStatuses.ResearchOfficeApproved, ProductStatuses.Approved, officeAccountId, "Công nhận sản phẩm.")
             };
             foreach (var transition in transitions)
@@ -1496,7 +1630,7 @@ public static class DemoDataSeeder
                         db.Notifications.Add(Sent(new Notification(
                             accountId,
                             "HE_THONG",
-                            $"{faculty.Name} được Phòng QLKH giao {target.AssignedArticleCount} bài báo trong năm học {year.Code}. Chỉ tiêu đã được tiếp nhận và phân bổ.",
+                            $"{faculty.Name} được Trưởng khoa giao {target.AssignedArticleCount} bài báo trong năm học {year.Code}. Chỉ tiêu đã được tiếp nhận và phân bổ.",
                             key,
                             actionPath: "research-targets")));
                 }

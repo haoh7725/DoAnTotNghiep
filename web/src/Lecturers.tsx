@@ -230,7 +230,7 @@ function LecturerDetail({ user, lookups, lecturerId, onBack }: {
   if (loading) return <p role="status">Đang tải hồ sơ…</p>
   if (!lecturer || !profile) return <>{back}<p className="eyebrow">HỒ SƠ KHOA HỌC</p><h1>{lecturerId === undefined ? 'Hồ sơ của tôi' : 'Hồ sơ giảng viên'}</h1>
     <p className="alert" role="alert">{status === 404 && lecturerId === undefined
-      ? 'Tài khoản của bạn chưa được liên kết với hồ sơ giảng viên. Vui lòng liên hệ Phòng quản lý khoa học.' : error}</p>
+      ? 'Tài khoản của bạn chưa được liên kết với hồ sơ giảng viên. Vui lòng liên hệ Trưởng khoa.' : error}</p>
     {status !== 404 && <button onClick={() => setRetry(x => x + 1)}>Thử lại</button>}</>
 
   const perm = permissionsFor(user, lecturer)

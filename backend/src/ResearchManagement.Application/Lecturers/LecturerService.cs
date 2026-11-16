@@ -21,7 +21,7 @@ public sealed class LecturerService(
     public Task<IReadOnlyList<LecturerAccountOptionResponse>> GetAvailableAccountOptionsAsync(
         CancellationToken cancellationToken)
     {
-        RequireOffice();
+        RequireFacultyManager();
         return accounts.GetAvailableLecturerAccountsAsync(cancellationToken);
     }
 
@@ -44,7 +44,7 @@ public sealed class LecturerService(
     public async Task<LecturerResponse> CreateAsync(
         CreateLecturerRequest request, CancellationToken cancellationToken)
     {
-        RequireOffice();
+        RequireFacultyManager();
 
         var code = request.Code.Trim();
         var birthDate = ValidBirthDate(request.BirthDate);
@@ -67,6 +67,7 @@ public sealed class LecturerService(
         var departmentFacultyId = await lecturers.GetDepartmentFacultyIdAsync(request.DepartmentId, cancellationToken);
         if (!departmentFacultyId.HasValue)
             throw new BusinessRuleException("Bộ môn không tồn tại.");
+        RequireFacultyScope(departmentFacultyId.Value, request.DepartmentId);
 
         var scopedDepartmentIds = eligibleAssignments
             .Where(x => x.Role == Roles.DepartmentHead && x.DepartmentId.HasValue)
@@ -100,14 +101,19 @@ public sealed class LecturerService(
         return await GetViewAfterSaveAsync(lecturer.Id, cancellationToken);
     }
 
-    /// <summary>Phòng QLKH/Quản trị sửa toàn bộ thông tin. Tài khoản liên kết không đổi được.</summary>
+    /// <summary>Trưởng khoa/Quản trị sửa toàn bộ thông tin. Tài khoản liên kết không đổi được.</summary>
     public async Task<LecturerResponse> UpdateAsync(
         long id, UpdateLecturerRequest request, CancellationToken cancellationToken)
     {
-        RequireOffice();
+        RequireFacultyManager();
 
         var lecturer = await lecturers.GetByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException("Không tìm thấy giảng viên.");
+
+        var currentFacultyId = await lecturers.GetDepartmentFacultyIdAsync(
+            lecturer.DepartmentId, cancellationToken)
+            ?? throw new BusinessRuleException("Bộ môn hiện tại không tồn tại.");
+        RequireFacultyScope(currentFacultyId, lecturer.DepartmentId);
 
         var code = request.Code.Trim();
         var birthDate = ValidBirthDate(request.BirthDate);
@@ -115,6 +121,10 @@ public sealed class LecturerService(
         if (request.DepartmentId != lecturer.DepartmentId &&
             !await lecturers.DepartmentExistsAsync(request.DepartmentId, cancellationToken))
             throw new BusinessRuleException("Bộ môn không tồn tại.");
+        var targetFacultyId = await lecturers.GetDepartmentFacultyIdAsync(
+            request.DepartmentId, cancellationToken)
+            ?? throw new BusinessRuleException("Bộ môn không tồn tại.");
+        RequireFacultyScope(targetFacultyId, request.DepartmentId);
         if (await lecturers.ExistsByCodeAsync(code, id, cancellationToken))
             throw new ConflictException("Mã giảng viên đã tồn tại.");
 
@@ -130,7 +140,7 @@ public sealed class LecturerService(
     }
 
     /// <summary>
-    /// Giảng viên tự sửa thông tin cá nhân. Bộ môn, mã, học hàm, học vị và chức vụ do Phòng QLKH
+    /// Giảng viên tự sửa thông tin cá nhân. Bộ môn, mã, học hàm, học vị và chức vụ do Trưởng khoa
     /// quản lý vì thống kê và đánh giá dựa trên các trường này.
     /// </summary>
     public async Task<LecturerResponse> UpdateMineAsync(
@@ -168,10 +178,17 @@ public sealed class LecturerService(
     private long RequireAccountId() =>
         currentUser.Id ?? throw new ForbiddenException("Chưa đăng nhập.");
 
-    private void RequireOffice()
+    private void RequireFacultyManager()
     {
-        if (!LecturerAccess.IsOffice(currentUser))
-            throw new ForbiddenException("Chỉ Phòng QLKH hoặc quản trị viên được thực hiện thao tác này.");
+        if (!LecturerAccess.IsFacultyManager(currentUser))
+            throw new ForbiddenException("Chỉ Trưởng khoa hoặc quản trị viên được thực hiện thao tác này.");
+    }
+
+    private void RequireFacultyScope(long facultyId, long departmentId)
+    {
+        if (!currentUser.IsInRole(Roles.Admin) &&
+            !currentUser.CanAccess(facultyId, departmentId))
+            throw new ForbiddenException("Không có quyền quản lý hồ sơ giảng viên ngoài phạm vi khoa.");
     }
 
     private DateOnly? ValidBirthDate(DateOnly? birthDate)

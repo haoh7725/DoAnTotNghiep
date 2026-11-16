@@ -398,7 +398,7 @@ class _EmptyEvaluationWidget extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 message ??
-                    'Tài khoản này chưa được liên kết với hồ sơ giảng viên để thực hiện đánh giá thi đua. Vui lòng liên hệ Phòng QLKH để được hỗ trợ.',
+                    'Tài khoản này chưa được liên kết với hồ sơ giảng viên để thực hiện đánh giá thi đua. Vui lòng liên hệ Trưởng khoa để được hỗ trợ.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.black87, fontSize: 13),
               ),
@@ -462,7 +462,7 @@ class _EmptyEvaluationWidget extends StatelessWidget {
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Kết quả thi đua sẽ được hiển thị sau khi Phòng Quản lý khoa học tiến hành đánh giá và chốt kết quả xếp loại.',
+                      'Kết quả thi đua sẽ được hiển thị sau khi Trưởng khoa tiến hành đánh giá và chốt kết quả xếp loại.',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.black87,

@@ -7,9 +7,9 @@ namespace ResearchManagement.Application.Lecturers;
 /// <summary>Quy tắc truy cập hồ sơ giảng viên, dùng chung cho hồ sơ và lý lịch khoa học.</summary>
 public static class LecturerAccess
 {
-    /// <summary>Phòng QLKH hoặc Quản trị: được tạo, sửa mọi hồ sơ và lý lịch.</summary>
-    public static bool IsOffice(ICurrentUser user) =>
-        user.IsInRole(Roles.ResearchOffice) || user.IsInRole(Roles.Admin);
+    /// <summary>Trưởng khoa hoặc Quản trị: được tạo, sửa hồ sơ và lý lịch theo quyền hiện tại.</summary>
+    public static bool IsFacultyManager(ICurrentUser user) =>
+        user.IsInRole(Roles.FacultyDean) || user.IsInRole(Roles.Admin);
 
     public static bool IsOwner(ICurrentUser user, LecturerResponse lecturer) =>
         user.Id is { } id && id == lecturer.AccountId;
@@ -18,9 +18,10 @@ public static class LecturerAccess
     public static bool CanRead(ICurrentUser user, LecturerResponse lecturer) =>
         IsOwner(user, lecturer) || user.CanAccess(lecturer.FacultyId, lecturer.DepartmentId);
 
-    /// <summary>Sửa lý lịch khoa học: chính chủ hoặc Phòng QLKH/Quản trị. Trưởng khoa, trưởng bộ môn chỉ xem.</summary>
+    /// <summary>Sửa lý lịch khoa học: chính chủ, Trưởng khoa hoặc Quản trị. Trưởng bộ môn chỉ xem.</summary>
     public static bool CanEditProfile(ICurrentUser user, LecturerResponse lecturer) =>
-        IsOwner(user, lecturer) || IsOffice(user);
+        IsOwner(user, lecturer) || user.IsInRole(Roles.Admin) ||
+        user.IsInRole(Roles.FacultyDean) && user.CanAccess(lecturer.FacultyId, lecturer.DepartmentId);
 
     public static LecturerVisibility VisibilityOf(ICurrentUser user) => new(
         user.Assignments.Any(a => a.Scope == Scopes.Global),

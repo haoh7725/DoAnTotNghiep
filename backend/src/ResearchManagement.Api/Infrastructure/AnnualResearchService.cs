@@ -8,14 +8,13 @@ namespace ResearchManagement.Api.Infrastructure;
 /// <summary>Live calculations shared by annual previews and finalized snapshots.</summary>
 public sealed class AnnualResearchService(ApplicationDbContext db)
 {
-    public const decimal RequiredHours = 586m;
     public static DateOnly Today() => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTimeOffset.UtcNow,
         OperatingSystem.IsWindows() ? "SE Asia Standard Time" : "Asia/Ho_Chi_Minh").DateTime);
     public sealed record Line(long ProductId, long TypeId, string TypeName, string Title, long? TargetId,
         long RuleId, string RuleCode, decimal BaseHours, decimal Coefficient, decimal Hours, string Basis);
     public sealed record Target(long Id, string TypeName, int Assigned, int Registered, int Approved,
         decimal Percent, bool Completed, decimal Hours);
-    public sealed record Result(long LecturerId, string LecturerName, string LecturerCode, long AcademicYearId,
+    public sealed record Result(long LecturerId, string LecturerName, string LecturerCode, long AcademicYearId, decimal RequiredHours,
         List<Line> Products, List<Target> Targets, List<string> Issues)
     {
         public decimal TotalHours => Products.Sum(x => x.Hours);
@@ -106,7 +105,8 @@ public sealed class AnnualResearchService(ApplicationDbContext db)
                 a.AllocatedArticleCount <= 0 ? 0 : decimal.Round(approved * 100m / a.AllocatedArticleCount, 2),
                 approved >= a.AllocatedArticleCount, lines.Where(x => x.TargetId == a.Id).Sum(x => x.Hours)));
         }
-        return new(lecturerId, lecturer.FullName, lecturer.Code, yearId, lines.OrderByDescending(x => x.Hours).ToList(), targets, issues);
+        return new(lecturerId, lecturer.FullName, lecturer.Code, yearId, year.RequiredResearchHours,
+            lines.OrderByDescending(x => x.Hours).ToList(), targets, issues);
     }
 
     private static bool Matches(ConversionCriterion c, Product p)
